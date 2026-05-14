@@ -1,0 +1,4 @@
+model_name: Qwen/Qwen2.5-VL-7B-Instruct
+num_candidates: 10
+prompt: Generate a short humorous caption for this image. Make it image-specific, concise, and avoid generic meme templates.
+dry_run: true
