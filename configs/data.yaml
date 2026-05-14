@@ -1,7 +1,3 @@
 dataset_name: OxfordTVG-HIC
-# You said you will place dataset at project root as `hic-data/`
-hic_root: hic-data
+source_root: data/raw
 processed_root: data/processed
-# Typical image locations supported by inspect script:
-# - <hic_root>/images
-# - <hic_root>/hic-data/images
