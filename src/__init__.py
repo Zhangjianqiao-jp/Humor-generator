@@ -1,0 +1,1 @@
+"""Humor generator package."""

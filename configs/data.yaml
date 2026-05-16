@@ -1,0 +1,3 @@
+dataset_name: OxfordTVG-HIC
+source_root: data/raw
+processed_root: data/processed
