@@ -1,0 +1,8 @@
+mode: heuristic
+weights:
+  IR: 0.25
+  HU: 0.30
+  SP: 0.15
+  RA: 0.10
+  CR: 0.10
+  SA: 0.10

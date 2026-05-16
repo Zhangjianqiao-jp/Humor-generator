@@ -1,0 +1,7 @@
+threshold: 0.85
+max_per_image: 5
+split:
+  train: 0.9
+  val: 0.05
+  test: 0.05
+seed: 42

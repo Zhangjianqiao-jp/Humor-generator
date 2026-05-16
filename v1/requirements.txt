@@ -1,0 +1,12 @@
+pandas
+pillow
+tqdm
+pyyaml
+scikit-learn
+pytest
+torch
+transformers
+accelerate
+qwen-vl-utils
+# Qwen2.5-VL often needs a recent transformers version.
+# For actual training/fine-tuning, cloud GPU is recommended.
