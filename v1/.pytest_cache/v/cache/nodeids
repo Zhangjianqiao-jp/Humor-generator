@@ -1,0 +1,5 @@
+[
+  "tests/test_ranker.py::test_ranker_top5_sorted",
+  "tests/test_sft_builder.py::test_build_sft_from_fake_csv",
+  "tests/test_splits.py::test_no_image_leakage"
+]
