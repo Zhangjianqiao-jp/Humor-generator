@@ -51,6 +51,14 @@ The main places to edit are marked in `configs/lora_sft.yaml`:
 - Training hyperparameters: `batch_size`, `gradient_accumulation_steps`, `num_epochs`, `learning_rate`
 - Memory settings: `gradient_checkpointing`, `bf16`, `fp16`
 
+If training stops and a checkpoint exists, resume with:
+
+```bash
+python -m scripts.train_lora_sft --config configs/lora_sft.yaml --resume-from-checkpoint outputs/lora_sft_v1_5/checkpoint-250
+```
+
+If no checkpoint directory exists, the run cannot be resumed from optimizer/model state and should be restarted. V1.5 filters missing image paths by default during training and writes reports under `outputs/lora_sft_v1_5/missing_images/`.
+
 ## Recommended First Ablation
 
 Keep everything fixed except LoRA rank:
