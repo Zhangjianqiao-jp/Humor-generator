@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.data.preprocess_hic import PreprocessConfig, preprocess_hic_dataset
+from src.training.sft_dataset import HumorSFTDataset
 from src.utils.io import read_jsonl
 
 
@@ -56,3 +57,30 @@ def test_preprocess_filters_deduplicates_and_splits(tmp_path: Path) -> None:
     assert len(rows) == 2
     assert {row["image_id"] for row in rows} == {"1", "3"}
     assert all(row["meta"]["version"] == "v1.5" for row in rows)
+
+
+def test_sft_dataset_filters_missing_images(tmp_path: Path) -> None:
+    data_path = tmp_path / "sft.jsonl"
+    report_path = tmp_path / "missing.jsonl"
+    rows = [
+        {
+            "image": str(tmp_path / "missing.jpg"),
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "prompt"}]},
+                {"role": "assistant", "content": [{"type": "text", "text": "caption"}]},
+            ],
+        }
+    ]
+    from src.utils.io import write_jsonl
+
+    write_jsonl(data_path, rows)
+    dataset = HumorSFTDataset(
+        data_path,
+        processor=None,
+        max_seq_len=128,
+        skip_missing_images=True,
+        missing_image_report_path=report_path,
+    )
+
+    assert len(dataset) == 0
+    assert read_jsonl(report_path)[0]["image"].endswith("missing.jpg")
