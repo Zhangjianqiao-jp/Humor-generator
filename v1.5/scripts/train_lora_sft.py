@@ -18,7 +18,7 @@ from src.models.qwen_vl_lora_loader import load_qwen_vl_with_lora
 from src.training.sft_dataset import HumorSFTDataset
 
 
-def train(config_path: Path) -> None:
+def train(config_path: Path, resume_from_checkpoint: str | None = None) -> None:
     with config_path.open("r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
@@ -40,8 +40,23 @@ def train(config_path: Path) -> None:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
 
-    train_dataset = HumorSFTDataset(Path(config["data"]["train_path"]), processor, config["data"]["max_seq_len"])
-    val_dataset = HumorSFTDataset(Path(config["data"]["val_path"]), processor, config["data"]["max_seq_len"])
+    report_dir = Path(config["output"]["output_dir"]) / "missing_images"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    skip_missing_images = config["data"].get("skip_missing_images", False)
+    train_dataset = HumorSFTDataset(
+        Path(config["data"]["train_path"]),
+        processor,
+        config["data"]["max_seq_len"],
+        skip_missing_images=skip_missing_images,
+        missing_image_report_path=report_dir / "train_missing.jsonl",
+    )
+    val_dataset = HumorSFTDataset(
+        Path(config["data"]["val_path"]),
+        processor,
+        config["data"]["max_seq_len"],
+        skip_missing_images=skip_missing_images,
+        missing_image_report_path=report_dir / "val_missing.jsonl",
+    )
 
     training_args_kwargs = {
         "output_dir": config["output"]["output_dir"],
@@ -79,7 +94,7 @@ def train(config_path: Path) -> None:
         eval_dataset=val_dataset,
         data_collator=train_dataset.collate_fn,
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     model.save_pretrained(config["output"]["final_adapter_dir"])
     processor.save_pretrained(config["output"]["final_adapter_dir"])
 
@@ -87,8 +102,14 @@ def train(config_path: Path) -> None:
 def main() -> None:
     parser = ArgumentParser(description="Train V1.5 LoRA-SFT humor generator.")
     parser.add_argument("--config", type=Path, default=Path("configs/lora_sft.yaml"))
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        type=str,
+        default=None,
+        help="Path to a Trainer checkpoint, for example outputs/lora_sft_v1_5/checkpoint-250.",
+    )
     args = parser.parse_args()
-    train(args.config)
+    train(args.config, resume_from_checkpoint=args.resume_from_checkpoint)
 
 
 if __name__ == "__main__":
