@@ -21,6 +21,7 @@ data:
   train_path: "data/processed/sft_train.jsonl"
   val_path: "data/processed/sft_val.jsonl"
   max_seq_len: 512
+  skip_missing_images: true
 
 training:
   # ===== YOU CAN CHANGE: core training hyperparameters =====
@@ -41,7 +42,7 @@ training:
 
   # ===== YOU CAN CHANGE: logging/checkpoint cadence =====
   logging_steps: 25
-  eval_steps: 250
+  eval_steps: 1000
   save_steps: 250
   save_total_limit: 3
 
