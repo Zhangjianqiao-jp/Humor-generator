@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import inspect
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -42,28 +43,34 @@ def train(config_path: Path) -> None:
     train_dataset = HumorSFTDataset(Path(config["data"]["train_path"]), processor, config["data"]["max_seq_len"])
     val_dataset = HumorSFTDataset(Path(config["data"]["val_path"]), processor, config["data"]["max_seq_len"])
 
-    args = TrainingArguments(
-        output_dir=config["output"]["output_dir"],
-        per_device_train_batch_size=config["training"]["batch_size"],
-        per_device_eval_batch_size=config["training"]["batch_size"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-        num_train_epochs=config["training"]["num_epochs"],
-        learning_rate=config["training"]["learning_rate"],
-        warmup_ratio=config["training"]["warmup_ratio"],
-        weight_decay=config["training"]["weight_decay"],
-        max_grad_norm=config["training"]["max_grad_norm"],
-        logging_steps=config["training"]["logging_steps"],
-        eval_steps=config["training"]["eval_steps"],
-        save_steps=config["training"]["save_steps"],
-        save_total_limit=config["training"]["save_total_limit"],
-        evaluation_strategy="steps",
-        save_strategy="steps",
-        bf16=config["training"]["bf16"] and torch.cuda.is_available(),
-        fp16=config["training"]["fp16"] and torch.cuda.is_available(),
-        optim=config["training"]["optim"],
-        remove_unused_columns=False,
-        report_to=[],
-    )
+    training_args_kwargs = {
+        "output_dir": config["output"]["output_dir"],
+        "per_device_train_batch_size": config["training"]["batch_size"],
+        "per_device_eval_batch_size": config["training"]["batch_size"],
+        "gradient_accumulation_steps": config["training"]["gradient_accumulation_steps"],
+        "num_train_epochs": config["training"]["num_epochs"],
+        "learning_rate": config["training"]["learning_rate"],
+        "warmup_ratio": config["training"]["warmup_ratio"],
+        "weight_decay": config["training"]["weight_decay"],
+        "max_grad_norm": config["training"]["max_grad_norm"],
+        "logging_steps": config["training"]["logging_steps"],
+        "eval_steps": config["training"]["eval_steps"],
+        "save_steps": config["training"]["save_steps"],
+        "save_total_limit": config["training"]["save_total_limit"],
+        "save_strategy": "steps",
+        "bf16": config["training"]["bf16"] and torch.cuda.is_available(),
+        "fp16": config["training"]["fp16"] and torch.cuda.is_available(),
+        "optim": config["training"]["optim"],
+        "remove_unused_columns": False,
+        "report_to": [],
+    }
+    training_args_params = inspect.signature(TrainingArguments.__init__).parameters
+    if "eval_strategy" in training_args_params:
+        training_args_kwargs["eval_strategy"] = "steps"
+    else:
+        training_args_kwargs["evaluation_strategy"] = "steps"
+
+    args = TrainingArguments(**training_args_kwargs)
 
     trainer = Trainer(
         model=model,
