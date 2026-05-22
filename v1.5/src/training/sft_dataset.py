@@ -6,12 +6,31 @@ from typing import Any
 import torch
 from PIL import Image
 
-from src.utils.io import read_jsonl
+from src.utils.io import read_jsonl, write_jsonl
 
 
 class HumorSFTDataset(torch.utils.data.Dataset):
-    def __init__(self, path: Path, processor: Any, max_seq_len: int) -> None:
-        self.rows = read_jsonl(path)
+    def __init__(
+        self,
+        path: Path,
+        processor: Any,
+        max_seq_len: int,
+        skip_missing_images: bool = False,
+        missing_image_report_path: Path | None = None,
+    ) -> None:
+        rows = read_jsonl(path)
+        missing_rows = [row for row in rows if not Path(row["image"]).exists()]
+        if missing_rows and not skip_missing_images:
+            first = missing_rows[0]
+            raise FileNotFoundError(
+                f"{path} contains {len(missing_rows)} missing image paths. "
+                f"First missing image: {first['image']}. "
+                "Set data.skip_missing_images: true or regenerate data with "
+                "filtering.require_existing_image: true."
+            )
+        if missing_image_report_path and missing_rows:
+            write_jsonl(missing_image_report_path, missing_rows)
+        self.rows = [row for row in rows if Path(row["image"]).exists()]
         self.processor = processor
         self.max_seq_len = max_seq_len
 
