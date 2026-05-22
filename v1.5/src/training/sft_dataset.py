@@ -31,6 +31,8 @@ class HumorSFTDataset(torch.utils.data.Dataset):
         if missing_image_report_path and missing_rows:
             write_jsonl(missing_image_report_path, missing_rows)
         self.rows = [row for row in rows if Path(row["image"]).exists()]
+        self.original_count = len(rows)
+        self.missing_image_count = len(missing_rows)
         self.processor = processor
         self.max_seq_len = max_seq_len
 
