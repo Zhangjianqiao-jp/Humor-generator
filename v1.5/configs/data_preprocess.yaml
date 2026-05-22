@@ -24,7 +24,7 @@ filtering:
   min_score:
   rank_percentile_threshold: 0.85
   max_captions_per_image: 5
-  require_existing_image: false
+  require_existing_image: true
 
 split:
   # ===== YOU CAN CHANGE: split hyperparameters =====
