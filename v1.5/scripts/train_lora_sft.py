@@ -57,6 +57,24 @@ def train(config_path: Path, resume_from_checkpoint: str | None = None) -> None:
         skip_missing_images=skip_missing_images,
         missing_image_report_path=report_dir / "val_missing.jsonl",
     )
+    print(
+        "Dataset sizes after image validation: "
+        f"train={len(train_dataset)}/{train_dataset.original_count} "
+        f"(missing={train_dataset.missing_image_count}), "
+        f"val={len(val_dataset)}/{val_dataset.original_count} "
+        f"(missing={val_dataset.missing_image_count})"
+    )
+    if len(train_dataset) == 0:
+        raise ValueError(
+            "Training dataset is empty after filtering missing images. "
+            "Check data.train_path and the image paths inside the JSONL file. "
+            "Most likely image_base_dir points to the wrong location on this machine."
+        )
+    if len(val_dataset) == 0:
+        raise ValueError(
+            "Validation dataset is empty after filtering missing images. "
+            "Check data.val_path and the image paths inside the JSONL file."
+        )
 
     training_args_kwargs = {
         "output_dir": config["output"]["output_dir"],
