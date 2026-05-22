@@ -1,0 +1,50 @@
+# V1.5 LoRA-SFT config.
+# Run from v1.5/: python scripts/train_lora_sft.py --config configs/lora_sft.yaml
+
+model:
+  # ===== YOU CAN CHANGE: base model =====
+  model_name: "Qwen/Qwen2.5-VL-3B-Instruct"
+  device_map: "auto"
+  torch_dtype: "auto"
+  trust_remote_code: true
+
+  lora:
+    # ===== YOU CAN CHANGE: LoRA hyperparameters =====
+    rank: 32
+    alpha: 64
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+    bias: "none"
+
+data:
+  # ===== YOU CAN CHANGE: data paths / sequence length =====
+  train_path: "data/processed/sft_train.jsonl"
+  val_path: "data/processed/sft_val.jsonl"
+  max_seq_len: 512
+
+training:
+  # ===== YOU CAN CHANGE: core training hyperparameters =====
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  num_epochs: 3
+  learning_rate: 0.0005
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 42
+
+  # ===== YOU CAN CHANGE: memory/speed settings =====
+  gradient_checkpointing: true
+  bf16: true
+  fp16: false
+  optim: "adamw_torch"
+
+  # ===== YOU CAN CHANGE: logging/checkpoint cadence =====
+  logging_steps: 25
+  eval_steps: 250
+  save_steps: 250
+  save_total_limit: 3
+
+output:
+  output_dir: "outputs/lora_sft_v1_5"
+  final_adapter_dir: "outputs/lora_sft_v1_5/final_lora"
