@@ -1,16 +1,47 @@
-# Humor Generator (V1 Baseline)
+# Humor Generator
 
-V1 baseline for humorous image captioning using OxfordTVG-HIC data preparation, candidate generation, and heuristic ranking.  
-**V1 does not train the model yet.** It prepares SFT data and an inference/ranking baseline.
+A research project for **multimodal humorous caption generation** using vision-language models, supervised fine-tuning, LoRA, candidate generation, and reranking.
 
+The project explores how to generate image-grounded humorous captions from the Oxford humor caption dataset. It is currently used as a research and engineering pipeline for data preparation, model fine-tuning, candidate generation, and evaluation design.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+## Overview
 
-## Expected dataset layout
+The current pipeline includes:
+
+- Data preprocessing for the Oxford humor caption dataset
+- SFT-format dataset construction
+- Qwen2.5-3B fine-tuning with LoRA
+- Candidate caption generation
+- Reranker construction for candidate selection
+- Large-scale generation of caption candidates
+- Evaluation metric design for humor quality and image relevance
+
+Future work includes replacing the single large model with a combination of smaller specialized models to improve modularity and efficiency.
+
+## Current Status
+
+- Built the data preprocessing pipeline
+- Constructed SFT-format training data
+- Completed SFT and LoRA fine-tuning with Qwen2.5-3B
+- Generated a large number of candidate captions
+- Built a reranker for candidate selection
+- Evaluation metrics are currently under construction
+
+## Tech Stack
+
+- Python
+- PyTorch
+- Hugging Face Transformers
+- Qwen2.5-3B
+- LoRA
+- Supervised Fine-Tuning (SFT)
+- pandas
+- JSONL
+- Candidate generation
+- Reranking
+
+## Expected Dataset Layout
+
 ```text
 <hic-root>/
   hic_data/
@@ -19,12 +50,22 @@ pip install -r requirements.txt
     ...image files...
 ```
 
-## Inspect dataset
+## Installation
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Inspect Dataset
+
 ```bash
 python scripts/inspect_dataset.py --hic-root /path/to/oxford-hic
 ```
 
-## Build SFT data
+## Build SFT Data
+
 ```bash
 python scripts/build_sft_data.py \
   --image-csv data/raw/images.csv \
@@ -36,19 +77,22 @@ python scripts/build_sft_data.py \
   --score-col score
 ```
 
-<<<<<<< codex/create-python-project-structure-for-humor-generator-i5dnt8
-你要填的关键项：
-- `--image-csv`：图片元数据 CSV 文件路径。
-- `--caption-csv`：caption 元数据 CSV 文件路径。
-- `--image-id-col`：图片 CSV 里图像 ID 列名。
-- `--image-path-col` 或 `--image-url-col`：图片路径/URL 列名（二选一）。
-- `--caption-image-id-col`：caption CSV 里关联图像 ID 列名。
-- `--caption-col`：caption 文本列名。
-- `--score-col`：打分列名。
+Key arguments:
 
-> 因为 OxfordTVG-HIC 的列名可能和示例不同，建议先跑 `inspect_dataset.py` 看列名再填。
+- `--image-csv`: path to the image metadata CSV file
+- `--caption-csv`: path to the caption metadata CSV file
+- `--image-id-col`: image ID column in the image CSV
+- `--image-path-col` or `--image-url-col`: image path or URL column
+- `--caption-image-id-col`: image ID column in the caption CSV
+- `--caption-col`: caption text column
+- `--score-col`: score column
 
-### 3.3 候选生成（mock，不需要模型）
+Because the column names in the Oxford dataset may vary, inspect the dataset first before running the full preprocessing pipeline.
+
+## Generate Candidates
+
+### Dry-run Mode
+
 ```bash
 python scripts/generate_candidates.py \
   --input-jsonl data/processed/sft_test.jsonl \
@@ -57,7 +101,8 @@ python scripts/generate_candidates.py \
   --dry-run true
 ```
 
-### 3.4 候选生成（真实 Qwen 模型）
+### Qwen Inference Mode
+
 ```bash
 python scripts/generate_candidates.py \
   --input-jsonl data/processed/sft_test.jsonl \
@@ -67,41 +112,35 @@ python scripts/generate_candidates.py \
   --model-name Qwen/Qwen2.5-VL-7B-Instruct
 ```
 
-如果你要用本地模型目录，把 `--model-name` 改成本地路径：
+For a local model directory, replace `--model-name` with the local path:
+
 ```bash
 --model-name /your/local/model/path/Qwen2.5-VL-7B-Instruct
 ```
 
-### 3.5 排序输出 Top-5
+## Rank Candidates
+
 ```bash
 python scripts/rank_candidates.py \
   --input-jsonl outputs/generations/candidates.jsonl \
   --output-jsonl outputs/generations/ranked_top5.jsonl
 ```
 
----
+## Dry-run Pipeline
 
-## 4) Dry-run（无需下载模型）
 ```bash
 python scripts/run_v1_dryrun.py
 ```
-该脚本会：
-- 生成 `data/demo/` 的小型合成数据
-- 构建 SFT
-- 生成 mock candidates
-- 进行排序并打印 top-5
 
----
+This script creates a small synthetic dataset, builds SFT-format data, generates mock candidates, ranks them, and prints the top candidates.
 
-## 5) 数据布局建议（你当前场景）
-建议你最终保持类似结构：
+## Suggested Project Structure
+
 ```text
 humor-generator/
   hic-data/
-    # 你的原始 CSV
     images_metadata.csv
     captions_metadata.csv
-    # 你的图片目录（两种都支持）
     images/
       *.jpg
       *.png
@@ -119,36 +158,12 @@ humor-generator/
       ranked_top5.jsonl
 ```
 
----
+## Research Direction
 
-## 6) V1 范围声明
-V1 当前只做：
-- SFT 数据准备
-- 候选生成（mock + Qwen加载入口）
-- 六维启发式打分与Top-5排序
+This project focuses on multimodal LLM-based humor generation and evaluation. Current research interests include:
 
-**不包含**：HCL / DPO / GRPO / IRCoT / GTVH / 动态RAG / 多专家LoRA 训练。
-=======
-## Run dry-run (no Qwen download needed)
-```bash
-python scripts/run_v1_dryrun.py
-```
-
-## Generate candidates with mock generator
-```bash
-python scripts/generate_candidates.py --dry-run true
-```
-
-## Run real Qwen2.5-VL inference later
-```bash
-python scripts/generate_candidates.py \
-  --dry-run false \
-  --model-name Qwen/Qwen2.5-VL-7B-Instruct
-```
-If loading fails, install/upgrade `transformers` and `qwen-vl-utils`, and ensure model weights are available.
-
-## Rank candidates
-```bash
-python scripts/rank_candidates.py
-```
->>>>>>> main
+- Image-grounded caption generation
+- Humor quality evaluation
+- Candidate generation and reranking
+- Efficient model composition with smaller specialized models
+- Multimodal generation evaluation
