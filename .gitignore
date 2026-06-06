@@ -1,15 +1,29 @@
 .DS_Store
 .idea/
 .pytest_cache/
+**/.pytest_cache/
 __pycache__/
+**/__pycache__/
 *.pyc
 
 .venv/
 v1/.venv/
+v1.5/.venv/
+v1.5final/.venv/
+v2.5/.venv/
 
 v1.5/data/processed/
 v1.5/outputs/
+v1.5final/data/processed/
+v1.5final/outputs/
+v2.5/data/processed/
+v2.5/outputs/
 version1/**/__pycache__/
 v1/**/__pycache__/
 
 *.zip
+*.pt
+*.pth
+*.bin
+*.safetensors
+events.out.tfevents*

@@ -1,8 +1,8 @@
 # Humor Generator
 
-A research project for **multimodal humorous caption generation** using vision-language models, supervised fine-tuning, LoRA, candidate generation, and reranking.
+A research project for multimodal humorous caption generation using vision-language models, supervised fine-tuning, LoRA, candidate generation, and reranking.
 
-The project explores how to generate image-grounded humorous captions from the Oxford humor caption dataset. It is currently used as a research and engineering pipeline for data preparation, model fine-tuning, candidate generation, and evaluation design.
+The project explores how to generate image-grounded humorous captions from OxfordTVG-HIC style data. It is currently used as a research and engineering pipeline for data preparation, model fine-tuning, candidate generation, reranker construction, and evaluation design.
 
 ## Overview
 
@@ -12,6 +12,7 @@ The current pipeline includes:
 - SFT-format dataset construction
 - Qwen2.5-3B fine-tuning with LoRA
 - Candidate caption generation
+- Candidate cleaning and diagnostic evaluation
 - Reranker construction for candidate selection
 - Large-scale generation of caption candidates
 - Evaluation metric design for humor quality and image relevance
@@ -24,8 +25,17 @@ Future work includes replacing the single large model with a combination of smal
 - Constructed SFT-format training data
 - Completed SFT and LoRA fine-tuning with Qwen2.5-3B
 - Generated a large number of candidate captions
-- Built a reranker for candidate selection
+- Built the first reranker utilities for candidate selection
+- Prepared `v2.5/` for the next reranker build
 - Evaluation metrics are currently under construction
+
+## Versions
+
+- `v1/`: first baseline for data preparation, candidate generation, and heuristic ranking.
+- `v1.5final/`: final V1.5 clean-prompt Qwen2.5-VL LoRA-SFT snapshot, plus candidate-cleaning, Qwen judging, hard-negative, and reranker utility scripts.
+- `v2.5/`: clean reranker construction workspace forked from `v1.5final`. Use this for the next reranker iteration.
+
+The older `v1.5/` folder has been superseded by `v1.5final/`.
 
 ## Tech Stack
 
@@ -40,101 +50,36 @@ Future work includes replacing the single large model with a combination of smal
 - Candidate generation
 - Reranking
 
-## Expected Dataset Layout
+## Quick Start
+
+```bash
+cd v1.5final
+python -m pip install -r requirements.txt
+python -m pytest tests
+```
+
+For the next reranker work:
+
+```bash
+cd v2.5
+python -m pip install -r requirements.txt
+python -m pytest tests
+```
+
+## Data And Artifacts
+
+GitHub does not store generated data, model checkpoints, candidate dumps, or logs. These paths are intentionally ignored:
 
 ```text
-<hic-root>/
-  hic_data/
-    *.csv
-  images/
-    ...image files...
+v1.5final/data/processed/
+v1.5final/outputs/
+v2.5/data/processed/
+v2.5/outputs/
 ```
 
-## Installation
+Rebuild processed files with the scripts in each version, or copy them from the local workspace when continuing experiments. The standalone local workspace at `/home/zhang.jianqiao/projects/v2.5` was prepared with processed data preserved for reranker construction.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-## Inspect Dataset
-
-```bash
-python scripts/inspect_dataset.py --hic-root /path/to/oxford-hic
-```
-
-## Build SFT Data
-
-```bash
-python scripts/build_sft_data.py \
-  --image-csv data/raw/images.csv \
-  --caption-csv data/raw/captions.csv \
-  --image-id-col image_id \
-  --image-path-col image_path \
-  --caption-image-id-col image_id \
-  --caption-col caption \
-  --score-col score
-```
-
-Key arguments:
-
-- `--image-csv`: path to the image metadata CSV file
-- `--caption-csv`: path to the caption metadata CSV file
-- `--image-id-col`: image ID column in the image CSV
-- `--image-path-col` or `--image-url-col`: image path or URL column
-- `--caption-image-id-col`: image ID column in the caption CSV
-- `--caption-col`: caption text column
-- `--score-col`: score column
-
-Because the column names in the Oxford dataset may vary, inspect the dataset first before running the full preprocessing pipeline.
-
-## Generate Candidates
-
-### Dry-run Mode
-
-```bash
-python scripts/generate_candidates.py \
-  --input-jsonl data/processed/sft_test.jsonl \
-  --output-jsonl outputs/generations/candidates.jsonl \
-  --num-candidates 10 \
-  --dry-run true
-```
-
-### Qwen Inference Mode
-
-```bash
-python scripts/generate_candidates.py \
-  --input-jsonl data/processed/sft_test.jsonl \
-  --output-jsonl outputs/generations/candidates.jsonl \
-  --num-candidates 10 \
-  --dry-run false \
-  --model-name Qwen/Qwen2.5-VL-7B-Instruct
-```
-
-For a local model directory, replace `--model-name` with the local path:
-
-```bash
---model-name /your/local/model/path/Qwen2.5-VL-7B-Instruct
-```
-
-## Rank Candidates
-
-```bash
-python scripts/rank_candidates.py \
-  --input-jsonl outputs/generations/candidates.jsonl \
-  --output-jsonl outputs/generations/ranked_top5.jsonl
-```
-
-## Dry-run Pipeline
-
-```bash
-python scripts/run_v1_dryrun.py
-```
-
-This script creates a small synthetic dataset, builds SFT-format data, generates mock candidates, ranks them, and prints the top candidates.
-
-## Suggested Project Structure
+## Expected Dataset Layout
 
 ```text
 humor-generator/
@@ -156,6 +101,16 @@ humor-generator/
     generations/
       candidates.jsonl
       ranked_top5.jsonl
+```
+
+## Model Paths
+
+Configs default to local model/dataset paths used in this workspace. If you run the project elsewhere, update the relevant paths inside each version directory:
+
+```text
+configs/data_preprocess.yaml
+configs/lora_sft.yaml
+configs/humor_reranker.yaml
 ```
 
 ## Research Direction

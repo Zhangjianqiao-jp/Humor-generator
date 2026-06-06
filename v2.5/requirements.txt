@@ -1,0 +1,9 @@
+pandas
+pillow
+pyyaml
+pytest
+torch
+transformers
+accelerate
+peft
+qwen-vl-utils

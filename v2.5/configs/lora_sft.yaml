@@ -1,0 +1,65 @@
+# V1.5 clean-prompt LoRA-SFT config.
+# Run from v1.5/: python scripts/train_lora_sft.py --config configs/lora_sft.yaml
+
+model:
+  model_name: "/home/zhang.jianqiao/models/Qwen2.5-VL-3B-Instruct"
+  device_map: "auto"
+  torch_dtype: "auto"
+  trust_remote_code: true
+
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+    bias: "none"
+
+data:
+  train_path: "data/processed/sft_train.jsonl"
+  val_path: "data/processed/sft_val.jsonl"
+  image_root: null
+  max_seq_len: 512
+  max_caption_chars: 240
+  min_supervised_tokens: 3
+  skip_missing_images: true
+  normalize_prompt: true
+  sft_prompt: "Generate one short, natural, image-specific humorous caption for this image. Do not explain."
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  num_epochs: 1
+  learning_rate: 0.0001
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 42
+
+  gradient_checkpointing: true
+  bf16: true
+  fp16: false
+  optim: "adamw_torch"
+
+  logging_steps: 10
+  eval_steps: 1000
+  save_steps: 1000
+  save_total_limit: 3
+
+generation:
+  max_new_tokens: 48
+  temperature: 0.8
+  top_p: 0.9
+  do_sample: true
+  num_candidates: 10
+  repetition_penalty: 1.05
+
+evaluation:
+  fixed_generation_samples: 5
+  max_eval_samples: 1024
+
+output:
+  output_dir: "outputs/lora_sft_v1_5"
+  latest_adapter_dir: "outputs/lora_sft_v1_5/latest"
+  best_adapter_dir: "outputs/lora_sft_v1_5/best_val_loss"
+  final_adapter_dir: "outputs/lora_sft_v1_5/final_lora"
+  tensorboard_dir: "outputs/lora_sft_v1_5/tensorboard"

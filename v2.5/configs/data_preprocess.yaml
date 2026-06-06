@@ -1,0 +1,37 @@
+# V1.5 data preprocessing config.
+# Run from v1.5/: python scripts/preprocess_data.py --config configs/data_preprocess.yaml
+
+data:
+  image_csv: "/home/zhang.jianqiao/datasets/hic-data/oxford_hic_image_info.csv"
+  caption_csv: "/home/zhang.jianqiao/datasets/hic-data/oxford_hic_data.csv"
+  image_base_dir: "/home/zhang.jianqiao/datasets/hic-data"
+
+  # ===== YOU CAN CHANGE: dataset column mapping =====
+  image_id_col: "image_id"
+  image_path_col: "image_path"
+  image_url_col:
+  caption_image_id_col: "image_id"
+  caption_col: "caption"
+  score_col: "funny_score"
+
+  # ===== YOU CAN CHANGE: model instruction prompt =====
+  prompt: "Generate one short, natural, image-specific humorous caption for this image. Do not explain."
+
+filtering:
+  # ===== YOU CAN CHANGE: preprocessing hyperparameters =====
+  min_caption_chars: 5
+  max_caption_chars: 220
+  min_score:
+  rank_percentile_threshold: 0.9
+  max_captions_per_image: 3
+  require_existing_image: true
+
+split:
+  # ===== YOU CAN CHANGE: split hyperparameters =====
+  train_ratio: 0.90
+  val_ratio: 0.05
+  test_ratio: 0.05
+  seed: 42
+
+output:
+  output_dir: "data/processed"

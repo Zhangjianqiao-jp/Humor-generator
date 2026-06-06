@@ -1,0 +1,49 @@
+# V1.5 humor reranker baseline config.
+# First train with strong pairs, then optionally resume with mixed/weak pairs.
+
+model:
+  # If this model is not cached locally, either allow HF download or replace with a local CLIP/SigLIP path.
+  backbone_name: "openai/clip-vit-base-patch32"
+  torch_dtype: "auto"
+  trust_remote_code: false
+  local_files_only: false
+  freeze_backbone: true
+  save_backbone: false
+  gradient_checkpointing: false
+  normalize_embeddings: true
+  hidden_dim: 1024
+  num_head_layers: 2
+  dropout: 0.10
+
+data:
+  stage: "strong"
+  pair_jsonl: "data/processed/reranker_score_pools_strict/strong_pairs.jsonl"
+  weak_pair_jsonl: "data/processed/reranker_score_pools_strict/weak_pairs.jsonl"
+  weak_mix_ratio: 0.30
+  max_text_len: 64
+
+training:
+  batch_size: 128
+  gradient_accumulation_steps: 1
+  num_epochs: 3
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  bf16: true
+  fp16: false
+  num_workers: 4
+  skip_missing_images: true
+  val_ratio: 0.02
+  max_train_samples: null
+  max_val_samples: null
+  eval_max_batches: 200
+  logging_steps: 20
+  eval_steps: 500
+  save_steps: 1000
+  seed: 42
+  use_row_loss_weight: true
+  progress: true
+
+output:
+  output_dir: "outputs/humor_reranker_v1/strong"
