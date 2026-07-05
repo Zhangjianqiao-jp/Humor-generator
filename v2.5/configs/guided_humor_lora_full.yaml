@@ -1,0 +1,57 @@
+model:
+  model_name: "/home/zhang.jianqiao/models/Qwen2.5-VL-3B-Instruct"
+  device_map: "cuda:0"
+  torch_dtype: "auto"
+  trust_remote_code: true
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+    bias: "none"
+
+data:
+  train_path: "outputs/guided_sft_pipeline/data/full_train.jsonl"
+  val_path: "outputs/guided_sft_pipeline/data/full_val.jsonl"
+  train_guidance_path: "outputs/guided_sft_pipeline/data/full_train_guidance.jsonl"
+  val_guidance_path: "outputs/guided_sft_pipeline/data/full_val_guidance.jsonl"
+  max_seq_len: 512
+  max_caption_chars: 160
+  min_supervised_tokens: 3
+  sft_prompt: "Generate one short, natural, image-specific humorous caption for this image. Do not explain."
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  num_epochs: 1
+  learning_rate: 0.00003
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 260618
+  gradient_checkpointing: true
+  bf16: true
+  fp16: false
+  optim: "adamw_torch"
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 100
+  save_total_limit: 3
+
+generation:
+  max_new_tokens: 48
+  temperature: 0.8
+  top_p: 0.9
+  do_sample: true
+  num_return_sequences: 1
+  repetition_penalty: 1.05
+
+evaluation:
+  fixed_generation_samples: 8
+
+output:
+  output_dir: "outputs/guided_sft_pipeline/full_lora"
+  latest_adapter_dir: "outputs/guided_sft_pipeline/full_lora/latest"
+  best_adapter_dir: "outputs/guided_sft_pipeline/full_lora/best_val_loss"
+  final_adapter_dir: "outputs/guided_sft_pipeline/full_lora/final_lora"
+  tensorboard_dir: "outputs/guided_sft_pipeline/full_lora/tensorboard"

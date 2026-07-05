@@ -1,0 +1,12 @@
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.venv/
+outputs/
+*.pt
+*.pth
+*.bin
+*.safetensors
+events.out.tfevents*
