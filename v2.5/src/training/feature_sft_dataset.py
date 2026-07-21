@@ -1,16 +1,31 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from src.analysis.guided_prompting import build_guided_prompt
-from src.training.sft_dataset import HumorSFTDataset, extract_image_path
+from src.training.sft_dataset import HumorSFTDataset, extract_caption, extract_image_path
+
+
+def _caption_hash(caption: Any) -> str | None:
+    text = str(caption or "").strip()
+    if not text:
+        return None
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
 
 
 def _keys_for_context(row: dict[str, Any]) -> list[str]:
     keys = []
+    row_key = row.get("row_key")
+    if row_key:
+        keys.append(f"row_key:{row_key}")
     image_id = row.get("image_id")
+    caption = row.get("gold_caption") or row.get("caption") or extract_caption(row)
+    caption_key = _caption_hash(caption)
+    if image_id and caption_key:
+        keys.append(f"row_key:{image_id}::{caption_key}")
     if image_id:
         keys.append(f"id:{image_id}")
     image = row.get("image") or row.get("raw_image") or extract_image_path(row)
@@ -81,6 +96,9 @@ class FeatureHumorSFTDataset(HumorSFTDataset):
         row["image_description"] = context.get("image_description", "")
         row["visual_facts"] = context.get("visual_facts") or context.get("humor_points", {})
         row["structured_humor"] = context.get("structured_humor", {})
+        row["humor_viewpoint"] = context.get("analysis") or context.get("humor_viewpoint") or {}
+        row["region_annotation"] = context.get("region_annotation")
+        row["gold_caption"] = context.get("gold_caption") or row.get("caption")
         row["context_source"] = {
             "context_jsonl": str(self.context_jsonl),
             "extractor_model": context.get("extractor_model"),
@@ -98,6 +116,8 @@ class FeatureHumorSFTDataset(HumorSFTDataset):
             image_description=str(row.get("image_description") or ""),
             visual_facts=row.get("visual_facts") or {},
             structured_humor=row.get("structured_humor") or {},
+            humor_viewpoint=row.get("humor_viewpoint") or {},
+            region_annotation=row.get("region_annotation"),
+            gold_caption=str(row.get("gold_caption") or row.get("caption") or ""),
             base_prompt=base_prompt,
         )
-

@@ -272,7 +272,7 @@ Supported HIC annotation renderers:
 hic-humor-point       literal scene + gold-derived humor target
 hic-viewpoint-tags    humor type + minimal viewpoint tags only
 hic-anchor-viewpoint  literal scene + anchors + viewpoint tags + humor target
-hic-compact-json      compact JSON version of anchors/viewpoints/target
+hic-compact-json      compact JSON anchors/viewpoints/target with strict short-caption style guards
 ```
 
 Run the prompt ablation with the base 3B generator. Use the same subset, seed,
@@ -325,6 +325,78 @@ Treat HIC annotations as gold-caption-derived analysis, not as a deployable
 image-only extractor. A renderer only becomes a serious candidate if it beats
 plain generation under this gold-reference judge and then still helps when the
 teacher extracts humor targets without seeing the gold caption.
+
+The selected `hic-compact-json` renderer intentionally treats the compact JSON
+as joke clues, not wording to copy. Its wrapper asks the generator for exactly
+one caption, uses a 12-word limit, and discourages explanatory
+phrases such as `because`, `which is`, `visual effect`, `image`, `scene`,
+`joke`, `humor`, and `funny`. It also tells the generator not to surface
+analysis labels such as `contrast`, `mismatch`, `viewpoint`, `target`,
+`anchor`, `role`, or `scale`. Keep the final base prompt unchanged:
+
+```text
+Generate one short, natural, image-specific humorous caption for this image. Do not explain.
+```
+
+### HIC Region Annotation
+
+This workflow localizes humor evidence for the fixed 8 HIC viewpoints and tests
+whether region-guided generation improves on the selected `hic-compact-json`
+prompt. The fixed viewpoints are:
+
+```text
+face_expression_crop
+relation_crop
+context_scene_view
+text_region_crop
+object_crop
+full_image
+pose_action_view
+scale_reference_crop
+```
+
+Prepare a balanced annotation subset:
+
+```bash
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/prepare_hic_viewpoint_annotation_subset.py \
+  --input-jsonl outputs/analysis/hic_humor_viewpoints_pairs_10000_random_minview.jsonl \
+  --per-viewpoint 100 \
+  --output-jsonl outputs/annotations/hic_region_annotation_subset_800.jsonl
+```
+
+Annotate humor regions with Qwen2.5-VL-7B at temperature 0:
+
+```bash
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/annotate_hic_humor_regions.py \
+  --input-jsonl outputs/annotations/hic_region_annotation_subset_800.jsonl \
+  --output-jsonl outputs/annotations/hic_region_annotations_800.jsonl \
+  --wait-gpu-free-mb 14000 \
+  --wait-gpu-index 0
+```
+
+Render overlays, crop sheets, and review HTML:
+
+```bash
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/render_hic_region_overlays.py \
+  --input-jsonl outputs/annotations/hic_region_annotations_800.jsonl \
+  --output-jsonl outputs/annotations/hic_region_annotations_800_rendered.jsonl
+```
+
+Run the full region ablation:
+
+```bash
+WAIT_GPU_FREE_MB=14000 bash scripts/run_hic_region_annotation_ablation.sh
+```
+
+Monitor a running job:
+
+```bash
+watch -n 5 'nvidia-smi; echo; wc -l outputs/annotations/hic_region_annotations_800.jsonl 2>/dev/null; wc -l outputs/generations/hic_region_ablation_*.jsonl 2>/dev/null'
+```
+
+Generated JSONL files, overlays, crop sheets, and review HTML are experiment
+artifacts. Do not commit them unless the experiment output itself is explicitly
+requested.
 
 ### Smoke Test Notes
 
@@ -382,6 +454,176 @@ files first:
 
 Then update the SFT config deliberately and train a fresh adapter only after the
 prompt-only gate is convincing.
+
+### HIC Compact-JSON LoRA-SFT Pilot
+
+For the selected `hic-compact-json` renderer, first create caption-specific HIC
+viewpoint context. Keep `--no-dedupe-image`; the same image can have multiple
+gold captions, and each caption needs its own `row_key` and compact JSON.
+
+For a quick SSH-safe pilot, start the bundled script in `tmux`. By default it
+creates 32 train and 8 validation context rows, then runs `--debug-data`:
+
+```bash
+tmux new-session -d -s hic-compact-json-pilot \
+  'cd /home/zhang.jianqiao/projects/v2.5 && env PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True scripts/run_hic_compact_json_pilot_context.sh > outputs/analysis/hic_compact_json_pilot_context.log 2>&1'
+```
+
+For a larger pilot, override the limits:
+
+```bash
+tmux new-session -d -s hic-compact-json-pilot-512 \
+  'cd /home/zhang.jianqiao/projects/v2.5 && env PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True TRAIN_LIMIT=512 VAL_LIMIT=128 scripts/run_hic_compact_json_pilot_context.sh > outputs/analysis/hic_compact_json_pilot_context_512.log 2>&1'
+```
+
+To run the larger pilot end-to-end, including context generation, `--debug-data`,
+and a fresh LoRA adapter, use:
+
+```bash
+tmux new-session -d -s hic-compact-json-pilot-512 \
+  'cd /home/zhang.jianqiao/projects/v2.5 && env PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True TRAIN_LIMIT=512 VAL_LIMIT=128 TAG=512 scripts/run_hic_compact_json_pilot_train.sh > outputs/analysis/hic_compact_json_pilot_512.log 2>&1'
+```
+
+Equivalent explicit commands:
+
+```bash
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/analyze_hic_humor_viewpoints.py \
+  --input data/processed/sft_train.jsonl \
+  --output-jsonl outputs/analysis/hic_humor_viewpoints_sft_train_pilot.jsonl \
+  --summary-json outputs/analysis/hic_humor_viewpoint_summary_sft_train_pilot.json \
+  --report-md outputs/analysis/hic_humor_viewpoint_report_sft_train_pilot.md \
+  --limit 512 \
+  --sample-seed 260704 \
+  --no-dedupe-image \
+  --temperature 0.0 \
+  --wait-gpu-free-mb 18000 \
+  --wait-gpu-index 0 \
+  --overwrite
+
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/analyze_hic_humor_viewpoints.py \
+  --input data/processed/sft_val.jsonl \
+  --output-jsonl outputs/analysis/hic_humor_viewpoints_sft_val_pilot.jsonl \
+  --summary-json outputs/analysis/hic_humor_viewpoint_summary_sft_val_pilot.json \
+  --report-md outputs/analysis/hic_humor_viewpoint_report_sft_val_pilot.md \
+  --limit 128 \
+  --sample-seed 260705 \
+  --no-dedupe-image \
+  --temperature 0.0 \
+  --wait-gpu-free-mb 18000 \
+  --wait-gpu-index 0 \
+  --overwrite
+```
+
+Smoke-check the SFT rows before training:
+
+```bash
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/train_lora_sft_with_features.py \
+  --config configs/lora_sft_hic_compact_json_pilot.yaml \
+  --debug-data \
+  --max-train-samples 3 \
+  --max-val-samples 2
+```
+
+Run a one-step training smoke test before any real pilot:
+
+```bash
+env PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/train_lora_sft_with_features.py \
+  --config configs/lora_sft_hic_compact_json_pilot.yaml \
+  --debug-one-step \
+  --max-train-samples 8 \
+  --max-val-samples 4
+```
+
+### HIC Compact-JSON Experiment Progress
+
+Current decision: keep `hic-compact-json` as the only active annotation
+renderer for SFT. The prompt should continue to use the compact JSON as joke
+clues, avoid explanatory wording, and preserve this final base prompt exactly:
+
+```text
+Generate one short, natural, image-specific humorous caption for this image. Do not explain.
+```
+
+Held-out comparison on the first 200 rows of `data/processed/sft_test.jsonl`
+with 8 candidates per image:
+
+```text
+method                    gold_match  candidate_match  avg_max_sim  format_ok  avg_chars
+base hic-compact-json        0.0550          0.0181       0.3768     0.9806       59.6
+512-row LoRA pilot           0.1200          0.0694       0.4232     0.9963       28.7
+```
+
+The 512-row pilot also reduced explanation-style output:
+
+```text
+explains flag:        0.0194 -> 0.0031
+generic-pattern flag: 0.0425 -> 0.0169
+```
+
+Risk to watch: refusal-style generations increased from about `0.125%` to
+about `0.875%` on the same 200-row sample. Do not scale directly to full data
+without rechecking this rate.
+
+The 512-row pilot artifacts are local only:
+
+```text
+outputs/lora_sft_hic_compact_json_pilot_512/final_lora
+outputs/evaluations/hic_compact_json_pilot512_sft_test_200_summary.json
+outputs/generations/hic_compact_json_pilot512_sft_test_200.jsonl
+```
+
+Training summary for the 512-row pilot:
+
+```text
+train rows: 512
+val rows: 128
+steps: 64
+train_loss: 2.257
+eval_loss: 2.1428
+eval_ppl: 8.52
+```
+
+Because the 512-row adapter improves gold-caption similarity and format quality
+but has a small refusal-rate regression, the next scale is an intermediate
+`3000 train / 512 val` run:
+
+```bash
+tmux new-session -d -s hic-compact-json-train-3000 \
+  'cd /home/zhang.jianqiao/projects/v2.5 && env PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True TRAIN_LIMIT=3000 VAL_LIMIT=512 TAG=3000 WAIT_GPU_FREE_MB=18000 scripts/run_hic_compact_json_pilot_train.sh > outputs/analysis/hic_compact_json_train_3000.log 2>&1'
+```
+
+Monitor it with:
+
+```bash
+tail -f outputs/analysis/hic_compact_json_train_3000.log
+tmux attach -t hic-compact-json-train-3000
+```
+
+Evaluate the 512-row pilot adapter on the 200-row held-out slice:
+
+```bash
+env PYTHONUNBUFFERED=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/generate_guided_lora_candidates.py \
+  --config configs/vlm_guided_generation_hic_compact_json_pilot512.yaml \
+  --method hic-compact-json \
+  --input-jsonl data/processed/sft_test.jsonl \
+  --context-jsonl outputs/analysis/hic_humor_viewpoints_sft_test_full.jsonl \
+  --output-jsonl outputs/generations/hic_compact_json_pilot512_sft_test_200.jsonl \
+  --review-html outputs/reviews/hic_compact_json_pilot512_sft_test_200.html \
+  --limit 200 \
+  --num-candidates 8 \
+  --seed 250704 \
+  --min-pixels 100352 \
+  --max-pixels 401408 \
+  --overwrite
+
+/home/zhang.jianqiao/miniconda3/envs/humor/bin/python scripts/evaluate_sft_candidates.py \
+  --input-jsonl outputs/generations/hic_compact_json_pilot512_sft_test_200.jsonl \
+  --output-jsonl outputs/evaluations/hic_compact_json_pilot512_sft_test_200_eval.jsonl \
+  --summary-json outputs/evaluations/hic_compact_json_pilot512_sft_test_200_summary.json \
+  --similarity-threshold 0.55
+```
 
 ## Next Implementation Targets
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import subprocess
 import sys
 import time
@@ -250,6 +251,14 @@ def load_input_rows(input_path: Path, dedupe_image: bool) -> list[dict[str, Any]
     if input_path.is_dir():
         return load_rows_from_hic_root(input_path, dedupe_image=dedupe_image)
     return load_rows_from_jsonl(input_path, dedupe_image=dedupe_image)
+
+
+def select_input_rows(rows: list[dict[str, Any]], limit: int | None, sample_seed: int | None) -> list[dict[str, Any]]:
+    if limit is None or limit >= len(rows):
+        return list(rows)
+    if sample_seed is None:
+        return rows[:limit]
+    return random.Random(sample_seed).sample(rows, limit)
 
 
 def existing_keys(path: Path) -> set[str]:
@@ -723,6 +732,12 @@ def main() -> None:
     parser.add_argument("--device-map", default="auto")
     parser.add_argument("--torch-dtype", default="auto")
     parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument(
+        "--sample-seed",
+        type=int,
+        default=None,
+        help="If set with --limit, analyze a reproducible random sample instead of the first rows.",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=768)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--min-pixels", type=int, default=DEFAULT_MIN_PIXELS)
@@ -750,14 +765,13 @@ def main() -> None:
         return
 
     rows = load_input_rows(args.input, dedupe_image=not args.no_dedupe_image)
-    if args.limit is not None:
-        preview_count = min(args.limit, len(rows))
-    else:
-        preview_count = len(rows)
+    loaded_count = len(rows)
+    rows = select_input_rows(rows, limit=args.limit, sample_seed=args.sample_seed)
+    preview_count = len(rows)
     print(
         "[viewpoints] "
-        f"loaded_rows={len(rows)} selected_rows={preview_count} "
-        f"dedupe_image={not args.no_dedupe_image} input={args.input}"
+        f"loaded_rows={loaded_count} selected_rows={preview_count} "
+        f"dedupe_image={not args.no_dedupe_image} sample_seed={args.sample_seed} input={args.input}"
     )
     if rows:
         print(
@@ -779,7 +793,7 @@ def main() -> None:
         rows=rows,
         output_jsonl=args.output_jsonl,
         model_name=args.model_name,
-        limit=args.limit,
+        limit=None,
         overwrite=args.overwrite,
         skip_existing=not args.no_skip_existing,
         device_map=args.device_map,

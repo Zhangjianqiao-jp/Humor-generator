@@ -125,6 +125,18 @@ def set_seed(seed: int | None) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def build_generation_messages(
+    image_path: Path,
+    prompt: str,
+    auxiliary_image_paths: list[Path] | None = None,
+) -> list[dict[str, Any]]:
+    content = [{"type": "image", "image": str(image_path)}]
+    for path in auxiliary_image_paths or []:
+        content.append({"type": "image", "image": str(path)})
+    content.append({"type": "text", "text": prompt})
+    return [{"role": "user", "content": content}]
+
+
 def generate_one_image(
     model: Any,
     processor: Any,
@@ -136,17 +148,10 @@ def generate_one_image(
     temperature: float,
     top_p: float,
     repetition_penalty: float,
+    auxiliary_image_paths: list[Path] | None = None,
     seed: int | None = None,
 ) -> list[str]:
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": str(image_path)},
-                {"type": "text", "text": prompt},
-            ],
-        }
-    ]
+    messages = build_generation_messages(image_path, prompt, auxiliary_image_paths=auxiliary_image_paths)
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     image_inputs, video_inputs = process_vision_info(messages)
     inputs = processor(
@@ -205,7 +210,32 @@ def optional_path(value: Any) -> Path | None:
     return Path(str(value))
 
 
+REGION_GUIDED_METHODS = {
+    "hic-compact-json-region",
+    "hic-compact-json-overlay",
+    "hic-compact-json-crop",
+}
+
+
+def auxiliary_images_for_method(context: dict[str, Any], method: str) -> list[Path]:
+    if method == "hic-compact-json-overlay":
+        path = optional_path(context.get("overlay_image"))
+        return [path] if path is not None and path.exists() else []
+    if method == "hic-compact-json-crop":
+        path = optional_path(context.get("crop_sheet"))
+        return [path] if path is not None and path.exists() else []
+    return []
+
+
+def method_requires_auxiliary_image(method: str) -> bool:
+    return method in {"hic-compact-json-overlay", "hic-compact-json-crop"}
+
+
 def context_has_required_fields(context: dict[str, Any], method: str) -> bool:
+    if method in REGION_GUIDED_METHODS:
+        return isinstance(context.get("analysis") or context.get("humor_viewpoint"), dict) and isinstance(
+            context.get("region_annotation"), dict
+        )
     if method.startswith("hic-"):
         return isinstance(context.get("analysis") or context.get("humor_viewpoint"), dict)
     if method in ("structured-nl", "structured-json"):
@@ -283,6 +313,7 @@ def run_generate(
     skipped_missing_context = 0
     skipped_incomplete_context = 0
     skipped_missing_image = 0
+    skipped_missing_auxiliary_image = 0
     for index, row in enumerate(tqdm(rows, desc=f"generating {method}", dynamic_ncols=True)):
         context = {} if method == "plain" else find_context(row, context_map)
         if context is None:
@@ -302,6 +333,11 @@ def run_generate(
             skipped_missing_image += 1
             print(f"[guided-generate] missing image row={index}: {image_path}")
             continue
+        auxiliary_image_paths = auxiliary_images_for_method(context, method)
+        if method_requires_auxiliary_image(method) and not auxiliary_image_paths:
+            skipped_missing_auxiliary_image += 1
+            print(f"[guided-generate] missing auxiliary image for {method} row={index} image_id={row.get('image_id')}")
+            continue
 
         visual_facts = context.get("visual_facts") or context.get("humor_points") or {}
         humor_viewpoint = context.get("analysis") or context.get("humor_viewpoint") or {}
@@ -311,6 +347,7 @@ def run_generate(
             visual_facts=visual_facts,
             structured_humor=context.get("structured_humor") or {},
             humor_viewpoint=humor_viewpoint,
+            region_annotation=context.get("region_annotation"),
             gold_caption=str(context.get("gold_caption") or extract_caption(row) or ""),
             base_prompt=base_prompt,
         )
@@ -328,6 +365,7 @@ def run_generate(
             temperature=float(generator_config.get("temperature", 0.8)),
             top_p=float(generator_config.get("top_p", 0.9)),
             repetition_penalty=float(generator_config.get("repetition_penalty", 1.05)),
+            auxiliary_image_paths=auxiliary_image_paths,
             seed=row_seed,
         )
         outputs.append(
@@ -344,6 +382,9 @@ def run_generate(
                 "structured_humor_parse_error": context.get("structured_humor_parse_error"),
                 "humor_viewpoint": humor_viewpoint,
                 "humor_viewpoint_prompt_version": context.get("prompt_version"),
+                "region_annotation": context.get("region_annotation"),
+                "overlay_image": context.get("overlay_image"),
+                "crop_sheet": context.get("crop_sheet"),
                 "candidates": candidates,
                 "meta": {
                     "generator_model_name": generator_config["model_name"],
@@ -355,6 +396,7 @@ def run_generate(
                     "top_p": float(generator_config.get("top_p", 0.9)),
                     "repetition_penalty": float(generator_config.get("repetition_penalty", 1.05)),
                     "seed": row_seed,
+                    "auxiliary_images": [str(path) for path in auxiliary_image_paths],
                 },
             }
         )
@@ -367,7 +409,8 @@ def run_generate(
         "[guided-generate] "
         f"skipped_missing_context={skipped_missing_context} "
         f"skipped_incomplete_context={skipped_incomplete_context} "
-        f"skipped_missing_image={skipped_missing_image}"
+        f"skipped_missing_image={skipped_missing_image} "
+        f"skipped_missing_auxiliary_image={skipped_missing_auxiliary_image}"
     )
 
 

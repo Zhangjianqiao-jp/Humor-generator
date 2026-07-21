@@ -4,6 +4,8 @@ import json
 import re
 from typing import Any
 
+from src.analysis.hic_region_annotations import compact_region_payload_for_prompt
+
 
 DEFAULT_BASE_PROMPT = (
     "Generate one short, natural, image-specific humorous caption for this image. "
@@ -22,6 +24,9 @@ GUIDED_PROMPT_METHODS = (
     "hic-viewpoint-tags",
     "hic-anchor-viewpoint",
     "hic-compact-json",
+    "hic-compact-json-region",
+    "hic-compact-json-overlay",
+    "hic-compact-json-crop",
 )
 
 
@@ -505,10 +510,92 @@ def build_hic_compact_json_prompt(
     compact_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     lines = [
         "Auxiliary visual joke annotations are provided below as compact JSON.",
-        "Trust the image first. Do not repeat the JSON or explain it.",
-        "Return only one short caption.",
+        "Trust the image first. Ignore annotations that conflict with it.",
+        "Use the compact JSON as joke clues, not wording to copy.",
+        "Write a caption, not an image description.",
+        "Prefer a punchline or meme-style line over a full sentence explanation.",
+        "Maximum 12 words.",
+        "Output exactly one caption.",
+        "Do not repeat the JSON or explain it.",
+        "Do not use because, since, which is, creating, visual effect, image, photo, scene, joke, humor, or funny.",
+        "Do not name the humor type, viewpoint, annotation labels, or JSON fields.",
+        "Do not use abstract analysis words such as contrast, mismatch, reversal, unexpected, target, anchor, viewpoint, label, role, or scale.",
         "",
         f"<joke_annotations>{compact_json}</joke_annotations>",
+        "",
+        base_prompt,
+    ]
+    return "\n".join(lines).strip()
+
+
+def _hic_compact_joke_payload(
+    humor_viewpoint: dict[str, Any] | None,
+    gold_caption: str | None = None,
+) -> dict[str, Any]:
+    viewpoint = format_hic_humor_viewpoint(humor_viewpoint, gold_caption=gold_caption)
+    return {
+        "scene": viewpoint["literal_image_description"],
+        "type": viewpoint["humor_type"],
+        "target": viewpoint["humor_point"],
+        "primary_view": viewpoint["primary_viewpoint"],
+        "views": viewpoint["required_viewpoints"],
+        "anchors": [
+            {
+                "label": anchor.get("label"),
+                "evidence": anchor.get("evidence"),
+                "role": anchor.get("role"),
+            }
+            for anchor in viewpoint["visual_anchors"]
+        ],
+        "external_knowledge": viewpoint["needs_external_knowledge"],
+    }
+
+
+def _strip_caption_from_payload(value: Any, gold_caption: str | None = None) -> Any:
+    if isinstance(value, dict):
+        return {key: _strip_caption_from_payload(item, gold_caption=gold_caption) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_strip_caption_from_payload(item, gold_caption=gold_caption) for item in value]
+    if isinstance(value, str):
+        return _strip_source_caption(value, gold_caption=gold_caption)
+    return value
+
+
+def build_hic_compact_json_region_prompt(
+    humor_viewpoint: dict[str, Any] | None,
+    region_annotation: dict[str, Any] | None,
+    gold_caption: str | None = None,
+    base_prompt: str = DEFAULT_BASE_PROMPT,
+    auxiliary_mode: str = "region",
+) -> str:
+    joke_payload = _hic_compact_joke_payload(humor_viewpoint, gold_caption=gold_caption)
+    region_payload = _strip_caption_from_payload(
+        compact_region_payload_for_prompt(region_annotation),
+        gold_caption=gold_caption,
+    )
+    joke_json = json.dumps(joke_payload, ensure_ascii=False, separators=(",", ":"))
+    region_json = json.dumps(region_payload, ensure_ascii=False, separators=(",", ":"))
+    if auxiliary_mode == "overlay":
+        auxiliary_note = (
+            "An auxiliary overlay image may also be provided. It may contain short labels and boxes; "
+            "use it only as a rough attention hint."
+        )
+    elif auxiliary_mode == "crop":
+        auxiliary_note = (
+            "An auxiliary crop sheet may also be provided. It may contain labeled closeups; "
+            "use it only as a rough attention hint."
+        )
+    else:
+        auxiliary_note = "Use the region JSON only as a rough attention map."
+    lines = [
+        "Auxiliary visual joke annotations and region annotations are provided below as compact JSON.",
+        "Trust the original image first. Ignore any annotation that conflicts with the image.",
+        auxiliary_note,
+        "Do not repeat the JSON, explain it, or output multiple captions.",
+        "Return only one short caption.",
+        "",
+        f"<joke_annotations>{joke_json}</joke_annotations>",
+        f"<region_annotations>{region_json}</region_annotations>",
         "",
         base_prompt,
     ]
@@ -522,6 +609,7 @@ def build_guided_prompt(
     base_prompt: str = DEFAULT_BASE_PROMPT,
     structured_humor: dict[str, Any] | None = None,
     humor_viewpoint: dict[str, Any] | None = None,
+    region_annotation: dict[str, Any] | None = None,
     gold_caption: str | None = None,
 ) -> str:
     if method == "plain":
@@ -546,4 +634,28 @@ def build_guided_prompt(
         return build_hic_anchor_viewpoint_prompt(humor_viewpoint, gold_caption=gold_caption, base_prompt=base_prompt)
     if method == "hic-compact-json":
         return build_hic_compact_json_prompt(humor_viewpoint, gold_caption=gold_caption, base_prompt=base_prompt)
+    if method == "hic-compact-json-region":
+        return build_hic_compact_json_region_prompt(
+            humor_viewpoint,
+            region_annotation,
+            gold_caption=gold_caption,
+            base_prompt=base_prompt,
+            auxiliary_mode="region",
+        )
+    if method == "hic-compact-json-overlay":
+        return build_hic_compact_json_region_prompt(
+            humor_viewpoint,
+            region_annotation,
+            gold_caption=gold_caption,
+            base_prompt=base_prompt,
+            auxiliary_mode="overlay",
+        )
+    if method == "hic-compact-json-crop":
+        return build_hic_compact_json_region_prompt(
+            humor_viewpoint,
+            region_annotation,
+            gold_caption=gold_caption,
+            base_prompt=base_prompt,
+            auxiliary_mode="crop",
+        )
     raise ValueError(f"Unknown guided generation method: {method}")
