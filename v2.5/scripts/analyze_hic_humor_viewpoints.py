@@ -731,7 +731,7 @@ def main() -> None:
     parser.add_argument("--model-name", default=DEFAULT_MODEL)
     parser.add_argument("--device-map", default="auto")
     parser.add_argument("--torch-dtype", default="auto")
-    parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument("--limit", type=int, default=200, help="Number of rows to analyze. Use 0 or a negative value for all rows.")
     parser.add_argument(
         "--sample-seed",
         type=int,
@@ -764,9 +764,10 @@ def main() -> None:
         )
         return
 
+    limit = None if args.limit is not None and args.limit <= 0 else args.limit
     rows = load_input_rows(args.input, dedupe_image=not args.no_dedupe_image)
     loaded_count = len(rows)
-    rows = select_input_rows(rows, limit=args.limit, sample_seed=args.sample_seed)
+    rows = select_input_rows(rows, limit=limit, sample_seed=args.sample_seed)
     preview_count = len(rows)
     print(
         "[viewpoints] "
