@@ -17,7 +17,9 @@ v1.5/outputs/
 v1.5final/data/processed/
 v1.5final/outputs/
 v2.5/data/processed/
-v2.5/outputs/
+v2.5/outputs/*
+!v2.5/outputs/manifest/
+!v2.5/outputs/manifest/runs.jsonl
 version1/**/__pycache__/
 v1/**/__pycache__/
 
