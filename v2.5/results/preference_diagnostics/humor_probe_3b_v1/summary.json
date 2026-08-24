@@ -1,0 +1,60 @@
+{
+  "examples": 159,
+  "train_images": 40,
+  "test_images": 13,
+  "labels": {
+    "literal": 0,
+    "weak": 1,
+    "funny": 2
+  },
+  "examples_sha256": "3c22ccb50ef2228973ceee355b57b0f9bcb6aba8a2d3bb0942999c6dfbcf15ba",
+  "config_sha256": "61d8c4235381138d8b6c6966c1ba7763f002041ff2c9c87b7c677202693d9091",
+  "adapter": "outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss",
+  "results": [
+    {
+      "layer": "early",
+      "accuracy": 0.7179487347602844,
+      "macro_f1": 0.6795518207282912,
+      "macro_auroc": 0.8456607460975647,
+      "funny_vs_weak_accuracy": 0.6153846383094788,
+      "funny_vs_weak_f1": 0.59375,
+      "funny_vs_weak_auroc": 0.5769230723381042,
+      "train_examples": 120,
+      "test_examples": 39
+    },
+    {
+      "layer": "middle",
+      "accuracy": 0.7179487347602844,
+      "macro_f1": 0.7071172555043522,
+      "macro_auroc": 0.8639053106307983,
+      "funny_vs_weak_accuracy": 0.5384615659713745,
+      "funny_vs_weak_f1": 0.5272727272727272,
+      "funny_vs_weak_auroc": 0.5355029702186584,
+      "train_examples": 120,
+      "test_examples": 39
+    },
+    {
+      "layer": "late",
+      "accuracy": 0.8205128312110901,
+      "macro_f1": 0.8136200716845878,
+      "macro_auroc": 0.9072978496551514,
+      "funny_vs_weak_accuracy": 0.6153846383094788,
+      "funny_vs_weak_f1": 0.6060606060606062,
+      "funny_vs_weak_auroc": 0.6582840383052826,
+      "train_examples": 120,
+      "test_examples": 39
+    },
+    {
+      "layer": "final",
+      "accuracy": 0.6666666865348816,
+      "macro_f1": 0.6538658474142346,
+      "macro_auroc": 0.8323471347490946,
+      "funny_vs_weak_accuracy": 0.5,
+      "funny_vs_weak_f1": 0.48079877112135183,
+      "funny_vs_weak_auroc": 0.4467455595731735,
+      "train_examples": 120,
+      "test_examples": 39
+    }
+  ],
+  "interpretation_guard": "Probe separability is correlational and does not establish a causal generation mechanism."
+}

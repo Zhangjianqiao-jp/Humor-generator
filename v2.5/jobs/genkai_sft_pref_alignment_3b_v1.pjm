@@ -1,0 +1,47 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=02:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+config=configs/preference_diagnostics_captioner_3b.yaml
+adapter=outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+pairs=results/preference_diagnostics/current_rank_pairs/pairs.jsonl
+
+python scripts/verify_lora_adapter.py "$adapter"
+
+# A one-pair executable smoke precedes the formal run in the same allocation.
+python scripts/preference_diagnostics/module_gradient_analysis.py \
+  --config "$config" \
+  --adapter "$adapter" \
+  --pairs "$pairs" \
+  --max-pairs 1 \
+  --batch-size 1 \
+  --compute-sft-alignment \
+  --output-dir results/preference_diagnostics/sft_pref_alignment_smoke_3b
+
+test -s results/preference_diagnostics/sft_pref_alignment_smoke_3b/sft_dpo_gradient_cosine.csv
+echo "[smoke] SFT-preference alignment completed"
+
+python scripts/preference_diagnostics/module_gradient_analysis.py \
+  --config "$config" \
+  --adapter "$adapter" \
+  --pairs "$pairs" \
+  --max-pairs 32 \
+  --batch-size 1 \
+  --compute-sft-alignment \
+  --output-dir results/preference_diagnostics/sft_pref_alignment_3b_v1
+
+echo "[formal-diagnostic] SFT-preference alignment completed"

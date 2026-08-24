@@ -1,0 +1,103 @@
+{
+  "policy_scope": "joint",
+  "nested_prefix_design": true,
+  "n_values": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+  ],
+  "seed": 20260824,
+  "config": "configs/preference_diagnostics_captioner_3b.yaml",
+  "adapter": "outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss",
+  "input_jsonl": "outputs/newyorker_caption_aware_v3_joint_vs_direct_eval/inputs_final.jsonl",
+  "candidate_jsonl": "results/preference_diagnostics/best_of_n_joint_vs_direct_v1/joint/candidates.jsonl",
+  "score_jsonl": "results/preference_diagnostics/best_of_n_joint_vs_direct_v1/joint/humor_judgments.jsonl",
+  "score_field": "humor",
+  "good_threshold": 4.0,
+  "generation_overrides": {
+    "temperature": null,
+    "top_p": null,
+    "top_k": null,
+    "max_new_tokens": null
+  },
+  "resolved_generation_config": {
+    "do_sample": true,
+    "temperature": 0.8,
+    "top_p": 0.9,
+    "top_k": 0,
+    "max_new_tokens": 48,
+    "repetition_penalty": 1.05,
+    "candidate_batch_size": 4,
+    "seed": 20260824,
+    "n_values": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ]
+  },
+  "config_sha256": "61d8c4235381138d8b6c6966c1ba7763f002041ff2c9c87b7c677202693d9091",
+  "input_jsonl_sha256": "c8ee2044af1a6d904e920d701674c290767af1f98bd49e145ec3bc0b5d1c5c58",
+  "score_jsonl_sha256": "e8cd6b51c5aa6c7f0f7ddac4f45da7ae24f77a7807d8fcd74afb55804a44be34",
+  "results": [
+    {
+      "n": 1,
+      "images": 24,
+      "h_max": 2.7916666666666665,
+      "h_mean": 2.7916666666666665,
+      "p_good": 0.2916666666666667,
+      "threshold": 4.0,
+      "score_field": "humor"
+    },
+    {
+      "n": 2,
+      "images": 24,
+      "h_max": 3.125,
+      "h_mean": 2.8125,
+      "p_good": 0.5,
+      "threshold": 4.0,
+      "score_field": "humor"
+    },
+    {
+      "n": 4,
+      "images": 24,
+      "h_max": 3.7083333333333335,
+      "h_mean": 2.84375,
+      "p_good": 0.75,
+      "threshold": 4.0,
+      "score_field": "humor"
+    },
+    {
+      "n": 8,
+      "images": 24,
+      "h_max": 3.9166666666666665,
+      "h_mean": 2.8177083333333335,
+      "p_good": 0.9166666666666666,
+      "threshold": 4.0,
+      "score_field": "humor"
+    },
+    {
+      "n": 16,
+      "images": 24,
+      "h_max": 3.9583333333333335,
+      "h_mean": 2.7526041666666665,
+      "p_good": 0.9583333333333334,
+      "threshold": 4.0,
+      "score_field": "humor"
+    },
+    {
+      "n": 32,
+      "images": 24,
+      "h_max": 3.9583333333333335,
+      "h_mean": 2.7760416666666665,
+      "p_good": 0.9583333333333334,
+      "threshold": 4.0,
+      "score_field": "humor"
+    }
+  ]
+}

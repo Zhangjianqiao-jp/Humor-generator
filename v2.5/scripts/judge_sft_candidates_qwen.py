@@ -38,6 +38,7 @@ Return only valid JSON with this schema:
 }}
 
 Use integer scores from 1 to 5. Keep each reason under 12 words.
+You must score all {candidate_count} candidates and return exactly {candidate_count} candidate objects.
 
 Gold caption: {gold_caption}
 
@@ -92,6 +93,7 @@ def judge_one(
     prompt = JUDGE_PROMPT_TEMPLATE.format(
         gold_caption=gold_caption,
         candidate_block=build_candidate_block(candidates),
+        candidate_count=len(candidates),
     )
     messages = [
         {
@@ -132,16 +134,20 @@ def normalize_judgment(judgment: dict[str, Any], candidates: list[str]) -> dict[
     by_index = {int(item.get("index", 0)): item for item in scored if str(item.get("index", "")).isdigit()}
     normalized = []
     for index, candidate in enumerate(candidates, start=1):
-        item = by_index.get(index, {})
+        if index not in by_index:
+            raise ValueError(f"judge omitted candidate index {index}/{len(candidates)}")
+        item = by_index[index]
+        scores = {
+            key: int(item.get(key, 0) or 0)
+            for key in ("image_specific", "naturalness", "humor", "format", "overall")
+        }
+        if any(value < 1 or value > 5 for value in scores.values()):
+            raise ValueError(f"candidate index {index} has a score outside [1, 5]: {scores}")
         normalized.append(
             {
                 "index": index,
                 "candidate": candidate,
-                "image_specific": int(item.get("image_specific", 0) or 0),
-                "naturalness": int(item.get("naturalness", 0) or 0),
-                "humor": int(item.get("humor", 0) or 0),
-                "format": int(item.get("format", 0) or 0),
-                "overall": int(item.get("overall", 0) or 0),
+                **scores,
                 "reason": str(item.get("reason", "")),
             }
         )
@@ -158,6 +164,7 @@ def run_judge(
     limit: int | None,
     max_candidates: int,
     max_new_tokens: int,
+    candidate_batch_size: int,
 ) -> None:
     config = load_config(config_path)
     model_name = config["model"]["model_name"]
@@ -182,15 +189,26 @@ def run_judge(
         if not candidates:
             continue
         try:
-            judgment, raw_response = judge_one(
-                model=model,
-                processor=processor,
-                image_path=str(row["image"]),
-                gold_caption=str(row.get("gold_caption") or ""),
-                candidates=candidates,
-                max_new_tokens=max_new_tokens,
-            )
-            normalized = normalize_judgment(judgment, candidates)
+            judged_candidates = []
+            raw_responses = []
+            for start in range(0, len(candidates), candidate_batch_size):
+                chunk = candidates[start : start + candidate_batch_size]
+                judgment, raw_response = judge_one(
+                    model=model,
+                    processor=processor,
+                    image_path=str(row["image"]),
+                    gold_caption=str(row.get("gold_caption") or ""),
+                    candidates=chunk,
+                    max_new_tokens=max_new_tokens,
+                )
+                chunk_normalized = normalize_judgment(judgment, chunk)
+                for item in chunk_normalized["candidates"]:
+                    item["index"] += start
+                judged_candidates.extend(chunk_normalized["candidates"])
+                raw_responses.append(raw_response)
+            best = max(judged_candidates, key=lambda item: (item["overall"], item["humor"], -item["index"]))
+            normalized = {"best_index": best["index"], "candidates": judged_candidates}
+            raw_response = "\n\n--- candidate chunk ---\n\n".join(raw_responses)
         except Exception as exc:
             failures += 1
             raw_response = ""
@@ -223,6 +241,12 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--max-candidates", type=int, default=10)
     parser.add_argument("--max-new-tokens", type=int, default=512)
+    parser.add_argument(
+        "--candidate-batch-size",
+        type=int,
+        default=8,
+        help="Score candidates in small chunks so the judge cannot silently omit a long tail.",
+    )
     args = parser.parse_args()
     run_judge(
         config_path=args.config,
@@ -231,6 +255,7 @@ def main() -> None:
         limit=args.limit,
         max_candidates=args.max_candidates,
         max_new_tokens=args.max_new_tokens,
+        candidate_batch_size=args.candidate_batch_size,
     )
 
 

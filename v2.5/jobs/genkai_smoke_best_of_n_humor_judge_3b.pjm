@@ -1,0 +1,30 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=00:20:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+python scripts/preference_diagnostics/judge_humor_candidates_qwen.py \
+  --config configs/preference_diagnostics_captioner_3b.yaml \
+  --input-jsonl results/preference_diagnostics/best_of_n_joint_vs_direct_v1/joint/candidates.jsonl \
+  --output-jsonl results/preference_diagnostics/best_of_n_humor_judge_smoke_3b/judgments.jsonl \
+  --limit 1 --max-candidates 4 --candidate-batch-size 2 --max-new-tokens 256
+
+python scripts/preference_diagnostics/best_of_n.py \
+  --policy-scope joint \
+  --output-dir results/preference_diagnostics/best_of_n_humor_judge_smoke_3b \
+  --score-jsonl results/preference_diagnostics/best_of_n_humor_judge_smoke_3b/judgments.jsonl \
+  --score-field humor --good-threshold 4 --n-values 1,2,4 --seed 20260824
+
+echo "[smoke] strict Best-of-N humor judge completed"

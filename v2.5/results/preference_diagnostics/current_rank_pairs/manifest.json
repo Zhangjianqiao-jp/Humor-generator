@@ -1,0 +1,32 @@
+{
+  "input_jsonl": "data/processed/newyorker_compact_sft_v2/caption_train.jsonl",
+  "input_sha256": "a24f7ce3b37fa71ac16b8ef8a51f2bf37b29203dc2579ccf10fd916b9d8948fa",
+  "excluded_image_file": "data/processed/newyorker_hic_compact_json_test/test_images_unique.jsonl",
+  "excluded_images": 24,
+  "candidate_count": 13190,
+  "images_with_candidates": 79,
+  "pair_count": 485,
+  "pairs_by_type": {
+    "H1": 0,
+    "H2": 485,
+    "H3": 0,
+    "H4": 0
+  },
+  "available_pair_types": [
+    "H2"
+  ],
+  "seed": 20260824,
+  "thresholds": {
+    "max_pairs_per_image": 8,
+    "max_relative_length_difference": 0.35,
+    "min_score_margin": 0.35,
+    "high_humor": 4.0,
+    "weak_humor": 3.0,
+    "low_humor": 2.0,
+    "min_grounding": 4.0,
+    "grounding_margin": 2.0,
+    "specificity_margin": 2.0,
+    "min_naturalness": 3.0
+  },
+  "scientific_guard": "A missing pair type means required annotations were unavailable; it is not treated as zero prevalence."
+}

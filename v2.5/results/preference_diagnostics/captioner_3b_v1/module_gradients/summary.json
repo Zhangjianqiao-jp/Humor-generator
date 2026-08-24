@@ -1,0 +1,22 @@
+{
+  "pairs": 32,
+  "batches": 32,
+  "trainable_parameters": 7372800,
+  "observed_module_families": [
+    "k_proj",
+    "o_proj",
+    "q_proj",
+    "v_proj"
+  ],
+  "not_measured_module_families": [
+    "down_proj",
+    "gate_proj",
+    "up_proj"
+  ],
+  "pairs_sha256": "320a3f53664a6e171e02c17009764eb80452d413e04beb6e3e6e85796a9a905f",
+  "config_sha256": "61d8c4235381138d8b6c6966c1ba7763f002041ff2c9c87b7c677202693d9091",
+  "adapter": "outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss",
+  "gradient_definition": "gradient of negative mean [log pi(chosen|image,prompt) - log pi(rejected|image,prompt)]",
+  "normalization": "raw=RMS batch Frobenius norm; normalized=raw/sqrt(parameter_count); relative=raw/trainable_adapter_weight_norm",
+  "interpretation_guard": "Not-measured modules cannot be ranked. Relative norm uses adapter weights, not frozen base Fisher."
+}

@@ -1,0 +1,20 @@
+{
+  "pairs": 61,
+  "unique_images": 61,
+  "mean_delta_margin": 0.13338339133340804,
+  "median_delta_margin": 0.3703804016113281,
+  "mean_delta_bootstrap_95ci": [
+    -0.49076236662317496,
+    0.7880357836113602
+  ],
+  "positive_delta_count": 33,
+  "fraction_delta_gt_zero": 0.5409836065573771,
+  "fraction_delta_gt_zero_wilson_95ci": [
+    0.41724048130756475,
+    0.6598706770614424
+  ],
+  "delta_standard_deviation": 2.5809316016543247,
+  "bootstrap_seed": 20260824,
+  "bootstrap_replicates": 50000,
+  "interpretation": "The correct-image advantage is close to zero and statistically unresolved when the compact plan is held fixed. This diagnoses weak independent raw-image checking by the 3B captioner, not absence of visual information from the full 7B-to-3B system because the plan itself carries image-derived information."
+}

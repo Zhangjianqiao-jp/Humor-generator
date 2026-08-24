@@ -1,0 +1,60 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+config=configs/preference_diagnostics_captioner_3b.yaml
+adapter=outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+joint_inputs=outputs/newyorker_caption_aware_v3_joint_vs_direct_eval/inputs_final.jsonl
+direct_inputs=data/processed/newyorker_hic_compact_json_test/test_images_unique.jsonl
+root=results/preference_diagnostics/best_of_n_joint_vs_direct_v1
+n_values=1,2,4,8,16,32
+
+python scripts/verify_lora_adapter.py "$adapter"
+
+if [ ! -s "$root/joint/candidates.jsonl" ]; then
+  python scripts/preference_diagnostics/best_of_n.py \
+    --generate --policy-scope joint --config "$config" --adapter "$adapter" \
+    --input-jsonl "$joint_inputs" --output-dir "$root/joint" \
+    --n-values "$n_values" --seed 20260824
+fi
+
+if [ ! -s "$root/direct/candidates.jsonl" ]; then
+  python scripts/preference_diagnostics/best_of_n.py \
+    --generate --policy-scope captioner --config "$config" --adapter "$adapter" \
+    --input-jsonl "$direct_inputs" --output-dir "$root/direct" \
+    --prompt "Generate one short, natural, image-specific humorous caption for this image. Do not explain." \
+    --n-values "$n_values" --seed 20260824
+fi
+
+for system in joint direct; do
+  if [ "$system" = joint ]; then scope=joint; else scope=captioner; fi
+  python scripts/preference_diagnostics/judge_humor_candidates_qwen.py \
+    --config "$config" \
+    --input-jsonl "$root/$system/candidates.jsonl" \
+    --output-jsonl "$root/$system/humor_judgments.jsonl" \
+    --limit 24 --max-candidates 32 --candidate-batch-size 2 --max-new-tokens 256 --resume
+
+  python scripts/preference_diagnostics/best_of_n.py \
+    --policy-scope "$scope" --config "$config" --adapter "$adapter" \
+    --input-jsonl "$root/$system/candidates.jsonl" \
+    --output-dir "$root/$system" \
+    --score-jsonl "$root/$system/humor_judgments.jsonl" \
+    --score-field humor --good-threshold 4 \
+    --n-values "$n_values" --seed 20260824
+done
+
+echo "[formal-diagnostic] Best-of-N joint versus direct completed"

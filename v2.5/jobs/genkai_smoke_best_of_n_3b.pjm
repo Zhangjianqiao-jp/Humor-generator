@@ -1,0 +1,56 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+config=configs/preference_diagnostics_captioner_3b.yaml
+adapter=outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+inputs=outputs/newyorker_caption_aware_v3_joint_vs_direct_eval/inputs_final.jsonl
+out=results/preference_diagnostics/best_of_n_smoke_3b
+
+python scripts/verify_lora_adapter.py "$adapter"
+python scripts/preference_diagnostics/best_of_n.py \
+  --generate \
+  --policy-scope joint \
+  --config "$config" \
+  --adapter "$adapter" \
+  --input-jsonl "$inputs" \
+  --output-dir "$out" \
+  --n-values 1,2 \
+  --limit 1 \
+  --seed 20260824
+
+python scripts/judge_sft_candidates_qwen.py \
+  --config "$config" \
+  --input-jsonl "$out/candidates.jsonl" \
+  --output-jsonl "$out/judgments.jsonl" \
+  --limit 1 \
+  --max-candidates 2 \
+  --max-new-tokens 512
+
+python scripts/preference_diagnostics/best_of_n.py \
+  --policy-scope joint \
+  --config "$config" \
+  --adapter "$adapter" \
+  --input-jsonl "$inputs" \
+  --output-dir "$out" \
+  --score-jsonl "$out/judgments.jsonl" \
+  --score-field humor \
+  --good-threshold 4 \
+  --n-values 1,2 \
+  --seed 20260824
+
+echo "[smoke] best-of-N generation, judge, and analysis completed"

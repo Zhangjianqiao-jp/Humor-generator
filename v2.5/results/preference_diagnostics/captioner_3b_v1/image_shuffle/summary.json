@@ -1,0 +1,14 @@
+{
+  "pairs": 61,
+  "unique_images": 61,
+  "mean_delta_margin": 0.13338339133340804,
+  "median_delta_margin": 0.3703804016113281,
+  "fraction_delta_gt_zero": 0.5409836065573771,
+  "mean_correct_margin": -0.8752632766473488,
+  "mean_shuffled_margin": -1.0086466679807569,
+  "seed": 20260824,
+  "pairs_sha256": "320a3f53664a6e171e02c17009764eb80452d413e04beb6e3e6e85796a9a905f",
+  "config_sha256": "61d8c4235381138d8b6c6966c1ba7763f002041ff2c9c87b7c677202693d9091",
+  "adapter": "outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss",
+  "interpretation_guard": "Near-zero delta suggests weak image dependence; positive delta alone does not prove humor quality."
+}

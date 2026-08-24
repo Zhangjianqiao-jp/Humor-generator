@@ -90,7 +90,11 @@ def resolve_image_path(image: str, image_root: Path | None) -> Path:
     return image_root / path
 
 
-def clean_generated_caption(text: str, prompt: str | None = None) -> str:
+def clean_generated_caption(
+    text: str,
+    prompt: str | None = None,
+    preserve_newlines: bool = False,
+) -> str:
     text = text.strip()
     if prompt and prompt in text:
         text = text.split(prompt, maxsplit=1)[-1].strip()
@@ -98,7 +102,7 @@ def clean_generated_caption(text: str, prompt: str | None = None) -> str:
         if text.startswith(prefix):
             text = text[len(prefix) :].strip()
     lines = [line.strip() for line in text.replace("\r", "\n").split("\n") if line.strip()]
-    text = lines[0] if lines else ""
+    text = "\n".join(lines) if preserve_newlines else (lines[0] if lines else "")
     for prefix in ("- ", "* "):
         if text.startswith(prefix):
             text = text[len(prefix) :].strip()
@@ -122,6 +126,8 @@ class HumorSFTDataset(torch.utils.data.Dataset):
         missing_image_report_path: Path | None = None,
         max_samples: int | None = None,
         validate_images: bool = True,
+        image_min_pixels: int | None = None,
+        image_max_pixels: int | None = None,
     ) -> None:
         self.path = path
         self.rows: list[dict[str, Any]] = []
@@ -140,6 +146,8 @@ class HumorSFTDataset(torch.utils.data.Dataset):
         self.normalize_prompt = normalize_prompt
         self.sft_prompt = sft_prompt.strip()
         self.min_supervised_tokens = min_supervised_tokens
+        self.image_min_pixels = image_min_pixels
+        self.image_max_pixels = image_max_pixels
 
         raw_rows = read_jsonl(path)
         self.original_count = len(raw_rows)
@@ -243,10 +251,18 @@ class HumorSFTDataset(torch.utils.data.Dataset):
         return prompt or self.sft_prompt
 
     def build_user_message(self, row: dict[str, Any]) -> dict[str, Any]:
+        image_content: dict[str, Any] = {"type": "image", "image": row["image"]}
+        # qwen-vl-utils resizes the image before the processor expands the
+        # image placeholder.  Keeping this budget on the message is essential:
+        # truncating expanded image tokens later makes Qwen token alignment fail.
+        if self.image_min_pixels is not None:
+            image_content["min_pixels"] = int(self.image_min_pixels)
+        if self.image_max_pixels is not None:
+            image_content["max_pixels"] = int(self.image_max_pixels)
         return {
             "role": "user",
             "content": [
-                {"type": "image", "image": row["image"]},
+                image_content,
                 {"type": "text", "text": self.prompt_for_row(row)},
             ],
         }

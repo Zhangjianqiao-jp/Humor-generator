@@ -1,0 +1,12 @@
+{
+  "version": "human-validation-v1",
+  "seed": 20260824,
+  "preference_pair_items": 485,
+  "preference_pair_images": 61,
+  "quick_gate_items": 61,
+  "best_of_n_items": 24,
+  "pairs_sha256": "320a3f53664a6e171e02c17009764eb80452d413e04beb6e3e6e85796a9a905f",
+  "joint_scores_sha256": "e8cd6b51c5aa6c7f0f7ddac4f45da7ae24f77a7807d8fcd74afb55804a44be34",
+  "direct_scores_sha256": "0c5d718e23bcd21f6114721540336062e7814e8a88b4f31e9952582e4379ae0c",
+  "annotation_rule": "Annotate blinded A/B pages first; do not open blind_key.json until exports are frozen."
+}

@@ -1,0 +1,19 @@
+# Local Python/runtime state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/
+
+# Local datasets, checkpoints, and generated experiment outputs
+data/
+outputs/
+results/
+
+# Genkai scheduler and preflight logs
+*.pjm.*.out
+preflight_*.log
+preflight_*.rc
+
+# Human-validation answer exports must remain local until annotations are frozen
+blind_key.json
+*_export.jsonl
