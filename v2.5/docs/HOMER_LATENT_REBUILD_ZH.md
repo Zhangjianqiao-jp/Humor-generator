@@ -91,6 +91,8 @@ culture_injection:
 
 Group-of-3 不是 HOMER 原论文全部评测的替代。HOMER 还报告 1–5 人评、pass@k、3-gram coverage 与 NLI diversity；Humor in AI 的生成评测使用排名式 group benchmark。论文级报告应并列这些指标，而不能只报单一 LLM judge 的相对胜率。
 
+具体 packet 构造把每个 10-candidate pool 的前 9 条划为三个互不重用的 Group-of-3 trials；第 10 条只保留给完整 pool 指标。A/B 身份、顺序和组内顺序均确定性随机化，identity key 与 blind packet 分文件保存，避免只挑最好三条造成 cherry-picking。
+
 ## 7. 执行门禁
 
 1. 静态检查与单测；
