@@ -1,0 +1,34 @@
+experiment:
+  name: homer_base_vs_sft_group3_10_candidates
+model:
+  model_name: Qwen/Qwen2.5-VL-7B-Instruct
+planner:
+  adapter_dir: outputs/newyorker_caption_aware_viewpoint_v3_7b_qlora/final_lora
+  protocol: homer_staged
+generator_systems:
+  - name: qwen7b_base
+    adapter_dir: null
+  - name: qwen7b_sft
+    adapter_dir: outputs/7b-generator/best_val_loss
+bridge:
+  checkpoint: outputs/latent_communication/homer_typed_bridge/best.pt
+data:
+  input_jsonl: data/processed/homer_latent/test.jsonl
+  requested_dataset_rows: 1000
+  cluster_unit: image_sha256
+generation:
+  seeds: [20260830, 20260831, 20260901]
+  candidates_per_system: 10
+  group_size: 3
+  temperature: 0.8
+  top_p: 0.9
+  top_k: 50
+  max_new_tokens: 64
+evaluation:
+  blind_system_identity: true
+  randomize_order_per_image_seed: true
+  report_dataset_rows_and_unique_images: true
+  cluster_bootstrap_samples: 10000
+  absolute_labels: [good, weak, bad]
+output:
+  output_dir: results/latent_communication/homer_base_vs_sft_1000x10

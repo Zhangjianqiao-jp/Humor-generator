@@ -1,0 +1,70 @@
+experiment:
+  name: homer_typed_latent_bridge_sft
+  references:
+    - HOMER, ICLR 2026, arXiv:2602.06423
+    - InterLat, ACL 2026, Anthology:2026.acl-long.1248
+    - StateBridge, COLM 2026, arXiv:2608.13317
+
+model:
+  model_name: Qwen/Qwen2.5-VL-7B-Instruct
+  device_map: auto
+  torch_dtype: bfloat16
+  load_in_4bit: true
+
+planner:
+  adapter_dir: outputs/newyorker_caption_aware_viewpoint_v3_7b_qlora/final_lora
+  protocol: homer_staged
+  description_prompt: prompts/homer_description.txt
+  conflict_prompt: prompts/homer_conflict_system.txt
+  imagination_local_prompt: prompts/homer_imagination_local_system.txt
+  imagination_global_prompt: prompts/homer_imagination_global_system.txt
+  max_new_tokens: 384
+  max_state_tokens: 256
+
+generator:
+  adapter_dir: outputs/7b-generator/best_val_loss
+  grounding_channel: text
+  conflict_channel: latent
+  associative_imagination_channel: latent
+
+bridge:
+  type: typed_homer_two_channel
+  bottleneck_dim: 256
+  num_slots_per_channel: 8
+  num_heads: 8
+  dropout: 0.05
+  curriculum:
+    # InterLat-style: learn semantic communication before strong compression.
+    stages: [full_state_alignment, compressed_distillation, caption_nll]
+    token_to_latent_mix: [0.25, 0.5, 0.75, 1.0]
+  losses:
+    caption_nll: 1.0
+    text_teacher_kl: 0.5
+    matched_vs_shuffled_separation: 0.1
+
+culture_injection:
+  enabled: false
+  mode: retrieval_context
+  ablation_only: true
+
+data:
+  train_path: data/processed/homer_latent/train.jsonl
+  val_path: data/processed/homer_latent/validation.jsonl
+  test_path: data/processed/homer_latent/test.jsonl
+  split_unit: image_sha256
+  min_formal_dataset_rows: 1000
+  min_formal_unique_images: 800
+  image_max_pixels: 100352
+
+training:
+  seed: 20260830
+  num_epochs: 10
+  gradient_accumulation_steps: 8
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  freeze_planner: true
+  freeze_generator: true
+
+output:
+  output_dir: outputs/latent_communication/homer_typed_bridge
