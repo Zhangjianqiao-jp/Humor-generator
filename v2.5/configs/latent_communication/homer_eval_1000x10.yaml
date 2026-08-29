@@ -14,7 +14,7 @@ bridge:
   checkpoint: outputs/latent_communication/homer_typed_bridge/best.pt
 data:
   input_jsonl: data/processed/homer_latent/test.jsonl
-  requested_dataset_rows: 1000
+  requested_independent_images: 1000
   cluster_unit: image_sha256
 generation:
   seeds: [20260830, 20260831, 20260901]

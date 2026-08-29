@@ -240,8 +240,13 @@ def generate_homer_candidates(
     top_p: float,
     top_k: int | None = None,
     include_culture: bool = False,
+    generator_adapter: str | None = "generator",
 ) -> list[str]:
-    model.set_adapter("generator")
+    base_only = generator_adapter is None
+    if base_only:
+        model.base_model.disable_adapter_layers()
+    else:
+        model.set_adapter(generator_adapter)
     prompt = homer_generator_prompt(mode, trace, include_culture=include_culture)
     messages = build_image_message(image, prompt)
     inputs = _encode_messages(processor, process_vision_info, messages).to(model_device(model))
@@ -274,7 +279,11 @@ def generate_homer_candidates(
         kwargs.update(temperature=temperature, top_p=top_p)
         if top_k is not None:
             kwargs["top_k"] = top_k
-    generated = model.generate(**inputs, **kwargs)
+    try:
+        generated = model.generate(**inputs, **kwargs)
+    finally:
+        if base_only:
+            model.base_model.enable_adapter_layers()
     start = inputs["input_ids"].shape[1]
     decoded = processor.batch_decode(generated[:, start:], skip_special_tokens=True)
     return [clean_generated_caption(value, prompt=prompt) for value in decoded]
