@@ -2,7 +2,7 @@ experiment:
   name: homer_typed_latent_bridge_sft
   references:
     - HOMER, ICLR 2026, arXiv:2602.06423
-    - InterLat, ACL 2026, Anthology:2026.acl-long.1248
+    - Enabling Agents to Communicate Entirely in Latent Space (InterLat), ACL 2026, Anthology:2026.acl-long.1248
     - StateBridge, COLM 2026, arXiv:2608.13317
 
 model:
@@ -34,7 +34,7 @@ bridge:
   num_heads: 8
   dropout: 0.05
   curriculum:
-    # InterLat-style: learn semantic communication before strong compression.
+    # InterLat-inspired: learn semantic communication before strong compression.
     stages: [full_state_alignment, compressed_distillation, caption_nll]
     token_to_latent_mix: [0.25, 0.5, 0.75, 1.0]
   losses:

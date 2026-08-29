@@ -18,13 +18,14 @@
 4. `Associative Imagination — Global`：以原图和 Conflict 为输入，对全局主要对象生成三跳关联链；
 5. Caption Generator：基于 description、conflict 和 local/global chains 生成简短 caption。
 
-论文附录 prompt 的代码位置：
+论文附录中 Conflict、Local/Global Imagination 与 Caption prompt 的措辞逐字保存；论文没有公布 Situation Description 的系统 prompt，只说明使用详细描述，因此 `homer_description.txt` 是忠实的工程化补充，不能声称逐字复现。代码位置：
 
 - `src/latent_communication/homer.py`
 - `prompts/homer_description.txt`
 - `prompts/homer_conflict_system.txt`
 - `prompts/homer_imagination_local_system.txt`
 - `prompts/homer_imagination_global_system.txt`
+- `prompts/homer_caption_system.txt`
 
 旧 compact JSON 不再是新主实验的 Planner contract，但保留旧文件以复现实验。
 
@@ -41,7 +42,7 @@ Generator(image,
 
 Conflict 与 Association 使用两个独立 query-resampler，并加入不同的 learned type embedding；输出再拼接到 Generator 输入。这样可以避免旧方案把整段 plan 的末尾 64 token 压到一个无类型的 16-slot prefix。
 
-配置把 sender state 上限提高到 256，并采用从 Hybrid scaffold 到纯 latent 的 curriculum。InterLat 的核心提醒是通信表征需要被接收器显式学会，不能把任意 hidden states 一次强压缩后期待冻结接收器自然理解；StateBridge 则支持从发送方内部状态建立紧凑连续桥接。当前实现因此先训练可解释的字段化 bridge，Planner 与 Generator 不解冻。
+配置把 sender state 上限提高到 256，并采用从 Hybrid scaffold 到纯 latent 的 curriculum。InterLat 使用发送方最后隐藏状态并进一步学习压缩；StateBridge 则采用 closed-form orthogonal alignment、norm calibration 与 vocabulary anchoring，属于 training-free 路线。当前实现是 **InterLat-inspired learned typed bridge**，只借用 StateBridge 的 final-state prefix 与 norm-calibration思想，并不是 StateBridge 原样复现；Planner 与 Generator 不解冻。
 
 ## 4. 文化注入
 
@@ -110,9 +111,9 @@ Group-of-3 不是 HOMER 原论文全部评测的替代。HOMER 还报告 1–5 �
 ## 8. 权威参考
 
 1. Zhang et al. *On the Wings of Imagination: Conflicting Script-based Multi-role Framework for Humor Caption Generation (HOMER).* ICLR 2026. arXiv:2602.06423.
-2. Sui et al. *InterLat: Interleaved Latent Communication for Multi-Agent LLM Systems.* ACL 2026, Long Papers, 1248.
-3. *StateBridge: Enhancing Multimodal Reasoning through Latent State Communication.* COLM 2026. arXiv:2608.13317.
-4. Hao et al. *Training Large Language Models to Reason in a Continuous Latent Space (Coconut).* ICLR 2025.
+2. Du et al. *Enabling Agents to Communicate Entirely in Latent Space (InterLat).* ACL 2026, Long Papers, 1248.
+3. Peng et al. *StateBridge: Training-free Hidden-state Alignment for Latent Communication in LLM Multi-Agent Systems.* COLM 2026. arXiv:2608.13317.
+4. Hao et al. *Training Large Language Models to Reason in a Continuous Latent Space (Coconut).* COLM 2025.
 5. Zhang et al. *Humor in AI: Massive Scale Crowd-Sourced Preferences and Benchmarks for Cartoon Captioning.* NeurIPS 2024 Datasets and Benchmarks.
 6. Hessel et al. *Do Androids Laugh at Electric Sheep? Humor “Understanding” Benchmarks from The New Yorker Caption Contest.* ACL 2023 Best Paper.
 7. Attardo and Raskin. *Script Theory Revis(it)ed: Joke Similarity and Joke Representation Model.* HUMOR, 1991.（GTVH / script opposition 理论基础）
