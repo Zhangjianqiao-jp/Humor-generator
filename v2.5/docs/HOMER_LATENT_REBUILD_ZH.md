@@ -44,6 +44,8 @@ Conflict 与 Association 使用两个独立 query-resampler，并加入不同的
 
 配置把 sender state 上限提高到 256，并采用从 Hybrid scaffold 到纯 latent 的 curriculum。InterLat 使用发送方最后隐藏状态并进一步学习压缩；StateBridge 则采用 closed-form orthogonal alignment、norm calibration 与 vocabulary anchoring，属于 training-free 路线。当前实现是 **InterLat-inspired learned typed bridge**，只借用 StateBridge 的 final-state prefix 与 norm-calibration思想，并不是 StateBridge 原样复现；Planner 与 Generator 不解冻。
 
+当前可执行 trainer 的 active loss 只有 gold-caption NLL；`text-teacher KL` 与 `matched-vs-shuffled separation` 仅在配置中登记为 planned ablations，尚未实现数学单测前不得在报告中写成已训练目标。这使当前作业属于 bridge-SFT 第一阶段，而不是完整 InterLat 复现。
+
 ## 4. 文化注入
 
 文化注入默认关闭，只作为 ablation：

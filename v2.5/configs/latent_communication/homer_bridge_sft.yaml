@@ -38,9 +38,11 @@ bridge:
     stages: [full_state_alignment, compressed_distillation, caption_nll]
     token_to_latent_mix: [0.25, 0.5, 0.75, 1.0]
   losses:
-    caption_nll: 1.0
-    text_teacher_kl: 0.5
-    matched_vs_shuffled_separation: 0.1
+    active_caption_nll: 1.0
+    # These remain preregistered ablations; the current trainer does not claim
+    # to implement them until each loss receives a mathematical unit test.
+    planned_text_teacher_kl: 0.5
+    planned_matched_vs_shuffled_separation: 0.1
 
 culture_injection:
   enabled: false
