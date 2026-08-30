@@ -27,16 +27,22 @@ REVISION = "cc594898137f460bfe9f0759e9844b3ce807cfb5"
 def main() -> None:
     parser = ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=ROOT / "data/processed/latent_bridge_v3")
-    parser.add_argument("--output", type=Path, default=ROOT / "data/cache/planner_traces")
+    parser.add_argument(
+        "--output", type=Path,
+        default=ROOT / "data/cache/planner_traces_homer_strict_v1",
+    )
     parser.add_argument("--splits", nargs="+", default=["train", "validation", "test"])
     parser.add_argument("--max-clusters", type=int)
-    parser.add_argument("--attempts", type=int, default=1)
+    parser.add_argument("--attempts", type=int, default=5)
     parser.add_argument("--seed", type=int, default=20260830)
+    parser.add_argument("--retry-round", type=int, default=0)
     args = parser.parse_args()
     args.dataset = args.dataset.resolve()
     args.output = args.output.resolve()
     if args.attempts < 1:
         raise ValueError("attempts must be positive")
+    if args.retry_round < 0:
+        raise ValueError("retry-round must be non-negative")
 
     rows: dict[str, dict] = {}
     for split in args.splits:
@@ -66,10 +72,18 @@ def main() -> None:
             last_outputs: dict[str, str] = {}
             for attempt in range(args.attempts):
                 attempt_outputs: dict[str, str] = {}
-                seed = args.seed + offset * args.attempts * 3 + attempt * 3
+                seed = (
+                    args.seed
+                    + args.retry_round * 10_000_000
+                    + offset * args.attempts * 3
+                    + attempt * 3
+                )
+                temperature = 0.0 if attempt == 0 else 0.7
+                top_p = 1.0 if attempt == 0 else 0.95
                 try:
                     conflict_text, conflict_states, conflict_alignment = backend.generate_and_verify_states(
-                        conflict_messages(row["standard_description"]), max_new_tokens=384, seed=seed
+                        conflict_messages(row["standard_description"]), max_new_tokens=384, seed=seed,
+                        temperature=temperature, top_p=top_p,
                     )
                     # Strict conflict parsing precedes both association calls.
                     conflicts = parse_conflicts(conflict_text)
@@ -84,14 +98,14 @@ def main() -> None:
                 try:
                     local_text, local_states, local_alignment = backend.generate_and_verify_states(
                         local_imagination_messages(row["standard_description"], normalized),
-                        max_new_tokens=512,
-                        seed=seed + 1,
+                        max_new_tokens=512, seed=seed + 1,
+                        temperature=temperature, top_p=top_p,
                     )
                     attempt_outputs["local"] = local_text
                     global_text, global_states, global_alignment = backend.generate_and_verify_states(
                         global_imagination_messages(row["image"], normalized),
-                        max_new_tokens=512,
-                        seed=seed + 2,
+                        max_new_tokens=512, seed=seed + 2,
+                        temperature=temperature, top_p=top_p,
                     )
                     attempt_outputs["global"] = global_text
                     plan = validate_plan(
@@ -126,6 +140,12 @@ def main() -> None:
                     "planner_adapter": "planner_sft",
                     "seed": seed,
                     "attempt": attempt,
+                    "retry_round": args.retry_round,
+                    "generation": {
+                        "temperature": temperature,
+                        "top_p": top_p,
+                        "repetition_penalty": 1.0,
+                    },
                     "plan": plan_to_record(plan),
                     "alignment": alignment,
                 }

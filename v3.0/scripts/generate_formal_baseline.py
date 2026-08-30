@@ -138,7 +138,10 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--split", choices=["validation", "test"], default="test")
-    parser.add_argument("--trace-index", type=Path, default=ROOT / "data/cache/planner_traces/index.jsonl")
+    parser.add_argument(
+        "--trace-index", type=Path,
+        default=ROOT / "data/cache/planner_traces_homer_strict_v1/index.jsonl",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seeds", type=int, nargs=3, default=[20260830, 20260831, 20260832])
     parser.add_argument("--max-new-tokens", type=int, default=96)

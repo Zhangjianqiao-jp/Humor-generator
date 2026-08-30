@@ -55,3 +55,30 @@ def test_qwen_typed_record_schema_preserves_every_three_step_chain() -> None:
             '[{"entity":"cat","associations":["keyboard","office"]}]',
             view="global",
         )
+
+
+def test_lossless_qwen_mapping_list_wrapper_is_accepted() -> None:
+    parsed = parse_associations(
+        '[{"cat":["keyboard","office","deadline"]},'
+        '{"dog":["leash","park","mud"]}]',
+        view="global",
+    )
+    assert [item.path for item in parsed] == [
+        ("cat", "keyboard", "office", "deadline"),
+        ("dog", "leash", "park", "mud"),
+    ]
+
+
+def test_contiguous_edge_chain_is_losslessly_reconstructed() -> None:
+    parsed = parse_associations(
+        '[{"entity":"cat","associations":['
+        '["cat","keyboard"],["keyboard","office"],["office","deadline"]]}]',
+        view="global",
+    )
+    assert parsed[0].path == ("cat", "keyboard", "office", "deadline")
+    with pytest.raises(SchemaError, match="not contiguous"):
+        parse_associations(
+            '[{"entity":"cat","associations":['
+            '["cat","keyboard"],["park","office"],["office","deadline"]]}]',
+            view="global",
+        )

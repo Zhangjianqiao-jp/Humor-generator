@@ -1,7 +1,7 @@
 #!/bin/sh
 #PJM -L rscgrp=c-batch
 #PJM -L gpu=1
-#PJM -L elapse=06:00:00
+#PJM -L elapse=08:00:00
 #PJM -j
 #PJM -S
 
@@ -17,6 +17,7 @@ export TOKENIZERS_PARALLELISM=false
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
+: "${TRACE_RETRY_ROUND:=0}"
 
 python scripts/check_environment.py
 python scripts/check_v3_isolation.py
@@ -24,5 +25,7 @@ python scripts/verify_frozen_artifacts.py
 python scripts/verify_clustered_dataset.py
 python scripts/cache_planner_traces.py \
   --splits train validation \
-  --output data/cache/planner_traces
-test -s data/cache/planner_traces/index.jsonl
+  --attempts 5 \
+  --retry-round "$TRACE_RETRY_ROUND" \
+  --output data/cache/planner_traces_homer_strict_v1
+test -s data/cache/planner_traces_homer_strict_v1/index.jsonl

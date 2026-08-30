@@ -13,3 +13,4 @@ data/processed/
 *.stats
 src/*.egg-info/
 .d[0-9]*
+.auto-research/

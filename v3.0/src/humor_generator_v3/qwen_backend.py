@@ -75,6 +75,8 @@ class GenerationAlignmentReport:
     replay: ReplayAlignmentReport
     processed_score_token_accuracy: float
     raw_head_token_accuracy: float
+    emitted_token_mean_logprob: float
+    sampling_mode: str
 
 
 class QwenBackend:
@@ -261,6 +263,8 @@ class QwenBackend:
         *,
         max_new_tokens: int,
         seed: int,
+        temperature: float = 0.0,
+        top_p: float = 1.0,
     ) -> tuple[str, AlignedMessageStates, GenerationAlignmentReport]:
         """Fail rather than trim when generation hooks and causal replay disagree."""
         inputs = self.encode(messages, add_generation_prompt=True)
@@ -270,13 +274,19 @@ class QwenBackend:
         handle = layer.register_forward_hook(decode_capture)
         try:
             torch.manual_seed(seed)
+            generation_kwargs: dict[str, Any] = {
+                "do_sample": temperature > 0,
+                "max_new_tokens": max_new_tokens,
+                "return_dict_in_generate": True,
+                "output_scores": True,
+                "repetition_penalty": 1.0,
+            }
+            if temperature > 0:
+                generation_kwargs.update({"temperature": temperature, "top_p": top_p})
             with torch.inference_mode():
                 generated_output = self.model.generate(
                     **inputs,
-                    do_sample=False,
-                    max_new_tokens=max_new_tokens,
-                    return_dict_in_generate=True,
-                    output_scores=True,
+                    **generation_kwargs,
                 )
         finally:
             handle.remove()
@@ -292,10 +302,16 @@ class QwenBackend:
             [score.argmax(dim=-1) for score in generated_output.scores], dim=1
         ).detach().cpu()
         processed_accuracy = float(processed_predictions.eq(token_ids.cpu()).float().mean())
-        if processed_accuracy != 1.0:
+        if temperature <= 0 and processed_accuracy != 1.0:
             raise AssertionError(
                 f"generation scores predict only {processed_accuracy:.3%} of emitted greedy tokens"
             )
+        emitted_logprobs = torch.stack([
+            score.log_softmax(dim=-1).gather(
+                1, token_ids[:, index : index + 1].to(score.device)
+            ).squeeze(1)
+            for index, score in enumerate(generated_output.scores)
+        ], dim=1)
 
         text = self.processor.batch_decode(
             token_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -338,4 +354,6 @@ class QwenBackend:
             replay=replay,
             processed_score_token_accuracy=processed_accuracy,
             raw_head_token_accuracy=hook_accuracy,
+            emitted_token_mean_logprob=float(emitted_logprobs.mean().detach().cpu()),
+            sampling_mode="sample" if temperature > 0 else "greedy",
         )

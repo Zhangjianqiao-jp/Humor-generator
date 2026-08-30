@@ -187,24 +187,52 @@ def parse_associations(
     if isinstance(raw, Mapping) and raw:
         normalized = list(raw.items())
     elif isinstance(raw, list) and raw:
-        # Qwen2.5-VL sometimes serializes the paper's key/value contract as a
-        # list of strictly typed records.  Normalize only this exact schema;
-        # arbitrary prose/JSON structures remain invalid.  Multiple chains
-        # for one entity are preserved rather than silently selecting one.
-        for item in raw:
-            if not isinstance(item, Mapping) or set(item) != {"entity", "associations"}:
-                raise SchemaError(
-                    "record-style imagination requires exactly entity and associations"
-                )
-            associations = item["associations"]
-            if (
-                isinstance(associations, list)
-                and associations
-                and all(isinstance(value, list) for value in associations)
-            ):
-                normalized.extend((item["entity"], value) for value in associations)
-            else:
-                normalized.append((item["entity"], associations))
+        # Two lossless wrappers are accepted around the paper's entity->chain
+        # mapping: a list of one-key mappings, or strictly typed records. No
+        # field aliases or arbitrary prose structures are admitted.
+        if all(isinstance(item, Mapping) and len(item) == 1 for item in raw):
+            for item in raw:
+                normalized.extend(item.items())
+        else:
+            for item in raw:
+                if not isinstance(item, Mapping) or set(item) != {"entity", "associations"}:
+                    raise SchemaError(
+                        "record-style imagination requires exactly entity and associations"
+                    )
+                associations = item["associations"]
+                if (
+                    isinstance(associations, list)
+                    and len(associations) == limits.chain_length
+                    and all(
+                        isinstance(edge, list) and len(edge) == 2
+                        and all(isinstance(value, str) for value in edge)
+                        for edge in associations
+                    )
+                ):
+                    # Qwen may spell one three-step chain as three contiguous
+                    # edges: [root,a], [a,b], [b,c]. This is mathematically the
+                    # same chain, not a relaxed or inferred label.
+                    root = _clean(item["entity"], label="association.root", maximum=limits.max_entity_chars)
+                    edges = associations
+                    if (
+                        _clean(edges[0][0], label="association.edge", maximum=limits.max_entity_chars).casefold()
+                        != root.casefold()
+                        or any(
+                            _clean(edges[index][1], label="association.edge", maximum=limits.max_entity_chars).casefold()
+                            != _clean(edges[index + 1][0], label="association.edge", maximum=limits.max_entity_chars).casefold()
+                            for index in range(len(edges) - 1)
+                        )
+                    ):
+                        raise SchemaError(f"association {root!r} edge chain is not contiguous")
+                    normalized.append((root, [edge[1] for edge in edges]))
+                elif (
+                    isinstance(associations, list)
+                    and associations
+                    and all(isinstance(value, list) for value in associations)
+                ):
+                    normalized.extend((item["entity"], value) for value in associations)
+                else:
+                    normalized.append((item["entity"], associations))
     else:
         raise SchemaError("imaginator JSON must be a non-empty object or typed record list")
     if len(normalized) > limits.max_entities:

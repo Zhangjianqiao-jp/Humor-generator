@@ -14,7 +14,7 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def main() -> None:
     dataset = ROOT / "data/processed/latent_bridge_v3"
-    cache = ROOT / "data/cache/planner_traces"
+    cache = ROOT / "data/cache/planner_traces_homer_strict_v1"
     required = {
         row["cluster_id"]
         for split in ("train", "validation")

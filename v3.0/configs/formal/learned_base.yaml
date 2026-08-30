@@ -9,7 +9,7 @@ model:
   frozen: true
 data:
   dataset: data/processed/latent_bridge_v3
-  trace_index: data/cache/planner_traces/index.jsonl
+  trace_index: data/cache/planner_traces_homer_strict_v1/index.jsonl
 bridge:
   bottleneck_dim: 256
   slots_per_channel: 8

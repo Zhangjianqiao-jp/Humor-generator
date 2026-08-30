@@ -81,7 +81,11 @@ Base receiver 与 SFT receiver 分别训练、分别比较各自的 latent-vs-te
 
 真实 trace smoke job `6643918`：2/2 traces 合格；policy trainable params=0；bridge params=9,106,944；峰值 allocated 6.69 GB；有限 gradient 且 optimizer update norm=0.01037。
 
-正式 trace 缓存 job `6643920`：仅 1 张 c-batch GPU，train+validation 729 clusters，可从 index 断点续跑。
+首轮 trace 缓存 job `6643920` 完整遍历 729 clusters：217 个严格通过、512 个因 schema 不合格被拒绝。它暴露了两个问题：Qwen 的若干等价 JSON wrapper 未被无损识别；原 attempts 始终 greedy，换 seed 不会产生新输出。该缓存还继承 checkpoint 内置 `repetition_penalty=1.05`，因此只保留作诊断，不与新 trace 混合。
+
+正式 trace 使用独立路径 `data/cache/planner_traces_homer_strict_v1`：每个 cluster 先以中性 sampling 做一次 greedy；失败后最多四次 `temperature=0.7, top_p=0.95` 的有界 retry。所有 retry 仍使用完全相同的 HOMER prompt，并逐次通过 schema 与 causal replay；每条记录保存 attempt、retry round、seed 与 sampling。只有一键 mapping-list wrapper 和三条连续边这两类可证明等价的 JSON 被无损规范化，真正缺步、重复 root、非连续 chain 仍拒绝。
+
+无人值守推进由 `scripts/formal_pipeline_monitor.py` 完成，不调用 LLM、不会消耗 Codex 额度：每 20 分钟检查一次，PJM 作业连续两次缺席才采取动作；完整遍历仍有 failures 时切换到下一 retry round；wall-time 中断则在同一 round 断点续跑。只有 729 个 required clusters 精确齐全、无 duplicate/extra、`failures.json=[]` 且 trace gate 通过后，才逐个持久化 job ID 并提交 Learned/Typed × Base/SFT 四个 bridge-only 作业。最多四个 retry rounds，超过即停在 blocked，不无限消耗 GPU。
 
 ## Phase L1 的进入条件
 
