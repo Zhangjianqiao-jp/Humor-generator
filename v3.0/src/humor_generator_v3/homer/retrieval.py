@@ -159,6 +159,61 @@ class SparseTfidfIndex:
         return [item[2] for item in scored[:k]]
 
 
+class OfficialQueryFittedTfidfIndex:
+    """Retrieval behavior in HOMER official commit d1334f2.
+
+    The released implementation fits a fresh sklearn vectorizer on the single
+    repeated-entity/context query, then transforms the complete joke corpus.
+    This unusual choice is preserved for the strict Text-HOMER baseline rather
+    than silently replacing it with a globally fitted index.
+    """
+
+    def __init__(self, documents: Sequence[str]) -> None:
+        if not documents:
+            raise ValueError("joke corpus is empty")
+        self.documents = tuple(str(value) for value in documents)
+
+    def search_context(
+        self,
+        entity: str,
+        *,
+        description: str,
+        conflicts: str,
+        k: int = 5,
+    ) -> list[str]:
+        if k < 1:
+            raise ValueError("k must be positive")
+        import numpy as np
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+
+        # pandas str.contains in the official code is regex-based.  Avoid a
+        # heavyweight Series while preserving case-insensitive regex search.
+        pattern = re.compile(entity, flags=re.I)
+        exact = [document for document in self.documents if pattern.search(document)]
+        if len(exact) >= k:
+            return exact[:k]
+        query = f"{entity} {entity} {entity} {entity} {description} {conflicts}"
+        vectorizer = TfidfVectorizer(
+            max_features=1000, stop_words="english", ngram_range=(1, 3)
+        )
+        query_vector = vectorizer.fit_transform([query])
+        document_vectors = vectorizer.transform(self.documents)
+        similarities = cosine_similarity(query_vector, document_vectors).ravel()
+        indices = np.argsort(similarities)[::-1]
+        result: list[str] = []
+        seen: set[str] = set()
+        for index in indices:
+            document = self.documents[int(index)]
+            if document in seen:
+                continue
+            seen.add(document)
+            result.append(document)
+            if len(result) == k:
+                break
+        return result
+
+
 @dataclass(frozen=True)
 class HomerRetrievalConfig:
     top_k: int = 5
@@ -206,7 +261,16 @@ class HomerRetrievalAugmenter:
             expansions: list[NodeExpansion] = []
             for node_index, node in enumerate(chain.path):
                 query = f"{plan.description} {conflict_context} {node}"
-                jokes = tuple(self.index.search(query, k=self.config.top_k))
+                search_context = getattr(self.index, "search_context", None)
+                if search_context is None:
+                    jokes = tuple(self.index.search(query, k=self.config.top_k))
+                else:
+                    jokes = tuple(search_context(
+                        node,
+                        description=plan.description,
+                        conflicts=conflict_context,
+                        k=self.config.top_k,
+                    ))
                 ranked = rank_entities(node, jokes, self.graph, delta=self.config.delta)
                 leaves = tuple(
                     HumorLeaf(

@@ -1,6 +1,8 @@
 __pycache__/
 .pytest_cache/
+.venv/
 *.py[cod]
+artifacts/
 outputs/
 data/cache/
 data/external/
@@ -9,3 +11,5 @@ data/processed/
 *.safetensors
 *.out
 *.stats
+src/*.egg-info/
+.d[0-9]*

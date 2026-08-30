@@ -144,8 +144,12 @@ def _pair_from_item(item: Any, limits: ValidationLimits) -> ConflictPair:
 def parse_conflicts(text: str, limits: ValidationLimits = ValidationLimits()) -> tuple[ConflictPair, ...]:
     """Parse JSON or the numbered prose requested by HOMER Appendix prompt 1."""
     raw: Any
+    candidate = text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", candidate, flags=re.I | re.S)
+    if fenced:
+        candidate = fenced.group(1).strip()
     try:
-        raw = json.loads(text)
+        raw = json.loads(candidate)
     except json.JSONDecodeError:
         items = [match.group(1).strip(" .") for match in _NUMBERED.finditer(text.strip())]
         raw = items or [text]
@@ -171,16 +175,42 @@ def parse_associations(
 ) -> tuple[AssociationChain, ...]:
     if view not in {"local", "global"}:
         raise SchemaError("association view must be local or global")
+    candidate = text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", candidate, flags=re.I | re.S)
+    if fenced:
+        candidate = fenced.group(1).strip()
     try:
-        raw = json.loads(text)
+        raw = json.loads(candidate)
     except json.JSONDecodeError as exc:
         raise SchemaError("imaginator output must be valid JSON") from exc
-    if not isinstance(raw, Mapping) or not raw:
-        raise SchemaError("imaginator JSON must be a non-empty object")
-    if len(raw) > limits.max_entities:
-        raise SchemaError(f"imaginator returned more than {limits.max_entities} roots")
+    normalized: list[tuple[Any, Any]] = []
+    if isinstance(raw, Mapping) and raw:
+        normalized = list(raw.items())
+    elif isinstance(raw, list) and raw:
+        # Qwen2.5-VL sometimes serializes the paper's key/value contract as a
+        # list of strictly typed records.  Normalize only this exact schema;
+        # arbitrary prose/JSON structures remain invalid.  Multiple chains
+        # for one entity are preserved rather than silently selecting one.
+        for item in raw:
+            if not isinstance(item, Mapping) or set(item) != {"entity", "associations"}:
+                raise SchemaError(
+                    "record-style imagination requires exactly entity and associations"
+                )
+            associations = item["associations"]
+            if (
+                isinstance(associations, list)
+                and associations
+                and all(isinstance(value, list) for value in associations)
+            ):
+                normalized.extend((item["entity"], value) for value in associations)
+            else:
+                normalized.append((item["entity"], associations))
+    else:
+        raise SchemaError("imaginator JSON must be a non-empty object or typed record list")
+    if len(normalized) > limits.max_entities:
+        raise SchemaError(f"imaginator returned more than {limits.max_entities} chains")
     chains: list[AssociationChain] = []
-    for root, values in raw.items():
+    for root, values in normalized:
         root_clean = _clean(root, label="association.root", maximum=limits.max_entity_chars)
         if not isinstance(values, list) or len(values) != limits.chain_length:
             raise SchemaError(

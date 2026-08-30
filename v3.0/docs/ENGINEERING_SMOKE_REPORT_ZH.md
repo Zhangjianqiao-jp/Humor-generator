@@ -37,13 +37,26 @@
 - `results/engineering_smoke/base_receiver.json`
 - `results/engineering_smoke/sft_receiver.json`
 
-## 尚未通过的科学门禁
+## 当时尚未通过的科学门禁（已由后续台账与真实 trace smoke 更新）
 
 1. GPU smoke 的 sender states 是合成状态，只验证 backward-through-frozen-receiver，不证明 latent semantic quality。
 2. 最新增加的 receiver embedding norm calibration 已通过 CPU tests；由于 formal training 本身仍被 HOMER gate 阻断，本轮不额外占用 GPU 重跑。
 3. HOMER 论文没有公开不可变 Qwen-VL revision、standard-description 来源清单、335,570-joke corpus/hash、精确 tokenizer/lemmatizer、模糊 entity merge 与主实验 embedding backend。
 4. 因此只能称为“已实现论文公开算法”，不能称为“完整复现实验结果”。
 5. 在这些门禁解除前，不提交 learned bridge 正式训练，也不进行 latent Group-of-3 质量比较。
+
+## 真实 Planner trace 补充 smoke
+
+后续 job `6643918` 用两张真实训练图片替代合成 sender states：
+
+- 2/2 Conflict/Local/Global traces 通过严格 schema；
+- multimodal global trace 使用完整 conversation 重新编码做 causal replay，禁止手工拼接 image token；
+- frozen SFT receiver 的 policy trainable parameters 为 0；
+- typed bridge trainable parameters 为 9,106,944；
+- total loss 5.9792，gradient norm 403.68（更新前 clip），参数 update norm 0.01037；
+- peak allocated/reserved 为 6.69/6.75 GB。
+
+因此 synthetic-state 限制已解除，正式 bridge 训练器的工程门禁通过。它仍不证明 latent 比 text 更好；这一结论必须由 81 个 held-out image clusters 的 Group-of-3 比较给出。
 
 ## 方法依据
 

@@ -2,10 +2,12 @@
 
 ## 决策
 
-- `v2.5` 的正式 latent bridge 自动化已经停止。
-- `v3.0` 在科学门禁通过前只允许 engineering smoke。
+- 旧系统已冻结在 tag `v2.5-legacy-freeze-20260830` / commit `3927f18`，此后只读。
+- v3 可执行目录由 `scripts/check_v3_isolation.py` 检查，禁止 import 或执行旧脚本。
+- 两个 7B adapter 已复制到 git-ignored artifact 目录，并由逐文件 SHA-256 manifest 固定。
 - Planner/Generator 两个 7B checkpoint 始终冻结；bridge 独立训练。
 - 先完成 HOMER 文本系统复现，再引入 latent；两个阶段不得混称。
+- latent 稳定优于 Text-HOMER 前，不启动 preference learning。
 
 ## Phase H0：HOMER 公开协议复现
 
@@ -50,11 +52,36 @@ Base receiver 与 SFT receiver 分别训练、分别比较各自的 latent-vs-te
 
 ## 当前 engineering 状态（2026-08-30）
 
-- CPU/schema/loss/alignment/retrieval/baseline contract：`20/20` tests passed。
+- 独立环境：Python 3.12.11；依赖锁定在 `requirements.lock`。
+- CPU/schema/loss/alignment/retrieval/baseline contract：`29/29` tests passed。
 - CPU bridge optimizer smoke：通过，loss 与 bridge gradient 均有限。
-- HOMER reproduction gate：按设计仍为 `BLOCKED`；缺少论文未披露的固定 Qwen-VL revision、benchmark standard-description provenance 与 335,570-joke corpus manifest/hash。
+- HOMER 官方 standard descriptions 与 joke corpus 已固定到官方 commit；Qwen 原权重 revision 未公开，因此准确声明为“固定 Qwen2.5-VL 替代的 method/data reproduction”。
 - GPU smoke：最终 job `6642776` exit code 0；只使用一个样本、一个 optimizer step，Base receiver 与 SFT receiver 串行使用同一张 GPU，避免并发占卡。完整诊断见 `docs/ENGINEERING_SMOKE_REPORT_ZH.md`。
 - GPU 选择规则继承执行手册的“预计最短完成时间优先”：以 `show_rsc` 的真实 GPU free/total 为准，不使用 CPU `a-batch`，不以 `pjshowrsc` node free 代替 GPU 可用性。当前 12GB MIG 曾在 frozen-7B backward-through-input 路径连续 OOM，因此真实 bridge smoke 使用一张空闲 `c-batch` H100，而非重复无信息价值的 MIG 失败。
+- 资源选择必须在提交后用实际 `START_DATE`/预计启动时间二次确认；本轮仅看瞬时 free 曾误判 b 组，已记录并纠正。
+
+## Image-clustered 数据
+
+- 唯一图片 cluster：810。
+- train / validation / test：648 / 81 / 81 clusters；2535 / 294 / 291 caption rows。
+- 三个 split 的 cluster overlap 均为 0。
+- 冻结 Planner/Generator SFT 曾见过的 145 个 cluster 全部强制进入 train；validation/test 泄漏均为 0。
+- Electronic Sheep contest 749 没有官方 finalist，显式记录为缺失，不伪造训练标签。
+- 可追溯 manifest：`manifests/image_clustered_dataset.json`。
+
+## 正式 bridge trainer
+
+- Planner trace 先以固定模型、adapter、prompt 和 seed 生成，经严格 schema 与 causal hidden-state/token replay 校验，再保存 SHA-256。
+- Qwen 的 fenced JSON 只做无损去 fence；Global 的 typed record 格式只接受精确 `entity + associations` schema，每条 chain 仍严格三步，多链全部保留。
+- 每个 epoch 每个 image cluster 只抽一条 caption，避免多 caption 图片获得更大权重。
+- loss：caption NLL + Text-HOMER teacher forward-KL + matched/shuffled caption-likelihood margin。
+- matched 与 shuffled receiver graph 分两次反传，避免两份 7B graph 同时驻留。
+- 每 epoch 保存 checkpoint，以 image-clustered validation total loss early-stop；训练过程写 `progress.json` 与 `metrics.jsonl`。
+- Base receiver 与 SFT receiver 分别训练 Learned/Typed bridge，不交叉复用 bridge 做公平性结论。
+
+真实 trace smoke job `6643918`：2/2 traces 合格；policy trainable params=0；bridge params=9,106,944；峰值 allocated 6.69 GB；有限 gradient 且 optimizer update norm=0.01037。
+
+正式 trace 缓存 job `6643920`：仅 1 张 c-batch GPU，train+validation 729 clusters，可从 index 断点续跑。
 
 ## Phase L1 的进入条件
 

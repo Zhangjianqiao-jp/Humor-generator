@@ -1,0 +1,37 @@
+{
+  "archive": {
+    "git_tag": "v2.5-legacy-freeze-20260830",
+    "git_commit": "3927f18",
+    "policy": "The copied artifacts are immutable v3.0 inputs. v3.0 must never read their former v2.5 paths."
+  },
+  "base_model": {
+    "model_id": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5"
+  },
+  "adapters": {
+    "planner_sft": {
+      "local_path": "artifacts/checkpoints/planner_sft",
+      "files": {
+        "README.md": "14b162674bd99b2b06ddf36f187a4683d8c53573f9e52a8f45e6e8259b192ebc",
+        "adapter_config.json": "51286151f4a2aebcbc4b6ef60c889c07ec4d232856b8caee70f5bb469f904966",
+        "adapter_model.safetensors": "37803eb1864ba87595b71294f949a94f4818110140ded0a2aec7517348b0ca65",
+        "chat_template.jinja": "a0bc6f6fc7a29a80017a433e8f03a1cc1236e838a944a2d034295a60c4f2fddb",
+        "processor_config.json": "2ac992d7378f02aa5ceea8ce294d5d26e10836a2aa113d6685c66839bceb558a",
+        "tokenizer.json": "3ca6d95705ec6ea73645b2ee7a7c57f7215721127d21375a958797815e1f6bf0",
+        "tokenizer_config.json": "e764dcddcc994ab9902bbded92929ab9e3d3a95b4b3ba7043db6b7b00f83a80a"
+      }
+    },
+    "generator_sft": {
+      "local_path": "artifacts/checkpoints/generator_sft",
+      "files": {
+        "README.md": "14b162674bd99b2b06ddf36f187a4683d8c53573f9e52a8f45e6e8259b192ebc",
+        "adapter_config.json": "0ea14e8220d14b67abfda88276529608ed63a87f3398b4cf40cab593ef0f34c8",
+        "adapter_model.safetensors": "780f44d08f30f358c9a3fc994867dfde837b75ef973bf54de768d975891b5b7b",
+        "chat_template.jinja": "a0bc6f6fc7a29a80017a433e8f03a1cc1236e838a944a2d034295a60c4f2fddb",
+        "processor_config.json": "2ac992d7378f02aa5ceea8ce294d5d26e10836a2aa113d6685c66839bceb558a",
+        "tokenizer.json": "0a1aaf191db75c905aba4371d7a7bf6274f92439ae6593debc5b77f622687590",
+        "tokenizer_config.json": "e764dcddcc994ab9902bbded92929ab9e3d3a95b4b3ba7043db6b7b00f83a80a"
+      }
+    }
+  }
+}

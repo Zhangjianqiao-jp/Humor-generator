@@ -6,6 +6,7 @@ from humor_generator_v3.homer.contracts import validate_plan
 from humor_generator_v3.homer.curation import JokeRecord, curate_jokes, english_word_overlap
 from humor_generator_v3.homer.retrieval import (
     HomerRetrievalAugmenter,
+    OfficialQueryFittedTfidfIndex,
     SparseTfidfIndex,
     humor_frequency,
     rank_entities,
@@ -48,6 +49,15 @@ def test_sparse_tfidf_and_homer_scores() -> None:
     assert humor_frequency("duck", [["duck", "bar"], ["duck", "pond"]]) > 0
     ranked = rank_entities("duck", ["duck bar", "duck pond"], FakeGraph(), delta=2)
     assert ranked[0].entity == "duck"
+
+
+def test_official_query_fitted_retrieval_preserves_exact_match_priority() -> None:
+    index = OfficialQueryFittedTfidfIndex([
+        "duck one", "duck two", "duck three", "duck four", "duck five", "office only"
+    ])
+    assert index.search_context(
+        "duck", description="a board meeting", conflicts="animal vs office", k=5
+    ) == ["duck one", "duck two", "duck three", "duck four", "duck five"]
 
 
 def test_retrieval_grows_backbone_nodes_and_enumerates_paths() -> None:

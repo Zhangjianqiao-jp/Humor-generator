@@ -105,6 +105,29 @@ def audit_reproduction(config: dict[str, Any], root: Path) -> GateResult:
                 failures.append(f"standard-description hash mismatch: {name}")
     if corpus.get("top_k") != 5 or corpus.get("delta") != 5:
         failures.append("paper settings require top_k=5 and delta=5")
+    nltk_manifest_value = corpus.get("nltk_manifest")
+    nltk_manifest_path = root / str(nltk_manifest_value or "")
+    nltk_root = root / "artifacts/nltk_data"
+    if not nltk_manifest_value or not nltk_manifest_path.is_file():
+        failures.append("pinned NLTK asset manifest is missing")
+    else:
+        nltk_manifest = json.loads(nltk_manifest_path.read_text())
+        for relative, metadata in nltk_manifest.get("archives", {}).items():
+            archive = nltk_root / relative
+            if not archive.is_file() or sha256(archive) != metadata.get("sha256"):
+                failures.append(f"NLTK asset mismatch: {relative}")
+        try:
+            import nltk
+            nltk.data.path.insert(0, str(nltk_root))
+            from nltk import pos_tag, word_tokenize
+            from nltk.corpus import stopwords, wordnet
+            word_tokenize("a reproducible joke")
+            pos_tag(["joke"])
+            stopwords.words("english")
+            wordnet.synsets("joke")
+            import sklearn  # noqa: F401
+        except Exception as exc:
+            failures.append(f"HOMER retrieval runtime dependencies are unusable: {exc}")
     evaluation = config.get("evaluation", {})
     if evaluation.get("candidates_per_image") != 5 or evaluation.get("repetitions") != 5:
         failures.append("paper evaluation requires five candidates and five repeated trials")

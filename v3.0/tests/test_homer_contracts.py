@@ -26,3 +26,32 @@ def test_association_requires_valid_json_and_exact_three_steps() -> None:
         parse_associations("[cat, keyboard]", view="local")
     with pytest.raises(SchemaError):
         parse_associations('{"cat":["keyboard","office"]}', view="local")
+
+
+def test_association_accepts_only_an_exact_json_fence_wrapper() -> None:
+    parsed = parse_associations(
+        '```json\n{"cat": ["pet", "fur", "lint"]}\n```', view="local"
+    )
+    assert parsed[0].path == ("cat", "pet", "fur", "lint")
+    with pytest.raises(SchemaError):
+        parse_associations(
+            'Here is JSON: {"cat": ["pet", "fur", "lint"]}', view="local"
+        )
+
+
+def test_qwen_typed_record_schema_preserves_every_three_step_chain() -> None:
+    parsed = parse_associations(
+        '[{"entity":"cat","associations":['
+        '["keyboard","office","deadline"],'
+        '["fur","lint","dryer"]]}]',
+        view="global",
+    )
+    assert [item.path for item in parsed] == [
+        ("cat", "keyboard", "office", "deadline"),
+        ("cat", "fur", "lint", "dryer"),
+    ]
+    with pytest.raises(SchemaError):
+        parse_associations(
+            '[{"entity":"cat","associations":["keyboard","office"]}]',
+            view="global",
+        )

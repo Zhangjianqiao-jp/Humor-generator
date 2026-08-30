@@ -40,8 +40,9 @@ joke_corpus:
   delta: 5
   rating_threshold: 3.0
   near_duplicate_word_overlap: 0.80
-  retrieval_backend: sparse_tfidf
+  retrieval_backend: official_query_fitted_tfidf
   retrieval_backend_disclosed_by_paper: false
+  nltk_manifest: manifests/nltk_assets.json
 
 evaluation:
   datasets: [humor_in_ai_365, electronic_sheep_679]

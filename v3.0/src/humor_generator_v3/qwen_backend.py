@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +121,59 @@ class QwenBackend:
         processor = AutoProcessor.from_pretrained(model_name, revision=revision, trust_remote_code=True)
         return cls(model, processor, process_vision_info)
 
+    @classmethod
+    def load_with_adapters(
+        cls,
+        model_name: str,
+        adapters: dict[str, str | Path],
+        *,
+        revision: str | None = None,
+        load_in_4bit: bool = True,
+    ) -> "QwenBackend":
+        """Load one immutable base and multiple frozen PEFT adapters.
+
+        This avoids holding duplicate 7B backbones while keeping Planner and
+        Generator adapter identities explicit.  Adapter switching is never
+        used inside an autograd graph.
+        """
+        if not adapters:
+            raise ValueError("at least one named adapter is required")
+        first_name, first_path = next(iter(adapters.items()))
+        backend = cls.load(
+            model_name, revision=revision, adapter=None, load_in_4bit=load_in_4bit
+        )
+        try:
+            from peft import PeftModel
+        except Exception as exc:
+            raise RuntimeError("PEFT is unavailable") from exc
+        model = PeftModel.from_pretrained(
+            backend.model, str(first_path), adapter_name=first_name, is_trainable=False
+        )
+        for name, path in list(adapters.items())[1:]:
+            model.load_adapter(str(path), adapter_name=name, is_trainable=False)
+        for parameter in model.parameters():
+            parameter.requires_grad_(False)
+        model.eval()
+        backend.model = model
+        backend.set_adapter(first_name)
+        return backend
+
+    def set_adapter(self, name: str) -> None:
+        if not hasattr(self.model, "set_adapter"):
+            raise RuntimeError("backend has no named PEFT adapters")
+        self.model.set_adapter(name)
+        self.model.eval()
+
+    @contextmanager
+    def base_only(self):
+        """Temporarily disable PEFT adapters for the base-receiver condition."""
+        disable = getattr(self.model, "disable_adapter", None)
+        if disable is None:
+            yield
+            return
+        with disable():
+            yield
+
     def encode(self, messages: list[dict[str, Any]], *, add_generation_prompt: bool) -> dict[str, torch.Tensor]:
         rendered = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=add_generation_prompt
@@ -154,6 +208,46 @@ class QwenBackend:
         prompt_length = inputs["input_ids"].shape[1]
         return self.processor.batch_decode(
             generated[:, prompt_length:], skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0].strip()
+
+    def generate_with_latent_prefix(
+        self,
+        messages: list[dict[str, Any]],
+        slots: torch.Tensor,
+        *,
+        temperature: float,
+        max_new_tokens: int,
+        seed: int,
+    ) -> str:
+        """Append continuous communication slots after the receiver prompt."""
+        if slots.ndim != 3 or slots.shape[0] != 1 or slots.shape[1] < 1:
+            raise ValueError("slots must be non-empty [1,S,D]")
+        inputs = self.encode(messages, add_generation_prompt=True)
+        embeddings = self.model.get_input_embeddings()(inputs["input_ids"])
+        slots = slots.to(device=embeddings.device, dtype=embeddings.dtype)
+        combined = torch.cat([embeddings, slots], dim=1)
+        mask = torch.cat([
+            inputs["attention_mask"],
+            torch.ones(
+                (1, slots.shape[1]),
+                dtype=inputs["attention_mask"].dtype,
+                device=inputs["attention_mask"].device,
+            ),
+        ], dim=1)
+        torch.manual_seed(seed)
+        kwargs: dict[str, Any] = {
+            "inputs_embeds": combined,
+            "attention_mask": mask,
+            "do_sample": temperature > 0,
+            "max_new_tokens": max_new_tokens,
+            "repetition_penalty": 1.05,
+        }
+        if temperature > 0:
+            kwargs.update({"temperature": temperature, "top_p": 0.95})
+        with torch.inference_mode():
+            generated = self.model.generate(**kwargs)
+        return self.processor.batch_decode(
+            generated, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0].strip()
 
     def generate_and_verify_states(
@@ -198,15 +292,30 @@ class QwenBackend:
                 f"generation scores predict only {processed_accuracy:.3%} of emitted greedy tokens"
             )
 
-        replay_ids = torch.cat([inputs["input_ids"], token_ids.to(inputs["input_ids"].device)], dim=1)
-        replay_mask = torch.ones_like(replay_ids)
+        text = self.processor.batch_decode(
+            token_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0].strip()
+        # Re-run the processor on the complete conversation.  For multimodal
+        # Qwen inputs, manually appending token IDs leaves vision position
+        # metadata inconsistent with the new sequence length.
+        replay_inputs = self.encode(
+            [*messages, {"role": "assistant", "content": [{"type": "text", "text": text}]}],
+            add_generation_prompt=False,
+        )
+        replay_ids = replay_inputs["input_ids"]
+        replay_targets = replay_ids[:, prompt_length : prompt_length + token_ids.shape[1]]
+        if replay_targets.shape != token_ids.shape or not torch.equal(
+            replay_targets.detach().cpu(), token_ids.detach().cpu()
+        ):
+            raise AssertionError(
+                "decoded assistant text does not replay to the exact emitted token sequence"
+            )
         sequence_capture = SequenceStateCapture()
         replay_handle = layer.register_forward_hook(sequence_capture)
         try:
             with torch.inference_mode():
                 self.model(
-                    input_ids=replay_ids,
-                    attention_mask=replay_mask,
+                    **replay_inputs,
                     use_cache=False,
                     output_hidden_states=False,
                     logits_to_keep=1,
@@ -220,7 +329,6 @@ class QwenBackend:
         )
         hook_accuracy = token_prediction_accuracy(self.model, hook_states)
         replay = assert_causal_replay_alignment(hook_states, teacher_states)
-        text = self.processor.batch_decode(token_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0].strip()
         return text, hook_states, GenerationAlignmentReport(
             replay=replay,
             processed_score_token_accuracy=processed_accuracy,
