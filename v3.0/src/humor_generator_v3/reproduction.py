@@ -41,6 +41,33 @@ def audit_reproduction(config: dict[str, Any], root: Path) -> GateResult:
         failures.append("paper version must be pinned to arXiv:2602.06423v2")
     if not evidence.get("model_revision"):
         failures.append("the exact Qwen-VL checkpoint revision used by HOMER is not documented")
+    model_manifest_value = evidence.get("model_manifest")
+    if not model_manifest_value or not (root / model_manifest_value).is_file():
+        failures.append("pinned local model manifest is missing")
+    else:
+        model_manifest = json.loads((root / model_manifest_value).read_text())
+        if model_manifest.get("model_id") != evidence.get("model_name"):
+            failures.append("local model ID does not match its manifest")
+        if model_manifest.get("revision") != evidence.get("model_revision"):
+            failures.append("local model revision does not match its manifest")
+        snapshot = Path(model_manifest.get("local_snapshot_path", ""))
+        if not snapshot.is_dir():
+            failures.append("pinned local Qwen2.5-VL snapshot is unavailable")
+        else:
+            for filename, expected in model_manifest.get("metadata_sha256", {}).items():
+                path = snapshot / filename
+                if not path.is_file() or sha256(path) != expected:
+                    failures.append(f"local Qwen2.5-VL metadata mismatch: {filename}")
+            for filename, expected in model_manifest.get("weight_lfs_sha256", {}).items():
+                path = snapshot / filename
+                if not path.is_file():
+                    failures.append(f"local Qwen2.5-VL weight shard is missing: {filename}")
+                elif path.is_symlink() and Path(path.readlink()).name != expected:
+                    failures.append(f"local Qwen2.5-VL LFS object mismatch: {filename}")
+    if evidence.get("homer_exact_model_match") is not True:
+        warnings.append(
+            "using pinned Qwen2.5-VL-7B-Instruct as a project substitution; HOMER's exact Qwen-VL revision remains undisclosed"
+        )
     description_manifest_value = evidence.get("description_provenance")
     if not description_manifest_value:
         failures.append("benchmark standard-description provenance is missing")

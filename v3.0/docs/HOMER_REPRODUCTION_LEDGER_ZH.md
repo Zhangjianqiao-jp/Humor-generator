@@ -25,11 +25,13 @@
 
 ## 本轮找到并固定的公开数据源
 
-### 1. Qwen-VL revision：仍未公开
+### 1. Qwen-VL revision：原论文仍未公开，本项目采用固定替代模型
 
 论文只写 `Qwen-VL (7B)`。官方仓库的 extractor、imaginator、generator 和 demo 实际均通过 OpenAI API 使用字符串 `gpt-4o`，没有 Qwen loader、Hugging Face model ID、权重 hash 或 revision。因此不能从公开证据确定论文中 Qwen-VL baseline 到底是 `Qwen-VL`、`Qwen-VL-Chat` 的哪一个提交或快照，更不能把当前项目的 Qwen2.5-VL 当成同一 revision。
 
-结论：`model_revision: null` 保持为硬 blocker；任何猜测只能作为新 baseline，不能标为 HOMER 精确复现。
+根据用户决定，本项目采用本地 `Qwen/Qwen2.5-VL-7B-Instruct`，固定 revision 为 `cc594898137f460bfe9f0759e9844b3ce807cfb5`。五个权重 shard 的 LFS SHA-256 和配置文件 SHA-256 已记录在 `manifests/local_qwen2_5_vl_7b.json`。
+
+这解除工程运行门禁，但声明范围必须写成：`HOMER method/data reproduction with a pinned Qwen2.5-VL substitution`。不能写成 HOMER 原始 Qwen-VL 权重级复现。
 
 ### 2. benchmark standard-description：来源已确定
 
@@ -67,13 +69,13 @@ Electronic Sheep 的 679 条 `canny` 字段来自该 benchmark 的人工 MTurk `
 
 ## 论文/发布物仍未充分公开的 blocker
 
-1. Qwen-VL (7B) 没有不可变 checkpoint revision，不能保证权重级复现。
+1. HOMER 原始 Qwen-VL (7B) 没有不可变 checkpoint revision，不能保证论文权重级复现；项目已用固定 Qwen2.5-VL revision 替代。
 2. 正文称 corpus 来自 12 个数据集，附录列出并称 11 个，存在内部不一致；发布 CSV 也没有逐条 source 字段。
 3. 发布仓库没有独立 corpus cleaning manifest，无法逐步从原始 11/12 个源重建同一 CSV；当前只能对最终发布 artifact 做 byte-level 复现。
 4. `Omega in NS × LA` 的 narrative-strategy 与 language-style 取值集合未公开。
 5. 官方仓库没有 LICENSE/COPYING，二次分发权限不明确。
 
-因此当前状态更新为：`official data artifacts and clean implementation pinned; weight-level result reproduction still blocked by undisclosed Qwen-VL revision`。
+因此当前状态更新为：`official data artifacts, implementation and local substitute weights pinned; runnable as a model-substitution reproduction, not an exact-weight reproduction`。
 
 ## 明确属于本项目扩展，不属于 HOMER
 

@@ -18,11 +18,12 @@ def test_manifest_preserves_released_count_discrepancy() -> None:
     assert joke["physical_lines"] == joke["csv_records"] + 1
 
 
-def test_gate_still_blocks_unknown_qwen_revision() -> None:
+def test_gate_accepts_pinned_local_qwen_substitution() -> None:
     import yaml
 
     config = yaml.safe_load((ROOT / "configs/homer_text_reproduction.yaml").read_text())
     result = audit_reproduction(config, ROOT)
-    assert not result.ready
-    assert any("Qwen-VL checkpoint revision" in failure for failure in result.failures)
+    assert result.ready
+    assert not result.failures
+    assert any("project substitution" in warning for warning in result.warnings)
     assert any("335,569 records" in warning for warning in result.warnings)

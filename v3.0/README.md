@@ -22,8 +22,12 @@ The official standard descriptions and joke CSV are pinned in
 ../v2.5/.venv-genkai/bin/python scripts/fetch_homer_official_assets.py
 ```
 
-The formal HOMER gate still fails because the paper and released code do not
-identify the exact Qwen-VL checkpoint revision used by the reported baseline:
+The experiment uses the locally cached
+`Qwen/Qwen2.5-VL-7B-Instruct@cc594898137f460bfe9f0759e9844b3ce807cfb5`
+as an explicit model substitution. The gate verifies this snapshot and the
+official data assets. A passing gate means method/data reproducibility with a
+pinned substitute; it does not claim exact parity with HOMER's undisclosed
+Qwen-VL weights:
 
 ```bash
 PYTHONPATH=src ../v2.5/.venv-genkai/bin/python scripts/check_reproduction_gate.py
