@@ -9,8 +9,9 @@ paper_evidence:
   # Paper says Qwen-VL (7B), but does not disclose an immutable model revision.
   model_name: Qwen-VL-7B
   model_revision: null
-  # Strict mode consumes benchmark-provided descriptions, not an invented prompt.
-  description_provenance: null
+  # Official HOMER assets pinned below; this does not resolve the undisclosed
+  # Qwen-VL weight revision used for the paper's baseline.
+  description_provenance: manifests/homer_official_assets.json
 
 protocol:
   strict_reproduction: true
@@ -25,8 +26,11 @@ protocol:
   random_path_selection: true
 
 joke_corpus:
-  expected_rows: 335570
-  manifest: data/processed/homer_jokes/manifest.json
+  # The paper/README says 335,570 jokes. The released CSV has 335,570 physical
+  # lines including its header, i.e. 335,569 actual joke records.
+  paper_declared_rows: 335570
+  released_csv_records: 335569
+  manifest: manifests/homer_official_assets.json
   top_k: 5
   delta: 5
   rating_threshold: 3.0
@@ -45,5 +49,6 @@ evaluation:
 
 references:
   - https://arxiv.org/abs/2602.06423
+  - https://github.com/Shang-hub/HOMER-Official-Implementation
   - https://aclanthology.org/2023.acl-long.41/
   - https://arxiv.org/abs/2406.10522

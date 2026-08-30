@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 outputs/
 data/cache/
+data/external/
 data/processed/
 *.pt
 *.safetensors

@@ -20,7 +20,12 @@ def main() -> None:
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text())
     result = audit_reproduction(config, args.config.parent.parent)
-    print(json.dumps({"ready": result.ready, "failures": result.failures}, indent=2))
+    print(
+        json.dumps(
+            {"ready": result.ready, "failures": result.failures, "warnings": result.warnings},
+            indent=2,
+        )
+    )
     result.require()
 
 

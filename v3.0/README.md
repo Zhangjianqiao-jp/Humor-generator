@@ -15,8 +15,15 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.0
 PYTHONPATH=src ../v2.5/.venv-genkai/bin/python scripts/engineering_smoke.py
 ```
 
-The formal HOMER gate is expected to fail until the exact model revision,
-standard-description provenance, and 335,570-joke corpus manifest are supplied:
+The official standard descriptions and joke CSV are pinned in
+`manifests/homer_official_assets.json`. Fetch and byte-verify them locally with:
+
+```bash
+../v2.5/.venv-genkai/bin/python scripts/fetch_homer_official_assets.py
+```
+
+The formal HOMER gate still fails because the paper and released code do not
+identify the exact Qwen-VL checkpoint revision used by the reported baseline:
 
 ```bash
 PYTHONPATH=src ../v2.5/.venv-genkai/bin/python scripts/check_reproduction_gate.py
