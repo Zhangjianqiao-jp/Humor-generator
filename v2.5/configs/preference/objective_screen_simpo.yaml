@@ -1,0 +1,45 @@
+experiment:
+  name: objective_screen_fullpairs_simpo_attention
+  phase: objective_screen_fullpairs
+model:
+  model_name: Qwen/Qwen2.5-VL-3B-Instruct
+  sft_adapter_dir: outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+  adapter_strategy: continue_sft
+  device_map: auto
+  torch_dtype: bfloat16
+  trust_remote_code: true
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: [q_proj, k_proj, v_proj, o_proj]
+    bias: none
+data:
+  train_path: data/processed/newyorker_published_dpo_reference_3b/dpo_train.jsonl
+  val_path: data/processed/newyorker_published_dpo_reference_3b/dpo_validation.jsonl
+  image_max_pixels: 200704
+  max_seq_len: 768
+  train_sampling: all_pairs
+  validation_sampling: all_pairs
+objective:
+  name: simpo
+  beta: 2.0
+  gamma: 0.5
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  num_epochs: 1
+  learning_rate: 0.000005
+  warmup_ratio: 0.05
+  lr_scheduler_type: cosine
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 2024
+  gradient_checkpointing: true
+  logging_steps: 20
+  eval_steps: 1000000
+output:
+  output_dir: outputs/preference_screen_fullpairs/simpo_attention
+  latest_adapter_dir: outputs/preference_screen_fullpairs/simpo_attention/latest
+  best_adapter_dir: outputs/preference_screen_fullpairs/simpo_attention/best
+  final_adapter_dir: outputs/preference_screen_fullpairs/simpo_attention/final

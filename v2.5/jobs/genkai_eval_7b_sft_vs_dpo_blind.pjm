@@ -1,0 +1,91 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=03:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=4
+
+input=data/processed/preference_objective_eval/fixed_hint_validation.jsonl
+model=Qwen/Qwen2.5-VL-7B-Instruct
+sft=outputs/7b-generator/best_val_loss
+dpo=outputs/7b-generator-dpo/dpo_mlp_fullpairs/final
+root=outputs/7b-generator-dpo/eval_pilot16
+judge_config=configs/7b_generator/eval_judge_7b.yaml
+packet=results/7b_generator/dpo_pilot16_blind
+seed=20260825
+
+test -s "$sft/adapter_model.safetensors"
+test -s "$dpo/adapter_model.safetensors"
+mkdir -p "$root/sft" "$root/dpo" "$packet"
+
+# One-image real generation smoke for both policies before result-bearing work.
+for name in sft dpo; do
+  eval adapter=\$$name
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$root/$name/smoke.jsonl" \
+    --model-name "$model" \
+    --adapter-dir "$adapter" \
+    --load-in-4bit \
+    --use-row-prompt \
+    --num-candidates 1 \
+    --limit 1 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed "$seed"
+done
+
+run_system() {
+  name=$1
+  adapter=$2
+  directory="$root/$name"
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$directory/generations.jsonl" \
+    --model-name "$model" \
+    --adapter-dir "$adapter" \
+    --load-in-4bit \
+    --use-row-prompt \
+    --num-candidates 3 \
+    --limit 24 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed "$seed"
+  test "$(wc -l < "$directory/generations.jsonl")" -eq 24
+  python scripts/judge_best_candidate_qwen.py \
+    --config "$judge_config" \
+    --input-jsonl "$directory/generations.jsonl" \
+    --output-jsonl "$directory/judgments.jsonl" \
+    --summary-json "$directory/judge_summary.json" \
+    --max-candidates 3 \
+    --max-new-tokens 256 \
+    --log-every 6
+}
+
+run_system sft "$sft"
+run_system dpo "$dpo"
+
+python scripts/build_group_winrate_eval.py \
+  --system sft="$root/sft/generations.jsonl" \
+  --system dpo="$root/dpo/generations.jsonl" \
+  --comparison dpo:sft \
+  --public-output "$packet/trials.jsonl" \
+  --key-output "$packet/key.json" \
+  --template-output "$packet/decisions_template.json" \
+  --candidates-per-group 3 \
+  --seed "$seed"
+
+echo "[7b-blind] SFT vs Pilot16-DPO generation, auxiliary judge, and anonymous packet passed"

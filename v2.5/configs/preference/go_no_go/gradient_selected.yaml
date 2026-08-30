@@ -1,0 +1,39 @@
+placement: gradient_selected
+adapter_strategy: separate_preference
+lora:
+  target_modules:
+  - base_model.model.model.language_model.layers.0.self_attn.v_proj
+  - base_model.model.model.language_model.layers.27.self_attn.o_proj
+  - base_model.model.model.language_model.layers.23.self_attn.o_proj
+  - base_model.model.model.language_model.layers.34.self_attn.o_proj
+  - base_model.model.model.language_model.layers.18.self_attn.o_proj
+  - base_model.model.model.language_model.layers.18.self_attn.v_proj
+  - base_model.model.model.language_model.layers.28.self_attn.o_proj
+  - base_model.model.model.language_model.layers.14.self_attn.v_proj
+  - base_model.model.model.language_model.layers.20.self_attn.o_proj
+  - base_model.model.model.language_model.layers.17.self_attn.o_proj
+  - base_model.model.model.language_model.layers.9.self_attn.v_proj
+  - base_model.model.model.language_model.layers.24.self_attn.o_proj
+  - base_model.model.model.language_model.layers.27.self_attn.v_proj
+  - base_model.model.model.language_model.layers.14.self_attn.o_proj
+  - base_model.model.model.language_model.layers.0.self_attn.o_proj
+  - base_model.model.model.language_model.layers.11.self_attn.o_proj
+  - base_model.model.model.language_model.layers.23.self_attn.v_proj
+  - base_model.model.model.language_model.layers.24.self_attn.v_proj
+  - base_model.model.model.language_model.layers.26.self_attn.o_proj
+  - base_model.model.model.language_model.layers.28.self_attn.v_proj
+  - base_model.model.model.language_model.layers.10.self_attn.v_proj
+  - base_model.model.model.language_model.layers.35.self_attn.o_proj
+  - base_model.model.model.language_model.layers.2.self_attn.v_proj
+  - base_model.model.model.language_model.layers.1.self_attn.o_proj
+  - base_model.model.model.language_model.layers.31.self_attn.o_proj
+  - base_model.model.model.language_model.layers.26.self_attn.v_proj
+  - base_model.model.model.language_model.layers.15.self_attn.o_proj
+  - base_model.model.model.language_model.layers.10.self_attn.o_proj
+  - base_model.model.model.language_model.layers.21.self_attn.o_proj
+  - base_model.model.model.language_model.layers.20.self_attn.v_proj
+  rank: 73
+  alpha: 146
+  dropout: 0.05
+  trainable_parameter_count: 7400448
+selection_evidence: top 30 existing attention-LoRA tangent gradients by normalized_grad_norm

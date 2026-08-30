@@ -1,0 +1,64 @@
+WORK SUMMARY — 21 AUGUST 2026
+
+Project objective
+
+We evaluated a two-stage humor-captioning system in which a 7B vision-language planner converts a New Yorker cartoon into a compact JSON humor plan and a 3B captioner uses the image and plan to generate captions. The central question was whether the planner provides useful causal guidance or merely adds redundant text.
+
+Work completed today
+
+1. We reviewed the 7B planner SFT run. It used QLoRA/LoRA with rank 8, alpha 16, dropout 0.05, a peak learning rate of 2e-5, effective batch size 8, and 30 epochs (300 optimizer steps). Validation loss reached its minimum of approximately 0.7818 near epoch 7.5 and later rose to approximately 0.9045. Gradients remained broadly stable. This indicates post-minimum validation degradation and objective mismatch rather than an obvious optimization failure. More SFT epochs on the same 78 examples are not recommended.
+
+2. We evaluated the trained 7B planner with the fixed 3B captioner on 24 held-out New Yorker images. An earlier absolute blind evaluation scored every caption for visual relevance and humor. The final joint system achieved a 33.3% good-caption rate, compared with 22.2% for the direct 3B system. The paired confidence interval crossed zero, so this was treated as a promising trend rather than proof of improvement.
+
+3. We introduced a new counterfactual Group-of-3 evaluation inspired by the NeurIPS 2024 HumorousAI benchmark. Each anonymous trial displayed the image and two groups of three captions. The judge made two decisions: Group Overall, which asks which set is stronger as a whole, and Group Best Pick, which compares the best caption from each set. System names, plans, gold captions, and per-trial system mappings were hidden until all decisions were fixed. A/B position was balanced within every comparison.
+
+4. Four controlled inference conditions were tested with the same 3B checkpoint and generation settings:
+
+   Correct: the image and its matching 7B compact plan.
+   Direct: the image without a planner output.
+   Swapped: the image with the complete plan from another image.
+   Target-corrupted: the correct visual scene and anchors, but humor type, target, and external knowledge replaced from another plan.
+
+5. The main Group Overall results were:
+
+   Correct versus Direct: 58.3%, 95% Wilson CI [38.8%, 75.5%].
+   Correct versus Swapped: 79.2%, 95% Wilson CI [59.5%, 90.8%].
+   Correct versus Target-corrupted: 75.0%, 95% Wilson CI [55.1%, 88.0%].
+   Swapped versus Direct: 29.2%, 95% Wilson CI [14.9%, 49.2%].
+   Target-corrupted versus Direct: 20.8%, 95% Wilson CI [9.2%, 40.5%].
+
+Interpretation
+
+The counterfactual test shows that the 3B captioner genuinely uses the plan. A mismatched plan or an incorrect humor target substantially damages caption quality, so the compact plan is not a redundant style prompt. The humor bridge represented by type and target is a meaningful intermediate variable.
+
+However, the correct planner achieved only a 58.3% Overall win rate and a 54.2% Best-Pick win rate against the direct 3B system. Both confidence intervals include 50%. The current evidence therefore supports continued planner research but does not establish that the joint system is reliably better than 3B-only inference.
+
+The result also identifies the primary risk: the 3B model follows bad plans. Planner visual grounding and plan quality must improve before stronger captioner conditioning or joint optimization is attempted.
+
+Next work plan
+
+1. Freeze the current 3B captioner and the held-out test set. Do not use the 24 test images to construct preference data.
+
+2. On non-test New Yorker images, sample four to eight compact plans from the 7B planner for each image. Add human-written plans, earlier-checkpoint plans, swapped plans, target-corrupted plans, visual-error plans, and generic scene-description plans as candidate negatives.
+
+3. Apply a hard visual-factuality gate before humor scoring. A chosen plan must have valid JSON, correct objects and relations, image-supported anchors, no gold-caption copying, and no unsupported entities inferred only from the gold caption.
+
+4. For every candidate plan, use the frozen 3B model to generate at least three captions. Compare caption groups rather than selecting a single lucky sample.
+
+5. Construct same-image chosen/rejected planner pairs from blinded Group Overall and Best-Pick preferences. Keep only pairs with a clear utility difference and valid visual grounding. Split training and validation data by image or contest, not by individual pair.
+
+6. Run a small 7B-planner DPO experiment. Initialize both policy and reference from the final SFT checkpoint, update only the 7B LoRA, start around learning rate 1e-6 and beta 0.1, and train for one to two epochs after an end-to-end smoke test. These are cautious starting parameters, not assumed optima.
+
+7. Re-evaluate SFT-planner plus 3B, DPO-planner plus 3B, and 3B-only under identical generation settings. Retain swapped and target-corrupted controls. Use a larger held-out set, independent judges, preferably human evaluation, and confidence intervals at the image level.
+
+8. Advance to a reranker or 3B optimization only if the DPO planner improves over both the SFT planner and the direct baseline without increasing visual errors or weakening correct-versus-swapped performance. Simultaneously updating both models is postponed because it would create a non-stationary objective and make planner-versus-captioner credit assignment unreliable.
+
+Primary references
+
+Zhang, J. et al. (2024). Humor in AI: Massive Scale Crowd-Sourced Preferences and Benchmarks for Cartoon Captioning. NeurIPS 2024 Datasets and Benchmarks Track. https://proceedings.neurips.cc/paper_files/paper/2024/hash/e297fb6cd1690ee5b39c5bb4c58ad801-Abstract-Datasets_and_Benchmarks_Track.html
+
+Hessel, J. et al. (2023). Do Androids Laugh at Electric Sheep? Humor Understanding Benchmarks from The New Yorker Caption Contest. ACL 2023. https://aclanthology.org/2023.acl-long.41/
+
+Rafailov, R. et al. (2023). Direct Preference Optimization: Your Language Model is Secretly a Reward Model. NeurIPS 2023. https://proceedings.neurips.cc/paper_files/paper/2023/hash/a85b405ed65c6477a4fe8302b5e06ce7-Abstract-Conference.html
+
+Shi, W. et al. (2024). Direct Multi-Turn Preference Optimization for Language Agents. EMNLP 2024. https://aclanthology.org/2024.emnlp-main.138/

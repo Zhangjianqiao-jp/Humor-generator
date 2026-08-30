@@ -1,0 +1,62 @@
+# 3B image + compact-plan -> humorous-caption SFT.
+model:
+  model_name: "Qwen/Qwen2.5-VL-3B-Instruct"
+  device_map: "auto"
+  torch_dtype: "bfloat16"
+  trust_remote_code: true
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+    bias: "none"
+
+data:
+  train_path: "data/processed/newyorker_compact_sft/caption_train.jsonl"
+  val_path: "data/processed/newyorker_compact_sft/caption_validation.jsonl"
+  image_root: null
+  # At most 256 Qwen visual tokens; shared with SFT generation and later DPO.
+  image_max_pixels: 200704
+  max_seq_len: 768
+  max_caption_chars: 220
+  min_supervised_tokens: 3
+  skip_missing_images: false
+  normalize_prompt: false
+  sample_one_caption_per_image: true
+  sample_one_caption_per_image_val: true
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  num_epochs: 80
+  learning_rate: 0.00005
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 42
+  gradient_checkpointing: true
+  bf16: true
+  fp16: false
+  optim: "adamw_torch"
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 100
+  save_total_limit: 3
+
+generation:
+  max_new_tokens: 48
+  temperature: 0.8
+  top_p: 0.9
+  do_sample: true
+  repetition_penalty: 1.05
+
+evaluation:
+  fixed_generation_samples: 8
+  max_eval_samples: null
+
+output:
+  output_dir: "outputs/newyorker_compact_captioner_3b"
+  latest_adapter_dir: "outputs/newyorker_compact_captioner_3b/latest"
+  best_adapter_dir: "outputs/newyorker_compact_captioner_3b/best_val_loss"
+  final_adapter_dir: "outputs/newyorker_compact_captioner_3b/final_lora"
+  tensorboard_dir: "outputs/newyorker_compact_captioner_3b/tensorboard"

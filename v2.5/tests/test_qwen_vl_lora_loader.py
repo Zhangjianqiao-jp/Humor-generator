@@ -28,6 +28,24 @@ class _Model:
         return self.parameters
 
 
+class _StackedModel(_Model):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parameters = [
+            ("q_proj.lora_A.sft.weight", _Parameter()),
+            ("q_proj.lora_B.sft.weight", _Parameter()),
+            ("q_proj.lora_A.preference.weight", _Parameter()),
+            ("q_proj.lora_B.preference.weight", _Parameter()),
+        ]
+        self.active = None
+
+    def add_adapter(self, name, _config) -> None:
+        self.added = name
+
+    def set_adapter(self, names) -> None:
+        self.active = names
+
+
 def _attach_lora(model: _Model, _config: object) -> _Model:
     for _, parameter in model.named_parameters():
         parameter.requires_grad = True
@@ -127,6 +145,111 @@ def test_qlora_allows_processor_without_pixel_attributes(monkeypatch) -> None:
     )
 
     assert model is base_model
+
+
+def test_new_preference_adapter_keeps_sft_adapter_frozen(monkeypatch, tmp_path) -> None:
+    stacked = _StackedModel()
+
+    class QwenModel:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return _Model()
+
+    class AutoProcessor:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return SimpleNamespace(image_processor=None)
+
+    class PeftModel:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return stacked
+
+    peft = ModuleType("peft")
+    peft.LoraConfig = lambda **kwargs: kwargs
+    peft.PeftModel = PeftModel
+    peft.get_peft_model = _attach_lora
+    peft.prepare_model_for_kbit_training = lambda model: model
+    transformers = ModuleType("transformers")
+    transformers.AutoProcessor = AutoProcessor
+    transformers.BitsAndBytesConfig = object
+    transformers.Qwen2_5_VLForConditionalGeneration = QwenModel
+    monkeypatch.setitem(sys.modules, "peft", peft)
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+    adapter = tmp_path / "sft"
+    adapter.mkdir()
+
+    model, _ = load_qwen_vl_with_lora(
+        model_name="unit-test-model",
+        lora_rank=4,
+        lora_alpha=8,
+        lora_dropout=0.0,
+        target_modules=["q_proj"],
+        adapter_path=adapter,
+        new_adapter_name="preference",
+    )
+
+    assert model.active == ["sft", "preference"]
+    for name, parameter in model.named_parameters():
+        assert parameter.requires_grad is (".preference." in name)
+
+
+def test_quantized_existing_adapter_prepares_base_before_peft_load(monkeypatch, tmp_path) -> None:
+    calls: dict[str, object] = {}
+    base = _Model()
+    loaded = _Model()
+
+    class BitsAndBytesConfig:
+        def __init__(self, **kwargs) -> None:
+            calls["quantization"] = kwargs
+
+    class QwenModel:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return base
+
+    class AutoProcessor:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            return SimpleNamespace(image_processor=None)
+
+    class PeftModel:
+        @staticmethod
+        def from_pretrained(model, *_args, **_kwargs):
+            calls["peft_input"] = model
+            return loaded
+
+    def prepare(model):
+        calls["prepared"] = model
+        return model
+
+    peft = ModuleType("peft")
+    peft.LoraConfig = lambda **kwargs: kwargs
+    peft.PeftModel = PeftModel
+    peft.get_peft_model = _attach_lora
+    peft.prepare_model_for_kbit_training = prepare
+    transformers = ModuleType("transformers")
+    transformers.AutoProcessor = AutoProcessor
+    transformers.BitsAndBytesConfig = BitsAndBytesConfig
+    transformers.Qwen2_5_VLForConditionalGeneration = QwenModel
+    monkeypatch.setitem(sys.modules, "peft", peft)
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+
+    model, _ = load_qwen_vl_with_lora(
+        model_name="unit-test-model",
+        lora_rank=3,
+        lora_alpha=6,
+        lora_dropout=0.0,
+        target_modules=["gate_proj"],
+        adapter_path=adapter,
+        load_in_4bit=True,
+    )
+
+    assert model is loaded
+    assert calls["prepared"] is base
+    assert calls["peft_input"] is base
 
 
 def test_inference_loader_quantizes_base_before_loading_adapter(monkeypatch, tmp_path) -> None:

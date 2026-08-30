@@ -1,0 +1,40 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch
+#PJM -L gpu=1
+#PJM -L elapse=30:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+
+export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+date
+hostname
+nvidia-smi
+checkpoint=$(find outputs/lora_sft_genkai_7b -maxdepth 1 -type d -name 'checkpoint-*' \
+  | sort -t- -k2,2n \
+  | tail -n 1)
+
+if [ -z "$checkpoint" ] || \
+   [ ! -f "$checkpoint/adapter_model.safetensors" ] || \
+   [ ! -f "$checkpoint/optimizer.pt" ] || \
+   [ ! -f "$checkpoint/trainer_state.json" ]; then
+  echo "No complete training checkpoint found." >&2
+  exit 1
+fi
+
+echo "Resuming from $checkpoint"
+python scripts/train_lora_sft.py \
+  --config configs/lora_sft_genkai_7b.yaml \
+  --resume-from-checkpoint "$checkpoint"
+date

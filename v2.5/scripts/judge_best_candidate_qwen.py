@@ -13,7 +13,7 @@ from typing import Any
 import torch
 import yaml
 from qwen_vl_utils import process_vision_info
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, Qwen2_5_VLForConditionalGeneration
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -38,6 +38,9 @@ Dimension rules:
 - image_specific: penalize generic dialogue or captions that could fit many images.
 - naturalness: penalize broken English, odd translation, repetition, or unnatural wording.
 - humor: penalize plain descriptions, forced jokes, or captions with no surprise/contrast.
+- originality: penalize clichés, stock meme phrasing, and near-copying references.
+- specificity: reward details and relations that are distinctive to this image.
+- hallucinated: true only if the caption depends on an object/action/relation contradicted by or absent from the image.
 - format: penalize explanations, lists, prefixes, multiple captions, or long text.
 - overall: should reflect real usefulness as the final selected caption.
 
@@ -48,9 +51,12 @@ Return only valid JSON with this exact schema:
     "image_specific": 1,
     "naturalness": 1,
     "humor": 1,
+    "originality": 1,
+    "specificity": 1,
     "format": 1,
     "overall": 1
   }},
+  "hallucinated": false,
   "reason": "short reason under 12 words"
 }}
 
@@ -121,6 +127,18 @@ def clamp_score(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, min(5, score))
+
+
+def parse_boolean(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "1"}:
+            return True
+        if normalized in {"false", "no", "0", ""}:
+            return False
+    return bool(value)
 
 
 def get_gold_captions(row: dict[str, Any]) -> list[str]:
@@ -210,6 +228,8 @@ def normalize_judgment(judgment: dict[str, Any], candidates: list[str], threshol
         "image_specific": clamp_score(raw_scores.get("image_specific")),
         "naturalness": clamp_score(raw_scores.get("naturalness")),
         "humor": clamp_score(raw_scores.get("humor")),
+        "originality": clamp_score(raw_scores.get("originality")),
+        "specificity": clamp_score(raw_scores.get("specificity")),
         "format": clamp_score(raw_scores.get("format")),
         "overall": clamp_score(raw_scores.get("overall")),
     }
@@ -219,6 +239,7 @@ def normalize_judgment(judgment: dict[str, Any], candidates: list[str], threshol
         "best_candidate": best_candidate,
         "scores": scores,
         "qualified": bool(best_index and qualified(scores, thresholds)),
+        "hallucinated": parse_boolean(judgment.get("hallucinated", False)),
         "reason": str(judgment.get("reason", ""))[:160],
     }
 
@@ -228,7 +249,7 @@ def summarize(output_jsonl: Path, summary_json: Path, thresholds: dict[str, int]
     scored = [row for row in rows if row.get("best_index")]
     failures = [row for row in rows if row.get("judge_failed")]
     pass_rows = [row for row in scored if row.get("qualified")]
-    metrics = ["image_specific", "naturalness", "humor", "format", "overall"]
+    metrics = ["image_specific", "naturalness", "humor", "originality", "specificity", "format", "overall"]
 
     def mean(values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
@@ -241,6 +262,7 @@ def summarize(output_jsonl: Path, summary_json: Path, thresholds: dict[str, int]
         "qualification_thresholds": thresholds,
         "qualified_count": len(pass_rows),
         "qualified_rate": len(pass_rows) / len(scored) if scored else 0.0,
+        "hallucination_rate": mean([float(bool(row.get("hallucinated"))) for row in scored]),
         "avg_scores": {
             metric: mean([float(row.get("scores", {}).get(metric, 0)) for row in scored]) for metric in metrics
         },
@@ -276,11 +298,24 @@ def run_judge(
 ) -> None:
     config = load_config(config_path)
     model_name = judge_model or config["model"]["model_name"]
+    quantization = config["model"].get("quantization", {})
+    model_kwargs = {
+        "device_map": config["model"].get("device_map", "auto"),
+        "torch_dtype": config["model"].get("torch_dtype", "auto"),
+        "trust_remote_code": config["model"].get("trust_remote_code", True),
+    }
+    if quantization.get("load_in_4bit", False):
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type=str(quantization.get("bnb_4bit_quant_type", "nf4")),
+            bnb_4bit_use_double_quant=bool(
+                quantization.get("bnb_4bit_use_double_quant", True)
+            ),
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         model_name,
-        device_map=config["model"].get("device_map", "auto"),
-        torch_dtype=config["model"].get("torch_dtype", "auto"),
-        trust_remote_code=config["model"].get("trust_remote_code", True),
+        **model_kwargs,
     )
     processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=config["model"].get("trust_remote_code", True))
     model.eval()

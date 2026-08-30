@@ -1,0 +1,19 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch
+#PJM -L gpu=1
+# Validation is image-balanced (24 images, not 3,990 caption rows), so this
+# LoRA job does not need a full-day allocation.
+#PJM -L elapse=08:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+python scripts/train_lora_sft.py --config configs/lora_sft_newyorker_compact_3b.yaml

@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import math
+import json
+import random
 import shutil
 import sys
+import time
 from argparse import ArgumentParser
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +69,49 @@ class HumorSFTTrainer(Trainer):
         return metrics
 
 
+class ImageBalancedSFTDataset(torch.utils.data.Dataset):
+    """Expose one randomly chosen caption per image on every dataset pass.
+
+    Caption-contest data has many mutually valid captions per image.  Feeding
+    every row with ordinary row-wise sampling gives images with more submitted
+    captions disproportionate influence and encourages a generic compromise
+    caption.  This wrapper gives every image one draw at a time while retaining
+    the base dataset's multimodal collator.
+    """
+
+    def __init__(self, dataset: HumorSFTDataset, seed: int, randomize: bool = True) -> None:
+        self.dataset = dataset
+        self.groups: list[list[int]] = []
+        by_image: dict[str, list[int]] = {}
+        for index, row in enumerate(dataset.rows):
+            by_image.setdefault(str(row["image_id"]), []).append(index)
+        self.groups = [by_image[image_id] for image_id in sorted(by_image)]
+        self.rng = random.Random(seed)
+        self.randomize = randomize
+
+    def __len__(self) -> int:
+        return len(self.groups)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        indices = self.groups[index]
+        return self.dataset[self.rng.choice(indices) if self.randomize else indices[0]]
+
+
+def select_image_diverse_rows(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    """Select at most one deterministic row per image for qualitative evaluation."""
+    selected: list[dict[str, Any]] = []
+    seen_images: set[str] = set()
+    for row in rows:
+        image_key = str(row.get("image_id") or row.get("image"))
+        if image_key in seen_images:
+            continue
+        seen_images.add(image_key)
+        selected.append(row)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 class CadenceGuardCallback(TrainerCallback):
     def on_step_end(self, args, state, control, **kwargs):
         if state.global_step <= 0:
@@ -85,6 +132,32 @@ class CadenceGuardCallback(TrainerCallback):
             "[cadence] using current config cadence: "
             f"logging_steps={args.logging_steps}, eval_steps={args.eval_steps}, save_steps={args.save_steps}"
         )
+        return control
+
+
+class WallClockCheckpointCallback(TrainerCallback):
+    def __init__(self, interval_hours: float, clock: Callable[[], float] = time.monotonic) -> None:
+        if interval_hours <= 0:
+            raise ValueError("interval_hours must be greater than zero")
+        self.interval_seconds = interval_hours * 60 * 60
+        self.clock = clock
+        self.next_deadline: float | None = None
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.next_deadline = self.clock() + self.interval_seconds
+        print(f"[checkpoint] wall-clock interval={self.interval_seconds / 3600:g} hours")
+        return control
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step <= 0 or self.next_deadline is None:
+            return control
+        now = self.clock()
+        if now < self.next_deadline:
+            return control
+        control.should_save = True
+        while self.next_deadline <= now:
+            self.next_deadline += self.interval_seconds
+        print(f"[checkpoint] wall-clock save requested at step={state.global_step}")
         return control
 
 
@@ -145,7 +218,7 @@ class FixedGenerationCallback(TrainerCallback):
         was_training = model.training
         model.eval()
         rows = []
-        for row in self.val_dataset.rows[: self.num_samples]:
+        for row in select_image_diverse_rows(self.val_dataset.rows, self.num_samples):
             generated = generate_caption(
                 model=model,
                 processor=self.processor,
@@ -156,6 +229,7 @@ class FixedGenerationCallback(TrainerCallback):
             rows.append(
                 {
                     "step": step,
+                    "image_id": row.get("image_id"),
                     "image": row["image"],
                     "gold_caption": row["caption"],
                     "generated_caption": generated,
@@ -243,7 +317,21 @@ def build_dataset(
         missing_image_report_path=report_path,
         max_samples=max_samples,
         validate_images=validate_images,
+        image_min_pixels=data.get("image_min_pixels"),
+        image_max_pixels=data.get("image_max_pixels"),
     )
+
+
+def filter_dataset_to_image_id(dataset: HumorSFTDataset, image_id: str) -> None:
+    """Restrict a debug dataset to one explicit image without changing the source JSONL."""
+    matches = [row for row in dataset.rows if str(row.get("image_id")) == image_id]
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one training row for image_id={image_id!r}; "
+            f"found {len(matches)}"
+        )
+    dataset.rows = matches
+    print(f"[data] debug training row selected by image_id: {image_id}")
 
 
 def get_model_device(model: Any) -> torch.device:
@@ -288,16 +376,18 @@ def generate_caption(
     )
     inputs = inputs.to(get_model_device(model))
     num_return_sequences = int(generation_config.get("num_return_sequences", 1))
+    do_sample = bool(generation_config.get("do_sample", True))
+    generation_kwargs: dict[str, Any] = {
+        "do_sample": do_sample,
+        "max_new_tokens": int(generation_config.get("max_new_tokens", 48)),
+        "repetition_penalty": float(generation_config.get("repetition_penalty", 1.05)),
+        "num_return_sequences": num_return_sequences,
+    }
+    if do_sample:
+        generation_kwargs["temperature"] = float(generation_config.get("temperature", 0.8))
+        generation_kwargs["top_p"] = float(generation_config.get("top_p", 0.9))
     with torch.no_grad():
-        generated_ids = model.generate(
-            **inputs,
-            do_sample=bool(generation_config.get("do_sample", True)),
-            temperature=float(generation_config.get("temperature", 0.8)),
-            top_p=float(generation_config.get("top_p", 0.9)),
-            max_new_tokens=int(generation_config.get("max_new_tokens", 48)),
-            repetition_penalty=float(generation_config.get("repetition_penalty", 1.05)),
-            num_return_sequences=num_return_sequences,
-        )
+        generated_ids = model.generate(**inputs, **generation_kwargs)
     prompt_len = inputs["input_ids"].shape[-1]
     new_tokens = generated_ids[:, prompt_len:]
     decoded = processor.batch_decode(
@@ -305,7 +395,11 @@ def generate_caption(
         skip_special_tokens=True,
         clean_up_tokenization_spaces=False,
     )
-    return [clean_generated_caption(text, prompt=prompt) for text in decoded]
+    preserve_newlines = bool(generation_config.get("preserve_newlines", False))
+    return [
+        clean_generated_caption(text, prompt=prompt, preserve_newlines=preserve_newlines)
+        for text in decoded
+    ]
 
 
 def save_run_config(config: dict[str, Any], config_path: Path, output_dir: Path) -> None:
@@ -360,6 +454,13 @@ def prepare_model_and_processor(config: dict[str, Any]) -> tuple[Any, Any]:
         device_map=config["model"].get("device_map", "auto"),
         torch_dtype=config["model"].get("torch_dtype", "auto"),
         trust_remote_code=config["model"].get("trust_remote_code", True),
+        image_min_pixels=config["data"].get("image_min_pixels"),
+        image_max_pixels=config["data"].get("image_max_pixels"),
+        load_in_4bit=bool(config["model"].get("quantization", {}).get("load_in_4bit", False)),
+        bnb_4bit_quant_type=str(config["model"].get("quantization", {}).get("bnb_4bit_quant_type", "nf4")),
+        bnb_4bit_use_double_quant=bool(
+            config["model"].get("quantization", {}).get("bnb_4bit_use_double_quant", True)
+        ),
     )
     if config["training"].get("gradient_checkpointing", False):
         if hasattr(model, "enable_input_require_grads"):
@@ -400,6 +501,7 @@ def run_debug_collator(config: dict[str, Any], num_debug_samples: int) -> None:
 def training_args_from_config(config: dict[str, Any], debug_one_step: bool = False) -> TrainingArguments:
     training = config["training"]
     output = config["output"]
+    use_wall_clock_checkpoints = float(training.get("save_hours", 0) or 0) > 0
     kwargs = {
         "output_dir": output["output_dir"],
         "per_device_train_batch_size": training["batch_size"],
@@ -414,7 +516,7 @@ def training_args_from_config(config: dict[str, Any], debug_one_step: bool = Fal
         "save_steps": training["save_steps"],
         "save_total_limit": training.get("save_total_limit", 3),
         "eval_strategy": "no" if debug_one_step else "steps",
-        "save_strategy": "no" if debug_one_step else "steps",
+        "save_strategy": "no" if debug_one_step or use_wall_clock_checkpoints else "steps",
         "bf16": bool(training.get("bf16", False)) and torch.cuda.is_available(),
         "fp16": bool(training.get("fp16", False)) and torch.cuda.is_available(),
         "optim": training.get("optim", "adamw_torch"),
@@ -431,7 +533,13 @@ def training_args_from_config(config: dict[str, Any], debug_one_step: bool = Fal
         kwargs["warmup_steps"] = training["warmup_steps"]
     else:
         kwargs["warmup_ratio"] = training.get("warmup_ratio", 0.03)
-    return TrainingArguments(**kwargs)
+    args = TrainingArguments(**kwargs)
+    if config["model"].get("device_map") == "auto" and torch.cuda.device_count() > 1:
+        # The model is already sharded by Accelerate. Wrapping it again in
+        # DataParallel requires every parameter to live on cuda:0 and fails.
+        args._n_gpu = 1
+        print("[model] disabled Trainer DataParallel for device_map=auto")
+    return args
 
 
 def train(
@@ -440,6 +548,7 @@ def train(
     debug_one_step: bool = False,
     max_train_samples: int | None = None,
     max_val_samples: int | None = None,
+    debug_train_image_id: str | None = None,
 ) -> None:
     config = load_config(config_path)
     set_seed(config["training"].get("seed", 42))
@@ -454,46 +563,89 @@ def train(
     model, processor = prepare_model_and_processor(config)
 
     if debug_one_step:
-        max_train_samples = max_train_samples or max(1, int(config["training"].get("batch_size", 1)))
+        if debug_train_image_id:
+            # Load all validated rows before selecting the requested stress case.
+            max_train_samples = None
+        else:
+            max_train_samples = max_train_samples or max(1, int(config["training"].get("batch_size", 1)))
         max_val_samples = max_val_samples or 1
+    elif debug_train_image_id:
+        raise ValueError("--debug-train-image-id is only valid with --debug-one-step.")
     elif max_val_samples is None:
         max_val_samples = config.get("evaluation", {}).get("max_eval_samples")
 
     train_dataset = build_dataset(config, "train", processor=processor, max_samples=max_train_samples)
     val_dataset = build_dataset(config, "val", processor=processor, max_samples=max_val_samples)
+    if debug_train_image_id:
+        filter_dataset_to_image_id(train_dataset, debug_train_image_id)
     print(
         "[data] dataset sizes after validation: "
         f"train={len(train_dataset)}/{train_dataset.original_count}, "
         f"val={len(val_dataset)}/{val_dataset.original_count}"
     )
     train_dataset.print_debug_samples(3)
+    train_dataset_for_trainer: torch.utils.data.Dataset = train_dataset
+    if bool(config["data"].get("sample_one_caption_per_image", False)):
+        train_dataset_for_trainer = ImageBalancedSFTDataset(
+            train_dataset,
+            seed=int(config["training"].get("seed", 42)),
+        )
+        print(
+            "[data] image-balanced caption sampling enabled: "
+            f"one draw from each of {len(train_dataset_for_trainer)} images per epoch "
+            f"instead of {len(train_dataset)} caption rows"
+        )
+    val_dataset_for_trainer: torch.utils.data.Dataset = val_dataset
+    if bool(config["data"].get("sample_one_caption_per_image_val", False)):
+        val_dataset_for_trainer = ImageBalancedSFTDataset(
+            val_dataset,
+            seed=int(config["training"].get("seed", 42)),
+            randomize=False,
+        )
+        print(
+            "[data] image-balanced validation enabled: "
+            f"one fixed caption from each of {len(val_dataset_for_trainer)} images "
+            f"instead of {len(val_dataset)} caption rows"
+        )
 
     args = training_args_from_config(config, debug_one_step=debug_one_step)
     callbacks = [CadenceGuardCallback()]
     if not debug_one_step:
-        callbacks.extend(
-            [
-                AdapterCheckpointCallback(
-                    processor=processor,
-                    output_dir=output_dir,
-                    latest_dir=Path(config["output"].get("latest_adapter_dir", output_dir / "latest")),
-                    best_dir=Path(config["output"].get("best_adapter_dir", output_dir / "best_val_loss")),
-                ),
+        callbacks.append(
+            AdapterCheckpointCallback(
+                processor=processor,
+                output_dir=output_dir,
+                latest_dir=Path(config["output"].get("latest_adapter_dir", output_dir / "latest")),
+                best_dir=Path(config["output"].get("best_adapter_dir", output_dir / "best_val_loss")),
+            )
+        )
+        fixed_generation_samples = int(
+            config.get("evaluation", {}).get("fixed_generation_samples", 5)
+        )
+        if fixed_generation_samples > 0:
+            callbacks.append(
                 FixedGenerationCallback(
                     val_dataset=val_dataset,
                     processor=processor,
                     output_dir=output_dir,
                     generation_config=config.get("generation", {}),
-                    num_samples=int(config.get("evaluation", {}).get("fixed_generation_samples", 5)),
-                ),
-            ]
-        )
+                    num_samples=fixed_generation_samples,
+                )
+            )
+        else:
+            print(
+                "[generation] disabled during training; "
+                "run post-training generation in a fresh process"
+            )
+        save_hours = float(config["training"].get("save_hours", 0) or 0)
+        if save_hours > 0:
+            callbacks.append(WallClockCheckpointCallback(save_hours))
 
     trainer = HumorSFTTrainer(
         model=model,
         args=args,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        train_dataset=train_dataset_for_trainer,
+        eval_dataset=val_dataset_for_trainer,
         data_collator=train_dataset.collate_fn,
         callbacks=callbacks,
     )
@@ -505,6 +657,20 @@ def train(
 
     final_metrics = trainer.evaluate()
     print(f"[eval] final metrics: {final_metrics}")
+    final_metrics_path = output_dir / "final_metrics.json"
+    final_metrics_path.write_text(
+        json.dumps(
+            {
+                key: (value.item() if hasattr(value, "item") else value)
+                for key, value in final_metrics.items()
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"[eval] saved final metrics: {final_metrics_path}")
     final_dir = Path(config["output"].get("final_adapter_dir", output_dir / "final_lora"))
     final_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(final_dir)
@@ -520,6 +686,7 @@ def main() -> None:
     parser.add_argument("--debug-data", action="store_true")
     parser.add_argument("--debug-collator", action="store_true")
     parser.add_argument("--debug-one-step", action="store_true")
+    parser.add_argument("--debug-train-image-id", type=str, default=None)
     parser.add_argument("--num-debug-samples", type=int, default=3)
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--max-val-samples", type=int, default=None)
@@ -552,6 +719,7 @@ def main() -> None:
         debug_one_step=args.debug_one_step,
         max_train_samples=args.max_train_samples,
         max_val_samples=args.max_val_samples,
+        debug_train_image_id=args.debug_train_image_id,
     )
 
 

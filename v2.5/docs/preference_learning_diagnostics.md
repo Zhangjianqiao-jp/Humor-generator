@@ -14,7 +14,7 @@ Both adapters are attention-only QLoRA. The vision encoder, multimodal merger/pr
 
 ## 2. Is preference optimization justified?
 
-Current decision: the policy has a clear Best-of-N ranking opportunity, so a controlled preference-optimization pilot is scientifically justified. The current automatically derived H2-only pairs are not sufficient for the final run: they cover only 61 images, omit H1/H3/H4, and the auxiliary judge is context-sensitive. Formal preference training should wait for an independently or human-validated, image-disjoint pair version; a clearly labeled H2-only engineering pilot may be used only to validate the trainer.
+Current decision: the policy has a clear Best-of-N ranking opportunity, so a controlled preference-optimization pilot is scientifically justified. The current automatically derived H2-only pairs are not sufficient for the final run: they cover only 61 images, omit H1/H3/H4, and the auxiliary judge is context-sensitive. The original scientific recommendation was to wait for independent or human validation. On 2026-08-24 the project owner explicitly chose not to perform that manual audit and to use the published NeurIPS 2024 crowd-preference construction directly. This is now the execution decision; the audience/cultural-alignment limitation remains documented rather than silently treated as resolved.
 
 Evidence in favor:
 
@@ -142,6 +142,46 @@ Observed surface differences are small: chosen captions average 47.63 characters
 
 These 485 pairs are a diagnostic candidate set, not an approved DPO training set. They come from only 61 pair-producing images and cover only H2.
 
+### 6.1 Published New Yorker preference pairs adopted for the next stage
+
+The project now uses the preference construction released with Zhang et al. (NeurIPS 2024), not the 485 locally inferred pairs, as the DPO-label source. The authors' released `preprocess_dpo` rule is:
+
+1. sample `chosen` from the top half of a contest ranking;
+2. sample `rejected` from a lower rank;
+3. retain the pair only when `chosen_mean - rejected_mean > 3 * sqrt(chosen_precision^2 + rejected_precision^2)`.
+
+Implementation: `scripts/preference_diagnostics/build_published_newyorker_dpo_pairs.py`.
+
+The released caption preference labels are attached to this project's existing image plus compact-plan prompt so that the 3B DPO input distribution matches its SFT input distribution. The labels themselves are not changed.
+
+Full published-rule pools aligned to the current image-disjoint split:
+
+| Split | Images | Pairs | Unique caption pairs |
+|---|---:|---:|---:|
+| train | 79 | 77,944 | 77,915 |
+| validation | 24 | 24,000 | 23,997 |
+| test | 24 | 24,000 | 23,985 |
+
+For tractable frozen-reference computation, a deterministic train-ready view keeps 16 deduplicated, length-matched hard pairs per image without changing winner/loser labels:
+
+| Split | Selected pairs | Images |
+|---|---:|---:|
+| train | 1,264 | 79 |
+| validation | 384 | 24 |
+| test | 384 | 24 |
+
+Selection constraints: relative character-length difference at most 0.35, exact pair deduplication, and ascending three-sigma `z_margin`. Split contest overlap is zero. Contest 591 produced 436 pairs and contest 606 produced 508 pairs within the published 200,000-attempt cap; this is recorded in the manifest rather than hidden.
+
+Artifacts:
+
+- `data/processed/newyorker_published_dpo_pairs/{train,validation,test}.jsonl`
+- `data/processed/newyorker_published_dpo_pairs/{train,validation,test}_selected.jsonl`
+- `data/processed/newyorker_published_dpo_pairs/manifest.json`
+- `configs/dpo_reference_published_newyorker_compact_3b.yaml`
+- `configs/lora_dpo_published_newyorker_compact_3b.yaml`
+
+The dataset license is CC-BY-NC-4.0, so these data are restricted to non-commercial research. These are score-derived H2 preferences; adopting the official source does not turn them into H1/H3/H4 or image-grounding labels.
+
 ## 7. Preference gradient concentration
 
 Implementation: `scripts/preference_diagnostics/module_gradient_analysis.py`
@@ -193,6 +233,8 @@ No global target-module winner is selected yet.
 
 The current attention-only setting is the known stable baseline, not an evidence-based optimum. The first measured selective candidate inside that scope is `o_proj + v_proj`, which should be compared against all four attention projections under a matched LoRA-parameter budget. MLP-only and all-linear remain unmeasured and cannot be ranked until a diagnostic adapter covers them. All configurations must be compared under approximately equal trainable-parameter budgets.
 
+The concrete matched-budget comparison implied by current parameter counts is `q+k+v+o, r=16` versus `o+v, r=32`; both are approximately 7.37M LoRA parameters. This is a candidate ablation, not a claim that `o+v` is globally optimal. `gate_proj`, `up_proj`, `down_proj`, vision, multimodal projector, and `lm_head` remain unmeasured. Base Fisher and the requested attention-vs-MLP-vs-all-linear matched-budget ablation also remain incomplete.
+
 ## 10. Recommended objective
 
 Recommended objective matrix after diagnostics:
@@ -207,7 +249,7 @@ Planner-policy and caption-policy experiments must remain separate. The scientif
 
 ## 11. Recommended first training experiments
 
-Phase-1 diagnostics are complete. Before a result-bearing preference run, freeze an image-disjoint pair-data version with human or independent blind validation and add H1/H3/H4. Do not train on auxiliary judge scores from this diagnostic.
+Phase-1 diagnostics on the existing attention adapter are complete, but global module selection is not. The project owner has explicitly waived the proposed human audit and selected the published crowd-preference labels. Do not train on auxiliary judge scores from the earlier diagnostic.
 
 If diagnostics support preference optimization, the first controlled experiments should be:
 
@@ -234,9 +276,27 @@ Every result must report humor, grounding, originality, specificity, diversity, 
 - Formal humor representation probe: job `6577566` passed.
 - SFT-versus-preference alignment smoke and formal run: job `6577590` passed.
 - Formal joint-vs-direct Best-of-N candidate generation and validated scoring: completed; final scoring jobs `6577756` (joint) and `6577730` (direct) passed.
-- Preference training: not started.
+- Published-pair construction tests: 13 passed; schema, image paths, three-sigma condition, length control, and split leakage checks passed.
+- Published reference-logp smoke: job `6578505` passed on 2 train + 2 validation + 2 test pairs; all reference fields and supervised token counts were valid.
+- Full published reference-logp plus one-step LoRA-DPO smoke: job `6578562` started on one MIG GPU with a 30-minute limit. At the memory-capture point it was running normally and had completed 600/1,264 train reference pairs.
+- Full preference training: not started. Job `6578562` uses `--debug-one-step`, saves no DPO adapter, and cannot become a full training run.
 
-## 13. Authoritative references
+## 13. Current handoff memory (2026-08-24)
+
+This section records the operational decisions from the current conversation so the next session can continue without relying on chat history.
+
+1. The user found many New Yorker jokes culturally difficult to understand. The scientific recommendation was to record comprehension and audit the data, but the final user decision is: no manual spot check; trust the official crowd preferences and proceed.
+2. The primary preference source is Zhang et al. (NeurIPS 2024). The older NEXT release also contains direct dueling-bandit responses (`Which caption is funnier?`), but the current pipeline uses the newer paper's released score-and-precision DPO construction because it aligns with the already downloaded ranking corpus.
+3. The current 3B policy remains `Qwen/Qwen2.5-VL-3B-Instruct` plus `outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss`.
+4. Reference computation freezes every model parameter. The subsequent trainer smoke continues only the existing attention LoRA (`q_proj`, `k_proj`, `v_proj`, `o_proj`), approximately 7.37M parameters; it is not full-model training.
+5. Existing module evidence is partial: within attention LoRA, preference sensitivity is `o_proj ~= v_proj >> k_proj ~= q_proj`; all 144 measured SFT-vs-preference layer/module cosines are positive. MLP, vision, projector, `lm_head`, and Base Fisher have not been compared.
+6. The immediate selective-module candidate is budget-matched `o+v, r=32` versus stable attention `q+k+v+o, r=16`. No global module winner has been established.
+7. Image-shuffle dependence remains weak when compact plan is fixed, so an image-conditional/mDPO-inspired objective remains a required later ablation even if vanilla DPO improves humor ranking.
+8. The local blind-validation dashboard is available under `results/preference_diagnostics/human_validation_v1/`, and its safe server binds port 8765 while blocking `blind_key.json`; it is no longer a prerequisite for the published-pair baseline.
+9. Git commit `59f544f` contains the earlier preference diagnostics and dashboard. It was one commit ahead of `origin/main`; push was blocked because the server lacked valid GitHub authentication. New published-pair changes occurred after that commit and are not claimed as pushed.
+10. Required next gate: job `6578562` must finish both full reference computation and the one-step LoRA-DPO smoke successfully. Only after that should a result-bearing DPO/SimPO or module-ablation job be submitted.
+
+## 14. Authoritative references
 
 1. Hessel et al. (2023), *Do Androids Laugh at Electric Sheep?*, ACL 2023 Best Paper. https://aclanthology.org/2023.acl-long.41/
 2. Zhang et al. (2024), *Humor in AI*, NeurIPS 2024 Datasets and Benchmarks Track. https://proceedings.neurips.cc/paper_files/paper/2024/hash/e297fb6cd1690ee5b39c5bb4c58ad801-Abstract-Datasets_and_Benchmarks_Track.html

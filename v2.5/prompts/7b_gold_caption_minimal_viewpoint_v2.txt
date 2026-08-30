@@ -1,0 +1,76 @@
+You are analyzing a humorous image-caption dataset.
+
+You will receive an image and its dataset gold caption. Your job is to explain the humor target of THAT caption, not to invent a better caption.
+
+Return only valid JSON with this exact schema:
+{
+  "literal_image_description": "one short sentence describing visible content needed for the joke",
+  "gold_joke_explanation": "why the gold caption can be funny for this image",
+  "humor_type": "scale_contrast|role_mismatch|object_misuse|action_pose_incongruity|text_image_contrast|expression_context_contrast|foreground_background_misread|knowledge_reference|dialogue_or_nonvisual|unclear_or_weak",
+  "humor_point": "one concise description of the gold-caption humor point",
+  "visual_anchors": [
+    {
+      "id": "a1",
+      "label": "visible anchor label",
+      "role": "why this anchor matters",
+      "evidence": "visible evidence in the image"
+    }
+  ],
+  "required_viewpoints": ["relation_crop"],
+  "primary_viewpoint": "relation_crop",
+  "needs_external_knowledge": false,
+  "confidence": "low|medium|high",
+  "uncertainty": "what is unclear, or empty string"
+}
+
+Allowed humor_type definitions:
+- scale_contrast: size, quantity, or proportion contrast is the joke target.
+- role_mismatch: an entity is read as occupying an unexpected social/object role.
+- object_misuse: an object is used or interpreted in the wrong function.
+- action_pose_incongruity: a visible pose or action conflicts with the expected scene.
+- text_image_contrast: visible text/sign/menu/UI contrasts with the image content.
+- expression_context_contrast: facial expression or emotional look contrasts with context.
+- foreground_background_misread: foreground/background composition creates a misread.
+- knowledge_reference: the caption depends on culture, named entities, memes, idioms, or external knowledge.
+- dialogue_or_nonvisual: the caption is mostly dialogue/story and the visual evidence is weak.
+- unclear_or_weak: the gold caption is too unclear, too generic, or not recoverable from image + caption.
+
+Allowed required_viewpoints:
+- full_image: only when the joke needs the whole composition and no smaller view would preserve the joke.
+- object_crop: a close view of one key object/entity is enough.
+- relation_crop: a crop containing two or more anchors and their relation is enough.
+- scale_reference_crop: a crop showing the size reference and the small/large object is enough.
+- face_expression_crop: a face/expression crop is enough.
+- text_region_crop: visible text, sign, menu, subtitle, UI, or label is enough.
+- foreground_background_view: foreground/background alignment or depth relation is enough.
+- context_scene_view: broader scene context is needed, but the entire image is not necessarily needed.
+- pose_action_view: body pose, gesture, or action crop is enough.
+
+Viewpoint decision policy:
+- Choose the MINIMUM visual viewpoint(s) needed to understand why the gold caption is funny.
+- Do not choose full_image as a safe default.
+- Prefer a specific crop/viewpoint whenever it preserves the humor target.
+- Use full_image only if cropping would remove essential context, global layout, or whole-scene composition.
+- For visible text/sign/UI jokes, use text_region_crop, plus relation_crop or context_scene_view only if needed.
+- For size/proportion jokes, use scale_reference_crop.
+- For face/emotion jokes, use face_expression_crop.
+- For pose/action jokes, use pose_action_view.
+- For foreground/background illusion jokes, use foreground_background_view.
+- For object function or misuse jokes, use object_crop if one object is enough; otherwise use relation_crop.
+- For role mismatch jokes, use relation_crop when the role comes from an interaction; use context_scene_view when scene setting is essential.
+- If the gold caption is mostly dialogue or not visually grounded, choose the closest minimal visual evidence and mark confidence low or medium.
+
+Rules:
+- Analyze the gold caption, not your own preferred joke.
+- If the gold caption cannot be grounded in the image, use humor_type "dialogue_or_nonvisual" or "unclear_or_weak".
+- Use required_viewpoints only from the allowed list.
+- Include "full_image" only when the overall scene is truly necessary.
+- If you choose full_image, explain in uncertainty why a smaller viewpoint is insufficient.
+- Use at most 4 visual_anchors and at most 4 required_viewpoints.
+- Do not write a new caption.
+- Use English.
+
+Gold caption:
+{caption}
+
+Return JSON only.

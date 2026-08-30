@@ -30,6 +30,22 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def disable_use_cache(model: Any) -> None:
+    for module in model.modules():
+        config = getattr(module, "config", None)
+        if config is not None and hasattr(config, "use_cache"):
+            config.use_cache = False
+        generation_config = getattr(module, "generation_config", None)
+        if generation_config is not None and hasattr(generation_config, "use_cache"):
+            generation_config.use_cache = False
+
+
+def disable_dropout(model: Any) -> None:
+    for module in model.modules():
+        if isinstance(module, torch.nn.Dropout):
+            module.p = 0.0
+
+
 class HomerTraceCache:
     def __init__(self, root: Path, identity: dict[str, Any]) -> None:
         self.root, self.identity = root, identity
@@ -110,6 +126,13 @@ def main() -> None:
         device_map=cfg["model"].get("device_map", "auto"), torch_dtype=cfg["model"].get("torch_dtype", "bfloat16"),
         load_in_4bit=bool(cfg["model"].get("load_in_4bit", True)),
     )
+    if bool(cfg["training"].get("gradient_checkpointing", True)):
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        model.gradient_checkpointing_enable()
+        disable_use_cache(model)
+        disable_dropout(model)
+        print("[model] gradient checkpointing enabled; use_cache and frozen-policy dropout disabled")
     embedding = model.get_input_embeddings().weight
     hidden = int(embedding.shape[1])
     target_norm = float(embedding[:4096].float().norm(dim=-1).mean())
@@ -153,18 +176,24 @@ def main() -> None:
         for index, row in enumerate(rows):
             trace = trace_for(row); model.set_adapter("generator")
             mode = "latent" if random.random() < latent_probability else "hybrid"
+            model.train()
             batch = encode(model, processor, process_vision_info, bridge, trace, row, mode=mode)
             loss = model(**batch, use_cache=False).loss
+            if not torch.isfinite(loss):
+                raise FloatingPointError(f"non-finite train NLL at epoch={epoch+1} index={index}: {loss}")
             (loss / int(cfg["training"]["gradient_accumulation_steps"])).backward(); total += float(loss.detach())
             accum = int(cfg["training"]["gradient_accumulation_steps"])
             if (index + 1) % accum == 0 or index + 1 == len(rows):
                 torch.nn.utils.clip_grad_norm_(bridge.parameters(), float(cfg["training"]["max_grad_norm"]))
                 optimizer.step(); optimizer.zero_grad(set_to_none=True)
-        bridge.eval(); losses = []
+        model.eval(); bridge.eval(); losses = []
         with torch.no_grad():
             for row in unique_clusters(val_rows, seed):
                 model.set_adapter("generator")
-                losses.append(float(model(**encode(model, processor, process_vision_info, bridge, trace_for(row), row, mode="latent"), use_cache=False).loss))
+                val_loss = model(**encode(model, processor, process_vision_info, bridge, trace_for(row), row, mode="latent"), use_cache=False).loss
+                if not torch.isfinite(val_loss):
+                    raise FloatingPointError(f"non-finite validation NLL at epoch={epoch+1}: {val_loss}")
+                losses.append(float(val_loss))
         record = {"epoch": epoch+1, "latent_probability": latent_probability, "train_nll": total/max(len(rows),1), "val_nll": sum(losses)/max(len(losses),1)}
         history.append(record); print(json.dumps(record))
         payload = {"state_dict": bridge.state_dict(), "config": bcfg, "history": history, "identity": identity}

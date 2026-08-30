@@ -86,6 +86,29 @@ class ImageBalancedPreferenceDataset(torch.utils.data.Dataset):
         return self.dataset[candidates[chosen]]
 
 
+def preference_sampling_dataset(
+    dataset: PreferenceDataset,
+    mode: str,
+    *,
+    seed: int,
+    randomize: bool,
+) -> torch.utils.data.Dataset:
+    """Apply an explicit pair-sampling policy.
+
+    ``all_pairs`` is required for preference-objective screening: every
+    selected pair contributes one training/evaluation example.  The legacy
+    ``image_balanced`` mode remains available for intentionally cheap pilots.
+    """
+    normalized = mode.strip().lower().replace("-", "_")
+    if normalized == "all_pairs":
+        return dataset
+    if normalized == "image_balanced":
+        return ImageBalancedPreferenceDataset(dataset, seed=seed, randomize=randomize)
+    raise ValueError(
+        f"Unknown preference sampling mode {mode!r}; expected 'all_pairs' or 'image_balanced'."
+    )
+
+
 def sequence_logps(logits: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """Return summed supervised-token log probabilities and token counts."""
     shifted_logits = logits[:, :-1, :].float()
@@ -208,11 +231,25 @@ class DPOCollator:
             encoded["reference_chosen_logps"] = torch.tensor([x[0] for x in reference], dtype=torch.float32)
             encoded["reference_rejected_logps"] = torch.tensor([x[1] for x in reference], dtype=torch.float32)
         encoded["num_pairs"] = n_pairs
+        # Keep stable identifiers beside the tensors so validation can use the
+        # image (rather than the highly correlated pair) as its sampling unit.
+        encoded["image_ids"] = [str(pair["image_id"]) for pair in pairs]
+        encoded["pair_ids"] = [
+            str(pair.get("pair_id") or f"{pair['image_id']}:{index}")
+            for index, pair in enumerate(pairs)
+        ]
         return encoded
 
 
 def model_inputs_from_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
-    excluded = {"labels", "reference_chosen_logps", "reference_rejected_logps", "num_pairs"}
+    excluded = {
+        "labels",
+        "reference_chosen_logps",
+        "reference_rejected_logps",
+        "num_pairs",
+        "image_ids",
+        "pair_ids",
+    }
     return {
         key: value.to(device) if isinstance(value, torch.Tensor) else value
         for key, value in batch.items()

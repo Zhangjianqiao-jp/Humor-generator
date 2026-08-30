@@ -1,0 +1,14 @@
+hint_utility:
+  hint_samples_per_image: 6
+  caption_samples_per_hint: 3
+  weights:
+    humor: 0.40
+    grounding: 0.25
+    originality: 0.20
+    specificity: 0.15
+  min_utility_margin: 0.50
+  require_pareto_dominance: true
+  seed: 20260824
+  note: >-
+    Weights are screening defaults and remain config-driven. Raw dimensions
+    are always retained. The frozen best Generator defines downstream utility.

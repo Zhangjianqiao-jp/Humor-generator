@@ -1,0 +1,40 @@
+placement: random_selected
+adapter_strategy: separate_preference
+lora:
+  target_modules:
+  - base_model.model.model.language_model.layers.6.self_attn.o_proj
+  - base_model.model.model.language_model.layers.32.self_attn.o_proj
+  - base_model.model.model.language_model.layers.13.self_attn.o_proj
+  - base_model.model.model.language_model.layers.25.self_attn.o_proj
+  - base_model.model.model.language_model.layers.7.self_attn.o_proj
+  - base_model.model.model.language_model.layers.29.self_attn.o_proj
+  - base_model.model.model.language_model.layers.4.self_attn.o_proj
+  - base_model.model.model.language_model.layers.12.self_attn.o_proj
+  - base_model.model.model.language_model.layers.30.self_attn.o_proj
+  - base_model.model.model.language_model.layers.16.self_attn.o_proj
+  - base_model.model.model.language_model.layers.9.self_attn.o_proj
+  - base_model.model.model.language_model.layers.19.self_attn.o_proj
+  - base_model.model.model.language_model.layers.5.self_attn.o_proj
+  - base_model.model.model.language_model.layers.8.self_attn.o_proj
+  - base_model.model.model.language_model.layers.3.self_attn.o_proj
+  - base_model.model.model.language_model.layers.22.self_attn.o_proj
+  - base_model.model.model.language_model.layers.33.self_attn.o_proj
+  - base_model.model.model.language_model.layers.2.self_attn.o_proj
+  - base_model.model.model.language_model.layers.16.self_attn.v_proj
+  - base_model.model.model.language_model.layers.34.self_attn.v_proj
+  - base_model.model.model.language_model.layers.21.self_attn.v_proj
+  - base_model.model.model.language_model.layers.30.self_attn.v_proj
+  - base_model.model.model.language_model.layers.19.self_attn.v_proj
+  - base_model.model.model.language_model.layers.33.self_attn.v_proj
+  - base_model.model.model.language_model.layers.12.self_attn.v_proj
+  - base_model.model.model.language_model.layers.3.self_attn.v_proj
+  - base_model.model.model.language_model.layers.7.self_attn.v_proj
+  - base_model.model.model.language_model.layers.35.self_attn.v_proj
+  - base_model.model.model.language_model.layers.4.self_attn.v_proj
+  - base_model.model.model.language_model.layers.13.self_attn.v_proj
+  rank: 73
+  alpha: 146
+  dropout: 0.05
+  trainable_parameter_count: 7400448
+selection_evidence: seeded random, matched counts by module family to gradient-selected
+  (seed=20260824)

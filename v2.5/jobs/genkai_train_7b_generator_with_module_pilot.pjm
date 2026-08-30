@@ -1,0 +1,61 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+pilots="
+configs/7b_generator/module_pilot_attention.yaml
+configs/7b_generator/module_pilot_mlp.yaml
+configs/7b_generator/module_pilot_all_linear.yaml
+"
+
+# Fail closed: every placement must complete a real 7B QLoRA optimizer step.
+for config in $pilots; do
+  echo "[7b-generator-smoke] $config"
+  python scripts/train_lora_sft.py \
+    --config "$config" \
+    --debug-one-step \
+    --max-train-samples 1 \
+    --max-val-samples 1
+done
+
+# Controlled, budget-matched module-placement pilots.
+for config in $pilots; do
+  echo "[7b-generator-module-pilot] $config"
+  python scripts/train_lora_sft.py --config "$config"
+done
+
+python scripts/select_sft_module_pilot.py \
+  --candidate attention=configs/7b_generator/module_pilot_attention.yaml \
+  --candidate mlp=configs/7b_generator/module_pilot_mlp.yaml \
+  --candidate all_linear=configs/7b_generator/module_pilot_all_linear.yaml \
+  --full-template configs/7b_generator/full_train_template.yaml \
+  --output-config outputs/7b-generator/selected_config.yaml \
+  --report outputs/7b-generator/module_selection.json
+
+# Verify the generated winner config before the full result-bearing run.
+python scripts/train_lora_sft.py \
+  --config outputs/7b-generator/selected_config.yaml \
+  --debug-one-step \
+  --max-train-samples 1 \
+  --max-val-samples 1
+
+echo "[7b-generator-full-sft] selected config"
+sed -n '1,220p' outputs/7b-generator/selected_config.yaml
+python scripts/train_lora_sft.py --config outputs/7b-generator/selected_config.yaml
+
+python scripts/verify_lora_adapter.py outputs/7b-generator/final_lora
+echo "[7b-generator] module pilot, selection, full SFT, and adapter verification passed"

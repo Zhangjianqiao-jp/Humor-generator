@@ -1,0 +1,23 @@
+experiment:
+  name: 7b_generator_dpo_quality64_full_diagnostic
+  phase: read_only_post_dpo_diagnosis
+
+model:
+  model_name: Qwen/Qwen2.5-VL-7B-Instruct
+  device_map: auto
+  torch_dtype: bfloat16
+  trust_remote_code: true
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_quant_type: nf4
+    bnb_4bit_use_double_quant: true
+  lora:
+    rank: 3
+    alpha: 6
+    dropout: 0.05
+    target_modules: [gate_proj, up_proj, down_proj]
+    bias: none
+
+data:
+  max_seq_len: 768
+  image_max_pixels: 200704

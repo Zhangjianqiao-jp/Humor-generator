@@ -1,0 +1,26 @@
+# Freeze SFT-policy log probabilities before DPO.  Run only after the caption
+# SFT adapter has passed held-out image evaluation and human audit.
+model:
+  model_name: "Qwen/Qwen2.5-VL-3B-Instruct"
+  reference_adapter_dir: "outputs/newyorker_compact_captioner_3b/best_val_loss"
+  device_map: "auto"
+  torch_dtype: "bfloat16"
+  trust_remote_code: true
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+    bias: "none"
+
+data:
+  train_path: "data/processed/newyorker_compact_dpo/dpo_train.jsonl"
+  validation_path: "data/processed/newyorker_compact_dpo/dpo_validation.jsonl"
+  test_path: "data/processed/newyorker_compact_dpo/dpo_test.jsonl"
+  batch_size: 1
+  image_max_pixels: 200704
+  max_seq_len: 768
+  skip_missing_images: false
+
+output:
+  output_dir: "data/processed/newyorker_compact_dpo_reference_3b"

@@ -1,0 +1,38 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+configs="
+configs/preference/objective_screen_dpo.yaml
+configs/preference/objective_screen_simpo.yaml
+configs/preference/objective_screen_ipo.yaml
+configs/preference/objective_screen_anchored.yaml
+"
+
+# All objectives must complete a real forward/backward/optimizer smoke first.
+for config in $configs; do
+  echo "[objective-smoke] $config"
+  python scripts/train_lora_dpo.py --config "$config" --debug-one-step
+done
+
+# Result-bearing low-cost screening: placement, data, tokens, and seed fixed.
+for config in $configs; do
+  echo "[objective-screen] $config"
+  python scripts/train_lora_dpo.py --config "$config"
+done
+
+echo "[objective-screen] DPO SimPO IPO Anchored training screen passed"

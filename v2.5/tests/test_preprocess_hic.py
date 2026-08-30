@@ -6,7 +6,13 @@ from PIL import Image
 
 from src.data.preprocess_hic import PreprocessConfig, preprocess_hic_dataset
 from src.utils.io import read_jsonl
-from src.training.sft_dataset import HumorSFTDataset
+from src.training.sft_dataset import HumorSFTDataset, clean_generated_caption
+
+
+def test_generated_text_cleaning_can_preserve_planner_schema() -> None:
+    plan = "ANCHOR: visible object\nCONTRAST: violated expectation\nANGLE: dry escalation"
+    assert clean_generated_caption(plan) == "ANCHOR: visible object"
+    assert clean_generated_caption(plan, preserve_newlines=True) == plan
 
 def test_preprocess_filters_deduplicates_and_splits(tmp_path: Path) -> None:
     image_csv = tmp_path / "images.csv"

@@ -1,0 +1,67 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=14
+
+config=configs/7b_generator/dpo_quality64_full.yaml
+reference_root=data/processed/newyorker_published_dpo_reference_7b_generator_quality64
+gate=results/7b_generator/dpo_quality64_step_matched/validation_gate.json
+dashboard_dir=results/7b_generator/dpo_quality64_scaling_monitor
+
+python scripts/verify_lora_adapter.py outputs/7b-generator/best_val_loss
+test "$(wc -l < "$reference_root/dpo_train.jsonl")" -eq 17297
+
+# The earlier gate only rejected blind expansion from a single pilot.  This job
+# is the newly authorized controlled scaling experiment with intermediate
+# validation and early stopping; test47 remains sealed.
+test "$(python - <<'PY'
+import json
+from pathlib import Path
+print(json.loads(Path('results/7b_generator/dpo_quality64_step_matched/validation_gate.json').read_text())['decision'])
+PY
+)" = "NO_GO_FULL_QUALITY64"
+
+# One real batch=4 / accumulation=2 optimizer smoke before full training.
+python scripts/train_lora_dpo.py \
+  --config "$config" \
+  --max-train-samples 8 \
+  --max-val-samples 1 \
+  --debug-one-step
+
+mkdir -p "$dashboard_dir"
+python scripts/build_dpo_scaling_dashboard.py \
+  --run-dir outputs/7b-generator-dpo/dpo_mlp_quality64_full \
+  --output-dir "$dashboard_dir" \
+  --watch --interval 15 &
+dashboard_pid=$!
+trap 'kill "$dashboard_pid" 2>/dev/null || true' EXIT INT TERM
+
+python scripts/train_lora_dpo.py --config "$config"
+python scripts/build_dpo_scaling_dashboard.py \
+  --run-dir outputs/7b-generator-dpo/dpo_mlp_quality64_full \
+  --output-dir "$dashboard_dir"
+python scripts/verify_lora_adapter.py \
+  outputs/7b-generator-dpo/dpo_mlp_quality64_full/final
+
+test "$(python - <<'PY'
+import json
+from pathlib import Path
+status = json.loads(Path('outputs/7b-generator-dpo/dpo_mlp_quality64_full/run_status.json').read_text())
+print(status['state'])
+PY
+)" != "running"
+
+echo "[quality64-scaling] controlled run finished or early-stopped; test47 remains sealed"

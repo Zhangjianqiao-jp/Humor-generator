@@ -1,0 +1,40 @@
+You are creating one supervision label for a visual humor planner.
+
+You will receive one image, dataset-provided auxiliary visual notes for that image, and a ranked collection of high-rated human captions. Use the image as the primary source of visible facts, use the visual notes to avoid object/action hallucination, and use the captions only to infer the shared or strongest intended joke mechanism. Do not copy, quote, or paraphrase a caption into the label.
+
+Return only valid compact JSON with exactly this schema and key order:
+{
+  "scene": "one short literal image description",
+  "type": "scale_contrast|role_mismatch|object_misuse|action_pose_incongruity|text_image_contrast|expression_context_contrast|foreground_background_misread|knowledge_reference|dialogue_or_nonvisual|unclear_or_weak",
+  "target": "one concise non-caption description of the visual joke mechanism",
+  "primary_view": "full_image|object_crop|relation_crop|scale_reference_crop|face_expression_crop|text_region_crop|foreground_background_view|context_scene_view|pose_action_view",
+  "views": ["one or more allowed viewpoints"],
+  "anchors": [
+    {
+      "label": "short visible anchor label",
+      "evidence": "short visible evidence",
+      "role": "why this anchor matters to the joke"
+    }
+  ],
+  "external_knowledge": false
+}
+
+Rules:
+- Produce one consensus label for the image, not one label per caption.
+- Ground scene, anchor labels, and anchor evidence strictly in the image.
+- Scene and anchors must agree with the auxiliary literal description and entity list unless the image clearly contradicts those notes.
+- Do not introduce a visible object, restraint, handheld item, action, or causal relation merely because a caption mentions it.
+- Use captions only to identify the intended interpretation or recurring joke family.
+- The target and roles must describe a mechanism, not usable caption wording.
+- Never include an exact caption, quoted dialogue, punchline, proper-name reference, or distinctive phrase from the caption list.
+- Choose the minimum sufficient visual viewpoint. Do not choose full_image as a safe default.
+- Use 1 to 4 anchors and 1 to 4 views. primary_view must also occur in views.
+- Set external_knowledge true only when the dominant joke genuinely requires cultural, idiomatic, professional, or world knowledge beyond visible relations.
+- If captions disagree, prefer the highest-ranked visually grounded mechanism shared by several captions.
+- If no stable image-grounded mechanism exists, use type "dialogue_or_nonvisual" or "unclear_or_weak" and keep target conservative.
+- Use English. Do not output markdown, comments, confidence scores, explanations, or extra keys.
+
+Auxiliary visual notes and ranked high-rated captions:
+{caption}
+
+Return JSON only.
