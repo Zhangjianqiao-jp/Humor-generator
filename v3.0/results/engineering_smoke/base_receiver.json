@@ -1,0 +1,46 @@
+{
+  "status": "pass",
+  "scientific_training": false,
+  "synthetic_sender_states": true,
+  "receiver": "base_qwen_7b",
+  "adapter": null,
+  "alignment": {
+    "generated_tokens": 23,
+    "hidden_width": 3584,
+    "validated_conflict_pairs": 2,
+    "semantics": "state_used_to_predict_corresponding_token",
+    "teacher_replay_mean_cosine": 0.9998724460601807,
+    "teacher_replay_min_cosine": 0.9997526407241821,
+    "teacher_replay_relative_l2": 0.015911368653178215,
+    "processed_score_token_accuracy": 1.0,
+    "raw_head_token_accuracy_diagnostic": 1.0
+  },
+  "token_contract": {
+    "text_prompt_tokens": 178,
+    "latent_prompt_tokens": 65,
+    "caption_tokens": 10,
+    "latent_slots": 24
+  },
+  "freeze": {
+    "policy_trainable": 0,
+    "bridge_trainable": 9106944,
+    "gradient_checkpointing": true,
+    "use_cache": false
+  },
+  "loss": {
+    "caption_nll": 4.8125,
+    "teacher_kl": 2.8409361839294434,
+    "matched_shuffled_margin": 0.8001220226287842,
+    "total": 6.312980651855469,
+    "bridge_gradient_norm": 77.73143768310547,
+    "first_parameter_update_norm": 0.010358751751482487
+  },
+  "memory_bytes": {
+    "peak_allocated": 6234518016,
+    "peak_reserved": 6455033856
+  },
+  "notes": [
+    "The one-step bridge smoke uses synthetic sender states and is not a quality experiment.",
+    "The contrastive term is differentiated by an exact-gradient two-pass recomputation to avoid retaining two receiver graphs."
+  ]
+}

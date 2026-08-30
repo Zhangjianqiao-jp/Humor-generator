@@ -1,0 +1,10 @@
+#!/bin/bash
+#PJM -L "node=1"
+#PJM -L "elapse=00:10:00"
+#PJM -j
+#PJM -S
+
+set -euo pipefail
+cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.0
+export PYTHONPATH="$PWD/src"
+../v2.5/.venv-genkai/bin/python scripts/engineering_smoke.py

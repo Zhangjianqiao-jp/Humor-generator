@@ -1,0 +1,49 @@
+experiment:
+  name: homer_text_paper_reproduction
+  formal_training_enabled: false
+  stage: engineering_smoke_only
+
+paper_evidence:
+  paper: arXiv:2602.06423v2
+  venue: ICLR 2026
+  # Paper says Qwen-VL (7B), but does not disclose an immutable model revision.
+  model_name: Qwen-VL-7B
+  model_revision: null
+  # Strict mode consumes benchmark-provided descriptions, not an invented prompt.
+  description_provenance: null
+
+protocol:
+  strict_reproduction: true
+  standard_description_required: true
+  conflict_pairs_min: 2
+  association_chain_length: 3
+  local_view: standard_description
+  global_view: image
+  random_conflict_selection: true
+  random_target_selection: true
+  dfs_path_enumeration: true
+  random_path_selection: true
+
+joke_corpus:
+  expected_rows: 335570
+  manifest: data/processed/homer_jokes/manifest.json
+  top_k: 5
+  delta: 5
+  rating_threshold: 3.0
+  near_duplicate_word_overlap: 0.80
+  retrieval_backend: sparse_tfidf
+  retrieval_backend_disclosed_by_paper: false
+
+evaluation:
+  datasets: [humor_in_ai_365, electronic_sheep_679]
+  candidates_per_image: 5
+  pass_at_k: [1, 3, 5]
+  repetitions: 5
+  temperature: 1.0
+  evaluator_temperature: 0.0
+  formal_claims_enabled: false
+
+references:
+  - https://arxiv.org/abs/2602.06423
+  - https://aclanthology.org/2023.acl-long.41/
+  - https://arxiv.org/abs/2406.10522

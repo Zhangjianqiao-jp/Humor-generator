@@ -1,0 +1,32 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=00:20:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. ../v2.5/.venv-genkai/bin/activate
+
+export PYTHONUNBUFFERED=1
+export PYTHONPATH=src
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+
+python scripts/gpu_bridge_smoke.py \
+  --config configs/bridges/base_receiver.yaml \
+  --output results/engineering_smoke/base_receiver.json
+
+python scripts/gpu_bridge_smoke.py \
+  --config configs/bridges/sft_receiver.yaml \
+  --output results/engineering_smoke/sft_receiver.json
+
+test -s results/engineering_smoke/base_receiver.json
+test -s results/engineering_smoke/sft_receiver.json
