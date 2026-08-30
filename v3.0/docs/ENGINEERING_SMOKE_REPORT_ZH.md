@@ -6,7 +6,7 @@
 
 本轮只验证工程可运行性，不构成模型质量实验，也没有启动正式训练。
 
-- CPU tests：`20/20 passed`。
+- 当前 CPU tests：`34/34 passed`。
 - CPU bridge optimizer smoke：通过。
 - 最终 GPU job：`6642776`，`c-batch` 单张 H100，exit code `0`，wall time `00:01:03`。
 - Base 与 SFT receiver 串行执行；两个 receiver 的所有参数均冻结，只有 typed bridge 可训练。
@@ -57,6 +57,20 @@
 - peak allocated/reserved 为 6.69/6.75 GB。
 
 因此 synthetic-state 限制已解除，正式 bridge 训练器的工程门禁通过。它仍不证明 latent 比 text 更好；这一结论必须由 81 个 held-out image clusters 的 Group-of-3 比较给出。
+
+## 正式生成路径补充 smoke
+
+最终 job `6644022` 在一张 12 GB `b-batch-mig` 上执行 matched-text、StateBridge、Learned、Typed 四条真实推理路径并通过：
+
+- receiver policy trainable parameters：0；
+- 统一 sampling：`temperature=1.0, top_p=1.0, repetition_penalty=1.0`；
+- peak allocated/reserved：10.88/10.98 GB；
+- StateBridge 原始 322 tokens，按上限传输 causal-tail 64 tokens；sender/receiver rank 为 63/37，因此使用忠实 dense rank-mismatch fallback；
+- 随机未训练 Learned/Typed bridge 分别产生 `user` 与空输出。空输出保留为 `[EMPTY OUTPUT]`，没有通过重采样隐藏。
+
+这只证明四条生成路径可运行，不证明 latent 有效。随机 bridge 的无意义输出是预期的负面 sanity check；科学结果必须来自训练后 checkpoint 和 sealed test。
+
+前两次生成 smoke 的失败也保留：job `6643987` 暴露空输出处理与 checkpoint 自带 repetition penalty；job `6644004` 暴露重复 token 导致 StateBridge sender/receiver rank 不等。修复没有更换固定 seed，也没有用不忠实的低秩伪逆替代 rank-mismatch 正交补。
 
 ## 方法依据
 

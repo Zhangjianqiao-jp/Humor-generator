@@ -199,10 +199,14 @@ class QwenBackend:
         generation_kwargs: dict[str, Any] = {
             "do_sample": temperature > 0,
             "max_new_tokens": max_new_tokens,
-            "repetition_penalty": 1.05,
+            # The pinned Qwen checkpoint ships repetition_penalty=1.05.  Set
+            # the neutral value explicitly so text and latent conditions do
+            # not inherit an undisclosed checkpoint-side sampling choice.
+            "repetition_penalty": 1.0,
         }
         if temperature > 0:
             generation_kwargs["temperature"] = temperature
+            generation_kwargs["top_p"] = 1.0
         with torch.inference_mode():
             generated = self.model.generate(**inputs, **generation_kwargs)
         prompt_length = inputs["input_ids"].shape[1]
@@ -240,10 +244,11 @@ class QwenBackend:
             "attention_mask": mask,
             "do_sample": temperature > 0,
             "max_new_tokens": max_new_tokens,
-            "repetition_penalty": 1.05,
+            "repetition_penalty": 1.0,
         }
         if temperature > 0:
-            kwargs.update({"temperature": temperature, "top_p": 0.95})
+            kwargs["temperature"] = temperature
+            kwargs["top_p"] = 1.0
         with torch.inference_mode():
             generated = self.model.generate(**kwargs)
         return self.processor.batch_decode(

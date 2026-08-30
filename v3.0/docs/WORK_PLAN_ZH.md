@@ -91,9 +91,29 @@ Base receiver 与 SFT receiver 分别训练、分别比较各自的 latent-vs-te
 - StateBridge、Learned、Typed 三个 latent 通道均通过 matched > shuffled 的最小语义门禁；
 - sealed validation/test 与历史 SFT 数据无 image-cluster leakage。
 
+## 正式比较与盲评协议
+
+- Base receiver 与 SFT receiver 分开报告，不跨 receiver 比较 bridge 优劣。
+- 四个主系统为 Text-HOMER、StateBridge、Learned bridge、Typed bridge；另保留 matched-text 作为分析对照。
+- `Text-HOMER vs latent` 回答完整系统效用；`matched-text vs latent` 才回答在输入信息匹配后的 communication-modality 效应。不得把前者直接解释成 latent 编码优势。
+- sealed test 共 81 个从未被两个冻结 adapter 见过的 image clusters；每个系统使用相同的 3 个 generation seeds。
+- 文本与 latent 生成统一使用 `temperature=1.0, top_p=1.0, repetition_penalty=1.0`。后两项是中性值；必须显式覆盖 Qwen checkpoint 自带的 `repetition_penalty=1.05`。Planner trace 使用独立 greedy 路径，不受此次生成参数修正影响。
+- 固定 seed 首 token 即 EOS 时记录 `[EMPTY OUTPUT]` 并作为 bad 进入盲评，禁止重采样，以免产生只保留成功输出的选择偏差。
+- StateBridge communication prefix 最多 64 tokens，超长时固定保留 causal tail，并逐例记录原始/传输 token 数。
+- 匿名 Group-of-3 的 A/B 映射单独保存。每位评审除整组 A/B/Tie 与整组绝对标签外，还必须给六条 caption 逐条标记 `good/weak/bad`。
+- 主盲评直接展示图片，不展示 standard description；不支持图像的 text-only fallback 必须单列，不能用于主 grounding 结论。
+- win rate 以图片 cluster 为统计单位，tie 计 0.5，使用 image-cluster bootstrap 95% CI；逐候选绝对标签用于计算 generation-seed 方差。
+- latent 稳定收益至少要求：相对 Text-HOMER 或信息匹配的 matched-text 对照有一致方向、CI 支持，且绝对 `good` 率不退化。否则不进入 preference learning。
+
+对应配置：`configs/evaluation/group3.yaml`；评审格式：`docs/GROUP3_JUDGE_PROMPT_ZH.md`。
+
+正式推理前先执行真实 generation smoke。该 smoke 只验证四条代码路径，不构成科学结果，也不用于选择方法。
+
 ## 依据
 
 - HOMER, ICLR 2026, arXiv:2602.06423v2。
 - InterLat, ACL 2026, Anthology 2026.acl-long.1248。
 - StateBridge, COLM 2026, arXiv:2608.13317。
 - Coconut, COLM 2025, arXiv:2412.06769。
+- Humor in AI, NeurIPS 2024, arXiv:2406.10522。
+- Electronic Sheep, ACL 2023, ACL:2023.acl-long.41。

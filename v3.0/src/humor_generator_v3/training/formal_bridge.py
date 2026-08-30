@@ -95,7 +95,7 @@ def _prompt_and_full(
     return prompt, full, targets
 
 
-def _latent_messages(description: str) -> list[dict[str, Any]]:
+def latent_messages(description: str) -> list[dict[str, Any]]:
     return [
         {"role": "system", "content": [text_part(LATENT_SYSTEM)]},
         {"role": "user", "content": [text_part(f"Cartoon description: {description}")]},
@@ -180,7 +180,7 @@ class FrozenReceiverBridgeTask:
         plan = plan_from_record(example.trace_record["plan"])
         caption = example.row["caption"]
         text_prompt = caption_messages(plan.description, example.conflict, list(example.path))
-        latent_prompt = _latent_messages(plan.description)
+        latent_prompt = latent_messages(plan.description)
         _, text_full, text_targets = _prompt_and_full(self.backend, text_prompt, caption)
         latent_prefix, latent_full, latent_targets = _prompt_and_full(
             self.backend, latent_prompt, caption

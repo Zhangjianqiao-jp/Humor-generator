@@ -63,3 +63,11 @@ See `docs/HOMER_REPRODUCTION_LEDGER_ZH.md` for exact/unknown/extended fields.
    same held-out clusters and anonymous Group-of-3 generations.
 5. Preference learning remains disabled until a latent method shows a stable
    held-out gain over Text-HOMER.
+
+The formal comparison is configured in `configs/evaluation/group3.yaml`.
+It uses the 81 sealed image clusters, three common generation seeds, anonymous
+Group-of-3 comparisons, candidate-level `good/weak/bad` labels, image-cluster
+bootstrap confidence intervals, and generation-seed variance.  The additional
+`matched_text` control carries the same pre-retrieval information as the latent
+conditions; it is required before attributing a gain specifically to the
+communication modality rather than to different information content.
