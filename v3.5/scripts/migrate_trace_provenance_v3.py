@@ -83,21 +83,18 @@ def main() -> None:
             raise RuntimeError(f"missing generation commit: {row['cluster_id']}")
         generation_commits.add(generation_commit)
         migrated.append(dict(row))
-    if len(generation_commits) != 1:
-        raise RuntimeError(f"migration requires one generation commit, found {generation_commits}")
-
     migration_commit = repository_commit()
-    provenance = {
-        # Keep the commit that actually generated the tensors. The migration
-        # commit is recorded separately in the audit report below.
-        "git_commit": next(iter(generation_commits)),
+    common_provenance = {
         "trace_input_manifest_sha256": sha256(args.dataset / "trace_inputs.jsonl"),
         "homer_prompts_sha256": sha256(ROOT / "src/humor_generator_v35/homer/prompts.py"),
         "adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),
     }
     for row in migrated:
+        # Keep the commit that actually generated each tensor. The migration
+        # commit is recorded separately in the audit report below.
+        generation_commit = row.get("provenance", {}).get("git_commit")
         row["schema_version"] = 3
-        row["provenance"] = provenance
+        row["provenance"] = {"git_commit": generation_commit, **common_provenance}
 
     before = sha256(index)
     temporary = index.with_suffix(".jsonl.v3.tmp")
@@ -116,7 +113,8 @@ def main() -> None:
         "old_index_sha256": before,
         "new_index_sha256": sha256(index),
         "old_provenance_values": [json.loads(value) for value in sorted(old_provenance)],
-        "new_provenance": provenance,
+        "generation_git_commits": sorted(generation_commits),
+        "common_provenance": common_provenance,
         "migration_git_commit": migration_commit,
     }
     (args.cache / "provenance_migration_v3.json").write_text(

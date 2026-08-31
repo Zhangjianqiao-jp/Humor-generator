@@ -130,6 +130,15 @@ def verify_trace_gate() -> None:
     dataset = command([str(ROOT / ".venv/bin/python"), "scripts/verify_clustered_dataset.py"])
     if dataset.returncode != 0:
         raise RuntimeError(f"dataset gate failed:\n{dataset.stdout}\n{dataset.stderr}")
+    records = read_jsonl(CACHE / "index.jsonl")
+    if any(record.get("schema_version") != 3 for record in records):
+        migration = command([
+            str(ROOT / ".venv/bin/python"), "scripts/migrate_trace_provenance_v3.py"
+        ])
+        if migration.returncode != 0:
+            raise RuntimeError(
+                f"trace provenance migration failed:\n{migration.stdout}\n{migration.stderr}"
+            )
     result = command([str(ROOT / ".venv/bin/python"), "scripts/check_trace_completion.py"])
     if result.returncode != 0:
         raise RuntimeError(f"trace gate failed:\n{result.stdout}\n{result.stderr}")

@@ -85,7 +85,7 @@ def main() -> None:
         "unique_provenance_sets": len(provenance_values),
     }
     print(json.dumps(report, indent=2))
-    if failures or missing or extra or invalid or len(records) != len(available) or len(provenance_values) != 1:
+    if failures or missing or extra or invalid or len(records) != len(available) or not provenance_values:
         raise SystemExit("formal trace gate failed")
 
 

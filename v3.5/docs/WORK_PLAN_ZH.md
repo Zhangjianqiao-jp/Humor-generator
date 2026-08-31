@@ -46,7 +46,7 @@ Learned 与 Typed 的 trainable parameter count 必须完全相同。官方 Stat
 - 真正传给 bridge 的 communication state 使用 teacher-forced `post-token` 状态，即该位置已经读入对应 emitted token。不能把“预测 token 前的状态”误称为“token 自身语义状态”；
 - `semantics` 保存 Planner 的真实原始输出，而不是占位说明；
 - plan、sampling、seed、attempt、模型 revision、adapter 与 tensor SHA-256 全部写入 index；
-- 每条 trace 还必须固定唯一的 Git commit、`trace_inputs.jsonl`、HOMER prompt 源文件和 frozen-adapter manifest SHA-256。`trace_inputs` 只包含实际进入 Planner 的 cluster/split/image hash/description，使 caption 清洗不会伪造 trace 失效，同时任何真实 Planner 输入变化都会被门禁拒绝。未提交或 v3.5 工作树不干净时，正式 trace 生成直接失败。
+- 每条 trace 还必须记录实际生成它的 Git commit，并固定 `trace_inputs.jsonl`、HOMER prompt 源文件和 frozen-adapter manifest SHA-256。受控重试可以来自多个 commit，但只有后三种实际输入/模型身份哈希完全一致时才能合并；不能把迁移代码的 commit 冒充为 tensor 的生成 commit。`trace_inputs` 只包含实际进入 Planner 的 cluster/split/image hash/description，使 caption 清洗不会伪造 trace 失效，同时任何真实 Planner 输入变化都会被门禁拒绝。未提交或 v3.5 工作树不干净时，正式 trace 生成直接失败。
 
 正式 train/validation trace 路径固定为 `data/cache/planner_traces_homer_strict_v35`。旧 v3.0 trace 禁止复制或引用。test trace 在模型/bridge 选择冻结后另行生成，避免测试集参与开发。
 
