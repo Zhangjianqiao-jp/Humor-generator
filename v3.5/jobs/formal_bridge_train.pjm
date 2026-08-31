@@ -1,0 +1,29 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+: "${BRIDGE_CONFIG:?submit with -x BRIDGE_CONFIG=...}"
+: "${BRIDGE_OUTPUT:?submit with -x BRIDGE_OUTPUT=...}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/check_environment.py
+python scripts/check_v35_isolation.py
+python scripts/verify_frozen_artifacts.py
+python scripts/verify_clustered_dataset.py
+python scripts/check_trace_completion.py
+python scripts/train_bridge.py --config "$BRIDGE_CONFIG" --output "$BRIDGE_OUTPUT"
+test -s "$BRIDGE_OUTPUT/complete.json"

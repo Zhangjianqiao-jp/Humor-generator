@@ -1,0 +1,67 @@
+evaluation:
+  primary_splits: [internal_test, official_hia_unseen_test]
+  diagnostic_split: official_hia_seen_diagnostic
+  statistical_unit: image_cluster
+  primary_test_clusters: 121
+  primary_group_size: 10
+  legacy_group_size: 3
+  primary_generation_seeds: [20260830, 20260831, 20260832, 20260833, 20260834, 20260835, 20260836, 20260837, 20260838, 20260839]
+  legacy_generation_seeds: [20260830, 20260831, 20260832]
+  temperature: 1.0
+  top_p: 1.0
+  repetition_penalty: 1.0
+  max_new_tokens: 96
+  mirror_sides: true
+  five_shot_judge_calibration: required
+  conditions:
+    - text_homer
+    - full_plan_text
+    - budget_text
+    - token_embedding
+    - statebridge
+    - learned_latent
+    - typed_learned_latent
+  receivers: [base, sft]
+communication_budget:
+  channels: [conflict, local, global]
+  slots_per_channel: 8
+  total_slots: 24
+  overflow_policy: causal_tail_per_channel
+comparisons:
+  primary_family:
+    - [full_plan_text, typed_learned_latent]
+    - [budget_text, typed_learned_latent]
+    - [token_embedding, typed_learned_latent]
+    - [learned_latent, typed_learned_latent]
+  mechanistic_secondary:
+    - [text_homer, full_plan_text]
+    - [budget_text, token_embedding]
+    - [token_embedding, statebridge]
+judge:
+  blind_condition_names: true
+  randomize_A_B: true
+  evaluate_both_A_B_orientations: true
+  randomize_candidate_order_within_group: true
+  show_image: true
+  show_standard_description: false
+  relative_labels: [A, B, Tie]
+  absolute_labels: [good, weak, bad]
+  candidate_level_absolute_labels_required: true
+  text_only_fallback_is_primary_result: false
+statistics:
+  tie_value: 0.5
+  bootstrap_samples: 10000
+  confidence_level: 0.95
+  report_generation_seed_variance: true
+  hierarchical_cluster_rater_bootstrap: true
+  rater_agreement: krippendorff_alpha_nominal
+  multiple_comparison_control: Holm_within_preregistered_family
+claims:
+  system_level: text_homer_vs_full_plan_text
+  modality_level: budget_text_and_token_embedding_vs_latent
+  preference_learning_enabled: false
+references:
+  - https://openreview.net/pdf?id=SzaRhPom4o
+  - https://aclanthology.org/2026.acl-long.1248/
+  - https://arxiv.org/abs/2608.13317
+  - https://proceedings.neurips.cc/paper_files/paper/2024/hash/e297fb6cd1690ee5b39c5bb4c58ad801-Abstract-Datasets_and_Benchmarks_Track.html

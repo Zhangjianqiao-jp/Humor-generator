@@ -1,0 +1,70 @@
+{
+  "status": "pass",
+  "scientific_evaluation": false,
+  "cluster_id": "nycc_1",
+  "policy_trainable_parameters": 0,
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "repetition_penalty": 1.0
+  },
+  "empty_conditions": [
+    "learned_latent",
+    "typed_learned_latent"
+  ],
+  "outputs": {
+    "full_plan_text": "You'd better stop talking like a mouse.",
+    "budget_text": "You'd better stop talking like a mouse.",
+    "token_embedding": "BitFields",
+    "statebridge": "addCriterion",
+    "learned_latent": "[EMPTY OUTPUT]",
+    "typed_learned_latent": "[EMPTY OUTPUT]"
+  },
+  "latent_metadata": {
+    "token_embedding": {
+      "slots_per_channel": 8,
+      "latent_slots": 24,
+      "communication_budget": "causal_tail_per_channel"
+    },
+    "statebridge": {
+      "statebridge_original_tokens": {
+        "conflict": 41,
+        "local": 57,
+        "global": 144
+      },
+      "statebridge_transmitted_tokens": {
+        "conflict": 8,
+        "local": 8,
+        "global": 8
+      },
+      "slots_per_channel": 8,
+      "latent_slots": 24,
+      "statebridge_truncation": "causal_tail_per_channel",
+      "statebridge_solver": {
+        "conflict": {
+          "sender_rank": 7,
+          "receiver_rank": 7,
+          "solver": "low_rank_exact"
+        },
+        "local": {
+          "sender_rank": 7,
+          "receiver_rank": 7,
+          "solver": "low_rank_exact"
+        },
+        "global": {
+          "sender_rank": 7,
+          "receiver_rank": 7,
+          "solver": "low_rank_exact"
+        }
+      }
+    },
+    "learned_latent": {
+      "latent_slots": 24
+    },
+    "typed_learned_latent": {
+      "latent_slots": 24
+    }
+  },
+  "peak_allocated_bytes": 10351947776,
+  "peak_reserved_bytes": 10510925824
+}

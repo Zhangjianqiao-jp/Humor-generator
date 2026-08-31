@@ -1,0 +1,28 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/check_environment.py
+python scripts/check_v35_isolation.py
+python scripts/verify_frozen_artifacts.py
+python scripts/formal_generation_smoke.py \
+  --config configs/formal/typed_sft.yaml \
+  --trace-index data/cache/planner_trace_smoke/index.jsonl \
+  --output results/engineering_smoke/formal_generation_paths.json
+test -s results/engineering_smoke/formal_generation_paths.json

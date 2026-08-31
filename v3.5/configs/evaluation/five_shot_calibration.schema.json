@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "minItems": 5,
+  "maxItems": 5,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["image", "caption_A", "caption_B", "answer"],
+    "properties": {
+      "image": {"type": "string", "minLength": 1},
+      "caption_A": {"type": "string", "minLength": 1},
+      "caption_B": {"type": "string", "minLength": 1},
+      "answer": {"enum": ["A", "B"]
+    }
+  }
+}
