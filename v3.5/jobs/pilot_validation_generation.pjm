@@ -20,10 +20,12 @@ export NLTK_DATA="$PWD/artifacts/nltk_data"
 
 out=outputs/pilot_validation
 mkdir -p "$out"
-common="--receiver sft --split validation --seeds 20260830 20260831 20260832"
+common="--receiver sft --split validation --seeds 20260830 20260831 20260832 --exclude-clusters-file outputs/pilot/typed_sft_kl/run_manifest.json"
 
 python scripts/generate_formal_baseline.py --condition full_plan_text --label full_plan_text \
   --config configs/pilot/learned_sft_kl.yaml --output "$out/full_plan_text.jsonl" $common
+python scripts/generate_formal_baseline.py --condition budget_text --label budget_text \
+  --config configs/pilot/learned_sft_kl.yaml --output "$out/budget_text.jsonl" $common
 python scripts/generate_formal_baseline.py --condition token_embedding --label token_embedding \
   --config configs/pilot/learned_sft_kl.yaml --output "$out/token_embedding.jsonl" $common
 python scripts/generate_formal_baseline.py --condition learned_latent --label learned_kl \
@@ -34,14 +36,19 @@ python scripts/generate_formal_baseline.py --condition typed_learned_latent --la
   --config configs/pilot/typed_sft_kl.yaml \
   --checkpoint outputs/pilot/typed_sft_kl/best_bridge.pt \
   --output "$out/typed_kl.jsonl" $common
+python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_quantized \
+  --config configs/pilot/typed_sft_kl.yaml \
+  --checkpoint outputs/pilot/typed_sft_kl/best_bridge.pt --quantize-bridge-output \
+  --output "$out/typed_quantized.jsonl" $common
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_no_kl \
   --config configs/pilot/typed_sft_no_kl.yaml \
   --checkpoint outputs/pilot/typed_sft_no_kl/best_bridge.pt \
   --output "$out/typed_no_kl.jsonl" $common
 
 python scripts/build_group_packets.py \
-  --generations "$out/full_plan_text.jsonl" "$out/token_embedding.jsonl" \
-    "$out/learned_kl.jsonl" "$out/typed_kl.jsonl" "$out/typed_no_kl.jsonl" \
+  --generations "$out/full_plan_text.jsonl" "$out/budget_text.jsonl" \
+    "$out/token_embedding.jsonl" "$out/learned_kl.jsonl" "$out/typed_kl.jsonl" \
+    "$out/typed_quantized.jsonl" "$out/typed_no_kl.jsonl" \
   --packet "$out/blind_packet.jsonl" \
   --private-mapping "$out/private_mapping.jsonl" \
   --group-size 3 --family pilot_architecture --mirror-sides \
@@ -49,7 +56,9 @@ python scripts/build_group_packets.py \
   --comparison token_embedding:learned_kl \
   --comparison token_embedding:typed_kl \
   --comparison typed_no_kl:typed_kl \
-  --comparison full_plan_text:typed_kl
+  --comparison full_plan_text:typed_kl \
+  --comparison budget_text:typed_kl \
+  --comparison typed_quantized:typed_kl
 
 test -s "$out/blind_packet.jsonl"
 test -s "$out/private_mapping.jsonl"

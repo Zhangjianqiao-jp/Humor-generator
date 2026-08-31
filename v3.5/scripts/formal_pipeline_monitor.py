@@ -127,6 +127,9 @@ def submit_pilot_evaluation() -> str:
 
 
 def verify_trace_gate() -> None:
+    dataset = command([str(ROOT / ".venv/bin/python"), "scripts/verify_clustered_dataset.py"])
+    if dataset.returncode != 0:
+        raise RuntimeError(f"dataset gate failed:\n{dataset.stdout}\n{dataset.stderr}")
     result = command([str(ROOT / ".venv/bin/python"), "scripts/check_trace_completion.py"])
     if result.returncode != 0:
         raise RuntimeError(f"trace gate failed:\n{result.stdout}\n{result.stderr}")

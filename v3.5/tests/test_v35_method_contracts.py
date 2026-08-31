@@ -5,9 +5,11 @@ import torch
 from humor_generator_v35.evaluation.diversity import candidate_set_metrics, summarize_diversity
 from humor_generator_v35.latent.budget import channel_causal_tail, concatenate_budgeted
 from humor_generator_v35.latent.state_capture import AlignedMessageStates
+from humor_generator_v35.latent.bridges import nearest_vocabulary_embeddings
 from humor_generator_v35.training.formal_bridge import (
     full_plan_text_messages, hard_negative_cluster_map, latent_messages,
 )
+from humor_generator_v35.data.clustered import _finalists
 
 
 def _states(length: int, offset: int) -> AlignedMessageStates:
@@ -24,6 +26,21 @@ def test_channel_budget_never_erases_an_early_channel() -> None:
     joined = concatenate_budgeted(budgeted)
     assert joined.token_ids.shape == (1, 9)
     assert joined.token_ids[0, :3].tolist() == [11, 12, 13]
+
+
+def test_unknown_electronic_sheep_finalists_are_not_split_into_characters() -> None:
+    assert _finalists({"official_newyorker_finalists": "UNKNOWN"}, 3) == []
+    assert _finalists({"official_newyorker_finalists": ["nan", "A real caption"]}, 3) == [
+        {"caption": "A real caption", "caption_rank": 1, "caption_score": None}
+    ]
+
+
+def test_nearest_vocabulary_control_preserves_shape_and_uses_exact_rows() -> None:
+    embeddings = torch.tensor([[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0]])
+    slots = torch.tensor([[[0.9, 0.1], [-0.8, 0.1]]])
+    quantized, token_ids = nearest_vocabulary_embeddings(slots, embeddings, chunk_size=2)
+    assert token_ids.tolist() == [[0, 2]]
+    assert torch.equal(quantized, embeddings[token_ids])
 
 
 def test_sft_receiver_conditions_always_include_the_image() -> None:

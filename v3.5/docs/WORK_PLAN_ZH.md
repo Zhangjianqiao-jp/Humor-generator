@@ -30,6 +30,7 @@ SFT adapter 原本就是 image-conditioned，因此所有 full-plan/budget/token
 4. `statebridge`：对三个通道分别做 StateBridge alignment，再拼接为 24 slots；
 5. `learned_latent`：三通道合并后池化为 24 slots；
 6. `typed_learned_latent`：每通道 8 slots，共享 pooler，仅 query 分型。
+7. `typed_quantized`：把 Typed bridge 的 24 个连续输出逐槽量化到最近的 receiver vocabulary embedding。它与 Typed 使用相同输入、bridge、槽位和参数，只移除 off-manifold 连续残差，是判断“收益来自连续通信还是只来自学习压缩”的关键 control。
 
 Learned 与 Typed 的 trainable parameter count 必须完全相同。官方 StateBridge 默认 64-token、同质 agent 的结果只作 appendix；三通道各 8 的版本明确称为 channel-preserving adaptation，因为它不是论文原配置。
 
@@ -45,7 +46,7 @@ Learned 与 Typed 的 trainable parameter count 必须完全相同。官方 Stat
 - 真正传给 bridge 的 communication state 使用 teacher-forced `post-token` 状态，即该位置已经读入对应 emitted token。不能把“预测 token 前的状态”误称为“token 自身语义状态”；
 - `semantics` 保存 Planner 的真实原始输出，而不是占位说明；
 - plan、sampling、seed、attempt、模型 revision、adapter 与 tensor SHA-256 全部写入 index；
-- 每条 trace 还必须固定唯一的 Git commit、dataset manifest、HOMER prompt 源文件和 frozen-adapter manifest SHA-256。未提交或 v3.5 工作树不干净时，正式 trace 生成直接失败。
+- 每条 trace 还必须固定唯一的 Git commit、`trace_inputs.jsonl`、HOMER prompt 源文件和 frozen-adapter manifest SHA-256。`trace_inputs` 只包含实际进入 Planner 的 cluster/split/image hash/description，使 caption 清洗不会伪造 trace 失效，同时任何真实 Planner 输入变化都会被门禁拒绝。未提交或 v3.5 工作树不干净时，正式 trace 生成直接失败。
 
 正式 train/validation trace 路径固定为 `data/cache/planner_traces_homer_strict_v35`。旧 v3.0 trace 禁止复制或引用。test trace 在模型/bridge 选择冻结后另行生成，避免测试集参与开发。
 
@@ -53,7 +54,7 @@ Learned 与 Typed 的 trainable parameter count 必须完全相同。官方 Stat
 
 | split | image clusters | caption rows | 用途 |
 |---|---:|---:|---|
-| train | 602 | 2295 | bridge fitting |
+| train | 602 | 2162 | bridge fitting |
 | validation | 64 | 216 | early stopping/选择 |
 | internal_test | 97 | 327 | sealed primary test |
 | official_hia_unseen_test | 24 | 72 | adapter-unseen official test |
@@ -98,7 +99,7 @@ Gate E 通过前禁止正式训练。
 2. Typed + KL；
 3. Typed + no-KL。
 
-64/24 clusters 通过 `SHA256(seed, split, cluster_id)` 固定抽样，不按编号截断。Pilot 只判断架构/蒸馏是否值得扩展，不作论文最终结论。三个优化作业串行完成后，自动在 24 张 validation 图片上用 3 个共同 seeds 生成 `full-plan text / token embedding / Learned+KL / Typed+KL / Typed-no-KL`，并构造匿名、双向 Group-of-3 packet。流程随后停止等待独立评审；不得仅凭 validation loss 自动扩展。优胜条件同时要求 validation NLL、matched-vs-hard-negative margin和真实生成不退化。
+64/24 clusters 通过 `SHA256(seed, split, cluster_id)` 固定抽样，不按编号截断。24 张只用于 early stopping；真实 pilot 生成在剩余 40 张 outer-validation 图片上进行，避免用模型选择图片重复证明模型收益。三个优化作业串行完成后，使用 3 个共同 seeds 生成 `full-plan text / budget text / token embedding / Learned+KL / Typed+KL / Typed-quantized / Typed-no-KL`，并构造匿名、双向 Group-of-3 packet。流程随后停止等待独立评审；不得仅凭 validation loss 自动扩展。优胜条件同时要求 validation NLL、matched-vs-hard-negative margin和 outer-validation 真实生成不退化。
 
 ### Confirmatory C：只扩展 pilot 优胜者
 
@@ -111,6 +112,8 @@ Gate E 通过前禁止正式训练。
 ## 8. 生成与盲评
 
 主质量评测：121 张 adapter-unseen 图片、10 个共同 generation seeds、每条件 Group-of-10。它对齐 Humor in AI 的候选组规模；Group-of-3 仅作为历史敏感性分析，不承担主结论。每个比较生成 A/B 镜像方向，组内候选顺序独立随机化。评审必须支持看图，记录 provider/model/version/temperature/prompt hash。用 `build_judge_calibration.py` 从非 test 的官方 crowd ranking 构造五个清晰偏好示例；它复现官方 5-shot 校准思想，但不是论文每个测试项随机配五对的逐样本实现。本项目的 `Tie` 与绝对标签也属于额外扩展，因此应表述为“paper-aligned adaptation”，不能声称逐行复现官方 judge。
+
+A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必须先在每个 `rater × image × comparison` 内折叠镜像方向；否则会人为扩大样本量并污染 rater agreement。
 
 同时汇总：
 
@@ -166,9 +169,10 @@ Gate E 通过前禁止正式训练。
 - v2.5/v3.0 executable isolation：通过；
 - frozen adapters SHA-256：通过；
 - image-clustered split/hash/leakage：通过；
-- CPU tests：50/50 通过（以后以最新 test 输出为准）；
+- CPU tests：56/56 通过（以后以最新 test 输出为准）；
 - 正式 v3.5 GPU trace/bridge smoke：作业 6649172 已通过；
-- 正式 trace 生成：首次作业因补充 Git/prompt/data/adapter provenance 而主动取消，旧缓存已隔离；代码提交后从干净目录重新生成；
+- 数据质量修复：Electronic Sheep 的标量 `UNKNOWN` 曾被错误迭代成 `U/N/K` caption；已删除 133 个无效训练行，图片簇划分保持 602/64/97/24/23 不变；
+- 正式 trace 生成：重试作业 6653791 正在补齐 666 个 train+validation clusters；训练自动监控已暂停。缓存结束后必须逐条验证 split/description/tensor hash，并原子迁移到 trace-input-scoped provenance v3，之后才可训练；
 - 正式训练：未启动，后续由 trace gate 串行触发三个 pilot；每个 pilot 只申请 1 GPU、4 小时上限；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。

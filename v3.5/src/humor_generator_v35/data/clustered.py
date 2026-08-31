@@ -11,6 +11,9 @@ import random
 from typing import Any, Iterable
 
 
+INVALID_CAPTION_SENTINELS = {"nan", "none", "null", "unk", "unknown"}
+
+
 @dataclass(frozen=True)
 class DatasetBuildResult:
     manifest: dict[str, Any]
@@ -51,13 +54,20 @@ def _ranked_captions(path: Path, limit: int) -> list[dict[str, Any]]:
 
 
 def _finalists(annotation: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    raw_finalists = annotation.get("official_newyorker_finalists")
+    # Electronic Sheep uses the scalar string "UNKNOWN" when finalists are
+    # unavailable.  Iterating that value used to create the bogus captions
+    # "U", "N", and "K".  Only an actual list is a released finalist set.
+    if not isinstance(raw_finalists, list):
+        return []
     output: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for rank, raw in enumerate(annotation.get("official_newyorker_finalists") or []):
+    for rank, raw in enumerate(raw_finalists):
         caption = " ".join(str(raw).strip(" \t\r\n\"“”").split())
-        if not caption or caption.casefold() in seen:
+        normalized = caption.casefold()
+        if not caption or normalized in INVALID_CAPTION_SENTINELS or normalized in seen:
             continue
-        seen.add(caption.casefold())
+        seen.add(normalized)
         output.append({"caption": caption, "caption_rank": rank, "caption_score": None})
         if len(output) == limit:
             break
@@ -235,6 +245,25 @@ def build_clustered_bridge_dataset(
         path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
         output_hashes[path.name] = sha256(path)
 
+    # Planner traces depend on image/description inputs, not caption labels.
+    # Pin those inputs separately so caption cleaning does not invalidate
+    # expensive traces when their actual inputs are byte-identical.
+    trace_inputs: dict[str, dict[str, Any]] = {}
+    for split in ("train", "validation"):
+        for row in split_rows[split]:
+            trace_inputs.setdefault(row["cluster_id"], {
+                "cluster_id": row["cluster_id"],
+                "split": split,
+                "image_sha256": row["image_sha256"],
+                "standard_description": row["standard_description"],
+            })
+    trace_input_path = output / "trace_inputs.jsonl"
+    trace_input_path.write_text("".join(
+        json.dumps(trace_inputs[cluster], ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+        for cluster in sorted(trace_inputs)
+    ))
+    output_hashes[trace_input_path.name] = sha256(trace_input_path)
+
     overlaps = {
         "train_validation": len(split_clusters["train"] & split_clusters["validation"]),
         "train_internal_test": len(split_clusters["train"] & split_clusters["internal_test"]),
@@ -282,6 +311,8 @@ def build_clustered_bridge_dataset(
         "adapter_seen_manifest": str(adapter_seen_manifest),
         "adapter_seen_manifest_sha256": sha256(adapter_seen_manifest),
         "output_sha256": output_hashes,
+        "trace_input_manifest": trace_input_path.name,
+        "trace_input_manifest_sha256": output_hashes[trace_input_path.name],
         "references": [
             "HOMER, ICLR 2026, arXiv:2602.06423",
             "Humor in AI, NeurIPS 2024, arXiv:2406.10522",

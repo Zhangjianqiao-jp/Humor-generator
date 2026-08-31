@@ -23,6 +23,11 @@ v3.5 当前是一个可检验的 bridge-only 实验，而不是“latent 必然�
 15. **trace 缺少代码身份**：先前正式 trace 作业在 v3.5 未提交时启动，只记录模型和 tensor hash，无法锁定实际 prompt/代码。该作业已取消、部分缓存已隔离；schema v2 现在强制记录唯一 Git commit、dataset manifest、prompt 与 adapter manifest hash。
 16. **pilot 子集存在编号偏差**：旧实现取排序后的前 64/24 clusters。现改为固定 seed 的 SHA-256 cluster 抽样，且保存所选 cluster IDs 的 hash。
 17. **loss 完成被误写成实验完成**：现在三个 pilot 训练后还会自动运行 24-image × 3-seed generation 并产生匿名评审 packet；自动化在独立评审前停止，不会自动进入 full training。
+18. **无效 finalist 被当成 caption**：Electronic Sheep 用标量 `UNKNOWN` 表示缺失；旧 loader 把字符串逐字符迭代，产生 `U/N/K`，另有 `nan`。现只接受 list finalists，并拒绝 sentinel；共移除 133 个 train rows，所有图片簇划分不变。
+19. **caption 清洗错误地牵连昂贵 trace**：旧 provenance 绑定整个 dataset manifest。现新增只描述 Planner 实际输入的 `trace_inputs.jsonl`；旧缓存仅能通过逐条 cluster/split/description/tensor-hash 验证后的原子迁移复用。
+20. **learned bridge 读取的信息更多**：Learned/Typed 读取完整 hidden sequence 后压缩为 24 slots，而 budget text/token embedding/StateBridge 只读取每通道末 8 tokens。因此主结果应解释为“full-state learned compression”，不能仅据此声称 continuous 优于 text。新增 `typed_quantized`：同一 bridge 输出最近词表 embedding，与连续 Typed 的差异才更接近连续残差效应。
+21. **pilot 内外验证混用**：24 张 validation subset 已用于 early stopping，不能再作为唯一生成证据。现把其余 40 张设为 outer-pilot generation/evaluation 集，并把 24 张仅保留为训练诊断。
+22. **镜像 packet 被当作独立样本**：A/B 镜像用于检测位置偏差，不会把图片或评审数翻倍。聚合器现先在 `rater × image × comparison × mirror_pair` 内折叠两个方向，再进行 image-cluster bootstrap、显著性检验和一致性计算。
 
 ## 仍然不能过度声称的部分
 
@@ -38,7 +43,7 @@ v3.5 当前是一个可检验的 bridge-only 实验，而不是“latent 必然�
 2. 两个真实 Planner traces 的 engineering smoke 已验证图像特征、MRoPE、post-token states、冻结参数、finite loss/gradient/update、峰值显存及所有生成路径；
 3. 正式 trace 必须来自 clean Git commit 并通过完整 provenance gate；
 4. 之后只串行运行 Learned+KL、Typed+KL、Typed-no-KL 三个小 pilot；
-5. 三者训练结束后，自动生成 validation blind packet，并停下来等待独立评审；
+5. 三者训练结束后，在未用于 early stopping 的 40 张 validation 图片上，加入 budget-text 与 typed-quantized controls 生成 blind packet，并停下来等待独立评审；
 6. pilot 有 validation 与真实生成信号后，才扩展到 3-seed full bridge training；
 7. bridge 显示稳定 held-out 收益后，才重新讨论 preference learning。
 

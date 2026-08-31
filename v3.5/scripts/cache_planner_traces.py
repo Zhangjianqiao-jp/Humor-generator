@@ -79,7 +79,7 @@ def main() -> None:
 
     provenance = {
         "git_commit": repository_commit(),
-        "dataset_manifest_sha256": sha256(args.dataset / "manifest.json"),
+        "trace_input_manifest_sha256": sha256(args.dataset / "trace_inputs.jsonl"),
         "homer_prompts_sha256": sha256(ROOT / "src/humor_generator_v35/homer/prompts.py"),
         "adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),
     }
@@ -186,7 +186,7 @@ def main() -> None:
                     }.items()
                 }
                 record = {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "cluster_id": cluster,
                     "split": row["split"],
                     "trace_path": str(trace_path.relative_to(ROOT)),

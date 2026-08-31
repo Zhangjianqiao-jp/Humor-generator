@@ -26,7 +26,10 @@ from humor_generator_v35.homer.retrieval import (
     NltkWordNetGraph,
     OfficialQueryFittedTfidfIndex,
 )
-from humor_generator_v35.latent.bridges import LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm
+from humor_generator_v35.latent.bridges import (
+    LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm,
+    nearest_vocabulary_embeddings,
+)
 from humor_generator_v35.latent.budget import channel_causal_tail, concatenate_budgeted
 from humor_generator_v35.latent.statebridge import StateBridgeAlignment
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
@@ -209,6 +212,14 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="+", default=[20260830, 20260831, 20260832])
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--slots-per-channel", type=int, default=8)
+    parser.add_argument(
+        "--exclude-clusters-file", type=Path,
+        help="JSON file containing a validation_cluster_ids list to exclude (outer-pilot eval).",
+    )
+    parser.add_argument(
+        "--quantize-bridge-output", action="store_true",
+        help="Replace learned continuous slots with nearest receiver token embeddings.",
+    )
     args = parser.parse_args()
     if args.condition in {"learned_latent", "typed_learned_latent"} and args.checkpoint is None:
         parser.error("learned conditions require --checkpoint")
@@ -239,6 +250,16 @@ def main() -> None:
     bridge = None if args.checkpoint is None else load_bridge(config, args.checkpoint, backend)
     traces = load_trace_index(args.trace_index)
     rows = first_rows_by_cluster(read_jsonl(ROOT / config["data"]["dataset"] / f"{args.split}.jsonl"))
+    excluded_clusters: set[str] = set()
+    if args.exclude_clusters_file is not None:
+        exclusion = json.loads(args.exclude_clusters_file.read_text())
+        values = exclusion.get("validation_cluster_ids")
+        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+            raise RuntimeError("exclusion file must contain validation_cluster_ids: list[str]")
+        excluded_clusters = set(values)
+        rows = [row for row in rows if row["cluster_id"] not in excluded_clusters]
+        if not rows:
+            raise RuntimeError("cluster exclusion removed every evaluation row")
     missing = sorted({row["cluster_id"] for row in rows} - set(traces))
     if missing:
         raise RuntimeError(f"missing {len(missing)} sealed-{args.split} traces; first={missing[:5]}")
@@ -297,6 +318,16 @@ def main() -> None:
                         bridge=bridge,
                         slots_per_channel=args.slots_per_channel,
                     )
+                    if args.quantize_bridge_output:
+                        if args.condition not in {"learned_latent", "typed_learned_latent"}:
+                            raise RuntimeError("bridge-output quantization requires a learned bridge")
+                        slots, token_ids = nearest_vocabulary_embeddings(
+                            slots, backend.model.get_input_embeddings().weight
+                        )
+                        latent_meta.update({
+                            "bridge_output_quantized": True,
+                            "quantized_token_ids": token_ids.squeeze(0).tolist(),
+                        })
                     caption = backend.generate_with_latent_prefix(
                         latent_messages(row["image"]),
                         slots,
@@ -359,8 +390,10 @@ def main() -> None:
         "config_sha256": file_sha256(config_path),
         "trace_index_sha256": file_sha256(args.trace_index),
         "checkpoint_sha256": file_sha256(args.checkpoint) if args.checkpoint else None,
+        "quantize_bridge_output": args.quantize_bridge_output,
         "output_sha256": file_sha256(args.output),
         "records": len(completed),
+        "excluded_clusters": sorted(excluded_clusters),
     }
     args.output.with_suffix(args.output.suffix + ".manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"

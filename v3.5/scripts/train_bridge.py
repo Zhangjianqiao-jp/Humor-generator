@@ -174,6 +174,8 @@ def main() -> None:
         "validation_negative_diagnostics": validation_negative_diagnostics,
         "train_clusters": len({row["cluster_id"] for row in train_rows}),
         "validation_clusters": len({row["cluster_id"] for row in validation_rows}),
+        "train_cluster_ids": sorted({row["cluster_id"] for row in train_rows}),
+        "validation_cluster_ids": sorted({row["cluster_id"] for row in validation_rows}),
         "subset_selection": "sha256(v35-pilot:seed:split:cluster_id)",
         "train_cluster_ids_sha256": hashlib.sha256(
             "\n".join(sorted({row["cluster_id"] for row in train_rows})).encode()

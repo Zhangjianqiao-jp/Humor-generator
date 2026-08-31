@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import hashlib
 
 from humor_generator_v35.data.traces import load_trace, plan_from_record
 
@@ -13,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def main() -> None:
@@ -29,14 +34,19 @@ def main() -> None:
     missing = sorted(required - available)
     extra = sorted(available - required)
     invalid = []
+    current_hashes = {
+        "trace_input_manifest_sha256": sha256(dataset / "trace_inputs.jsonl"),
+        "homer_prompts_sha256": sha256(ROOT / "src/humor_generator_v35/homer/prompts.py"),
+        "adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),
+    }
     provenance_values: set[tuple[str, str, str, str]] = set()
     for record in records:
         try:
-            if record.get("schema_version") != 2:
-                raise ValueError("formal trace must use provenance schema version 2")
+            if record.get("schema_version") != 3:
+                raise ValueError("formal trace must use provenance schema version 3")
             provenance = record.get("provenance", {})
             required_provenance = {
-                "git_commit", "dataset_manifest_sha256", "homer_prompts_sha256",
+                "git_commit", "trace_input_manifest_sha256", "homer_prompts_sha256",
                 "adapter_manifest_sha256",
             }
             if set(provenance) != required_provenance:
@@ -46,6 +56,8 @@ def main() -> None:
             for key in required_provenance - {"git_commit"}:
                 if not re.fullmatch(r"[0-9a-f]{64}", provenance[key]):
                     raise ValueError(f"invalid provenance hash: {key}")
+                if provenance[key] != current_hashes[key]:
+                    raise ValueError(f"stale trace provenance hash: {key}")
             provenance_values.add(tuple(provenance[key] for key in sorted(required_provenance)))
             plan_from_record(record["plan"])
             load_trace(ROOT / record["trace_path"], expected_sha256=record["trace_sha256"])

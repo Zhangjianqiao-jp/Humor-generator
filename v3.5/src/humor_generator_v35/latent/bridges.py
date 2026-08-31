@@ -17,6 +17,30 @@ def mean_embedding_norm(embeddings: torch.Tensor, *, chunk_size: int = 4096) -> 
     return float((total / embeddings.shape[0]).cpu())
 
 
+@torch.no_grad()
+def nearest_vocabulary_embeddings(
+    slots: torch.Tensor, embeddings: torch.Tensor, *, chunk_size: int = 4096
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Quantize continuous slots to nearest receiver tokens by cosine similarity."""
+    if slots.ndim != 3 or embeddings.ndim != 2 or slots.shape[-1] != embeddings.shape[-1]:
+        raise ValueError("slots must be [B,S,D] and embeddings [V,D] with matching D")
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+    flat = torch.nn.functional.normalize(slots.float().reshape(-1, slots.shape[-1]), dim=-1)
+    best_score = torch.full((flat.shape[0],), -torch.inf, device=flat.device)
+    best_index = torch.zeros((flat.shape[0],), dtype=torch.long, device=flat.device)
+    for start in range(0, embeddings.shape[0], chunk_size):
+        candidates = torch.nn.functional.normalize(
+            embeddings[start : start + chunk_size].float(), dim=-1
+        )
+        score, index = (flat @ candidates.T).max(dim=-1)
+        replace = score > best_score
+        best_score[replace] = score[replace]
+        best_index[replace] = index[replace] + start
+    quantized = embeddings[best_index].reshape(*slots.shape[:-1], slots.shape[-1])
+    return quantized.to(dtype=slots.dtype), best_index.reshape(slots.shape[:-1])
+
+
 class _SharedPooler(nn.Module):
     def __init__(
         self,
