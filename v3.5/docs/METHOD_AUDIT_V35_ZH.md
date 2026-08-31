@@ -28,6 +28,7 @@ v3.5 当前是一个可检验的 bridge-only 实验，而不是“latent 必然�
 20. **learned bridge 读取的信息更多**：Learned/Typed 读取完整 hidden sequence 后压缩为 24 slots，而 budget text/token embedding/StateBridge 只读取每通道末 8 tokens。因此主结果应解释为“full-state learned compression”，不能仅据此声称 continuous 优于 text。新增 `typed_quantized`：同一 bridge 输出最近词表 embedding，与连续 Typed 的差异才更接近连续残差效应。
 21. **pilot 内外验证混用**：24 张 validation subset 已用于 early stopping，不能再作为唯一生成证据。现把其余 40 张设为 outer-pilot generation/evaluation 集，并把 24 张仅保留为训练诊断。
 22. **镜像 packet 被当作独立样本**：A/B 镜像用于检测位置偏差，不会把图片或评审数翻倍。聚合器现先在 `rater × image × comparison × mirror_pair` 内折叠两个方向，再进行 image-cluster bootstrap、显著性检验和一致性计算。
+23. **split 数量相同被误认为成员相同**：清洗后各 split cluster 数没有变化，但 source-stratified assignment 与 description 来源发生变化。旧 trace 经过逐条验证，只保留 546 条；34 条 description 不一致及 18 条超出新 train+validation 的 trace 已移动到带完整 index/failure 备份的 quarantine，而不是删除。
 
 ## 仍然不能过度声称的部分
 

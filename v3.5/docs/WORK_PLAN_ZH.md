@@ -171,8 +171,8 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - image-clustered split/hash/leakage：通过；
 - CPU tests：56/56 通过（以后以最新 test 输出为准）；
 - 正式 v3.5 GPU trace/bridge smoke：作业 6649172 已通过；
-- 数据质量修复：Electronic Sheep 的标量 `UNKNOWN` 曾被错误迭代成 `U/N/K` caption；已删除 133 个无效训练行，图片簇划分保持 602/64/97/24/23 不变；
-- 正式 trace 生成：重试作业 6653791 正在补齐 666 个 train+validation clusters；训练自动监控已暂停。缓存结束后必须逐条验证 split/description/tensor hash，并原子迁移到 trace-input-scoped provenance v3，之后才可训练；
+- 数据质量修复：Electronic Sheep 的标量 `UNKNOWN` 曾被错误迭代成 `U/N/K` caption；已删除 133 个无效训练行。各 split 数量保持 602/64/97/24/23，但具体 cluster 成员和部分 standard-description 来源发生变化，不能据“数量相同”复用全部 trace；
+- 正式 trace 生成：旧目标作业 6653791 已取消。逐条核验后保留 546/666 条兼容 trace；52 条不兼容记录及 tensor 已可恢复地隔离，其中 34 条 description 改变、18 条不再属于 train+validation。新作业 6654222 正在补齐 120 条；tmux 监控只在严格数据/trace gate 后串行触发 pilot；
 - 正式训练：未启动，后续由 trace gate 串行触发三个 pilot；每个 pilot 只申请 1 GPU、4 小时上限；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。
