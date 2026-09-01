@@ -120,7 +120,11 @@ class QwenBackend:
         except Exception as exc:
             raise RuntimeError("Qwen/PEFT/qwen-vl-utils dependencies are unavailable") from exc
         kwargs: dict[str, Any] = {
-            "device_map": "auto",
+            # Formal v3.5 jobs request exactly one full GPU.  Keeping the
+            # complete frozen receiver on CUDA device 0 avoids Accelerate
+            # sharding across MIG instances and makes the bridge input-gradient
+            # path deterministic.
+            "device_map": {"": 0},
             "torch_dtype": torch.bfloat16,
             "trust_remote_code": True,
         }

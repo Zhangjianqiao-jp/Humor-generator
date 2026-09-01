@@ -16,7 +16,9 @@ module load cuda/12.6.1
 export PYTHONPATH=src
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+unset PYTORCH_CUDA_ALLOC_CONF
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
@@ -25,5 +27,11 @@ python scripts/check_v35_isolation.py
 python scripts/verify_frozen_artifacts.py
 python scripts/verify_clustered_dataset.py
 python scripts/check_trace_completion.py
+python scripts/check_cuda_resource.py
+python scripts/real_trace_bridge_smoke.py \
+  --config "$BRIDGE_CONFIG" \
+  --trace-index data/cache/planner_traces_homer_strict_v35/index.jsonl \
+  --output "$BRIDGE_OUTPUT/resource_smoke.json"
+test -s "$BRIDGE_OUTPUT/resource_smoke.json"
 python scripts/train_bridge.py --config "$BRIDGE_CONFIG" --output "$BRIDGE_OUTPUT"
 test -s "$BRIDGE_OUTPUT/complete.json"

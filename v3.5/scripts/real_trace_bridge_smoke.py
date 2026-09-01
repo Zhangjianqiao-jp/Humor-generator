@@ -14,14 +14,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import read_jsonl
-from humor_generator_v35.latent.bridges import TypedLatentBridge, mean_embedding_norm
+from humor_generator_v35.latent.bridges import (
+    LearnedLatentBridge,
+    TypedLatentBridge,
+    mean_embedding_norm,
+)
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
 from humor_generator_v35.training.formal_bridge import (
     FrozenReceiverBridgeTask,
+    cluster_balanced_rows,
     hard_negative_cluster_map,
     load_trace_index,
     prepare_example,
 )
+from train_bridge import fixed_hash_sample_clusters
 
 
 def main() -> None:
@@ -36,12 +42,18 @@ def main() -> None:
         row for row in read_jsonl(ROOT / config["data"]["dataset"] / "train.jsonl")
         if row["cluster_id"] in traces
     ]
-    first_by_cluster = {}
-    for row in rows:
-        first_by_cluster.setdefault(row["cluster_id"], row)
-    if len(first_by_cluster) < 2:
+    seed = int(config["training"]["seed"])
+    rows = fixed_hash_sample_clusters(
+        rows,
+        config["training"].get("max_train_clusters"),
+        seed=seed,
+        split="train",
+    )
+    if len({row["cluster_id"] for row in rows}) < 2:
         raise RuntimeError("real trace smoke requires two clusters")
-    selected = list(first_by_cluster.values())[:2]
+    # This is deliberately the exact first example used by epoch zero of the
+    # formal pilot, not a convenient low-cost row.
+    selected = cluster_balanced_rows(rows, epoch=0, seed=seed)
     negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
 
     adapter = config["model"].get("adapter")
@@ -54,21 +66,38 @@ def main() -> None:
     for parameter in backend.model.parameters():
         parameter.requires_grad_(False)
     width = int(backend.model.get_input_embeddings().weight.shape[1])
-    bridge = TypedLatentBridge(
-        width, width,
-        bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
-        slots=int(config["bridge"]["slots_per_channel"]),
-        heads=int(config["bridge"]["heads"]),
-        target_norm=mean_embedding_norm(backend.model.get_input_embeddings().weight),
+    common_bridge_args = {
+        "bottleneck_dim": int(config["bridge"]["bottleneck_dim"]),
+        "heads": int(config["bridge"]["heads"]),
+        "target_norm": mean_embedding_norm(backend.model.get_input_embeddings().weight),
+    }
+    bridge = (
+        TypedLatentBridge(
+            width,
+            width,
+            slots=int(config["bridge"]["slots_per_channel"]),
+            **common_bridge_args,
+        )
+        if config["experiment"]["baseline"] == "typed_learned_latent"
+        else LearnedLatentBridge(
+            width,
+            width,
+            slots=int(config["bridge"]["total_slots"]),
+            **common_bridge_args,
+        )
     ).to(device)
     task = FrozenReceiverBridgeTask(
         backend, bridge, root=ROOT, trace_index=traces,
         loss_config=config["loss"],
         max_caption_tokens=int(config["training"]["max_caption_tokens"]),
     )
-    optimizer = torch.optim.AdamW(bridge.parameters(), lr=1e-4)
+    optimizer = torch.optim.AdamW(
+        bridge.parameters(),
+        lr=float(config["training"]["learning_rate"]),
+        weight_decay=float(config["training"]["weight_decay"]),
+    )
     before = next(bridge.parameters()).detach().float().clone()
-    example = prepare_example(selected[0], traces[selected[0]["cluster_id"]], seed=17)
+    example = prepare_example(selected[0], traces[selected[0]["cluster_id"]], seed=seed)
     negative_cluster = negative_map[selected[0]["cluster_id"]]
     metrics = task.backward_example(example, negative_cluster)
     gradient_norm = float(torch.nn.utils.clip_grad_norm_(bridge.parameters(), 1.0))
@@ -82,7 +111,9 @@ def main() -> None:
         "status": "pass",
         "scientific_training": False,
         "real_planner_traces": True,
-        "clusters": [row["cluster_id"] for row in selected],
+        "cluster": selected[0]["cluster_id"],
+        "row_id": selected[0]["row_id"],
+        "selection": "exact_formal_epoch_0_first_example",
         "hard_negative_cluster": negative_cluster,
         "hard_negative_diagnostics": negative_diagnostics,
         "policy_trainable_parameters": sum(
