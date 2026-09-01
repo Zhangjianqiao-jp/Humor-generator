@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T19:10:00+09:00"
+observed_at: "2026-09-01T19:13:30+09:00"
 must_revalidate: true
 source_commit: ef175638cfb1592f8801ed36aed4762da4eaef60
 branch: latent
 
-current_phase: P1_visualcap_v2_engineering_verified_pending_gpu_stress
+current_phase: P1_visualcap_v2_queued_for_gpu_stress_and_training
 trace_gate:
   status: passed
   available: 666
@@ -72,7 +72,10 @@ program_risk_audit:
   highest_open_risk: visualcap_v2_max_image_backward_not_yet_executed_on_gpu
 
 immediate_gate:
-  action: submit_visualcap_v2_p1_after_commit
+  action: monitor_visualcap_v2_job_6669043
+  job_id: "6669043"
+  resource_group: c-batch
+  predicted_start: "2026-09-02T02:00:00+09:00"
   required_resource: one_full_c_batch_gpu
   success_requires:
     - check_cuda_resource reports one device, native allocator, and at least 40 GiB.
@@ -94,16 +97,16 @@ eta:
   excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
 
 next_agent_actions:
-  - Commit visualcap_v2 code so run_manifest provenance is immutable.
-  - Submit Learned+KL visualcap_v2 on the fastest full-GPU group.
+  - Monitor visualcap_v2 job 6669043; do not interpret metrics until the two-sample smoke passes.
+  - The b-batch duplicate 6669045 was cancelled because its predicted start was 2026-09-04 12:00 JST.
   - Do not retry b-batch-mig or b-inter-mig.
   - Inspect resource_smoke.json before interpreting any training metrics.
   - The monitor may submit P2 only after P1 complete.json exists.
   - Never infer success from job disappearance; require `complete.json`.
 
 automation:
-  tmux_session: v35-native-monitor
-  state: data/cache/formal_pipeline_monitor_state_v10.json
+  tmux_session: v35-visualcap-monitor
+  state: data/cache/formal_pipeline_monitor_state_v11.json
   poll_seconds: 1200
   behavior: advance only through complete.json evidence gates
 
