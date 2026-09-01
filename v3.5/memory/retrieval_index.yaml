@@ -6,7 +6,10 @@ topics:
   research_goal_and_gates:
     files: [memory/project_memory.yaml, docs/WORK_PLAN_ZH.md]
   method_risks_and_claim_limits:
-    files: [docs/METHOD_AUDIT_V35_ZH.md, memory/project_memory.yaml]
+    files:
+      - docs/METHOD_AUDIT_V35_ZH.md
+      - docs/PROGRAM_RISK_ASSESSMENT_ZH.md
+      - memory/project_memory.yaml
   homer_prompt_and_reproduction:
     files: [docs/HOMER_REPRODUCTION_LEDGER_ZH.md, src/humor_generator_v35/homer/prompts.py]
   trace_provenance:

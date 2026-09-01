@@ -1,9 +1,9 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T15:13:30+09:00"
+observed_at: "2026-09-01T15:43:39+09:00"
 must_revalidate: true
-source_commit: 1de963f9b700ee7eafdc853101bf7b598531d18b
+source_commit: f4321e9ef486b3bdef2ac90295fa13b25f6257b0
 branch: latent
 
 current_phase: P1_queued_native_full_gpu
@@ -43,6 +43,7 @@ resource_diagnosis:
   retained_resource_group: c-batch
   predicted_start: "2026-09-01T20:00:00+09:00"
   cancelled_slower_duplicate: "6666632 on b-batch; predicted 2026-09-04T03:00:00+09:00"
+  second_b_batch_probe: "6667285 cancelled; node FREE did not mean allocatable GPU and scheduler predicted 2026-09-04T09:00:00+09:00"
 
 native_full_gpu_fix:
   allocator: native
@@ -52,7 +53,18 @@ native_full_gpu_fix:
   exact_formal_first_example_smoke: required_in_same_job
   smoke_cluster: nycc_415
   smoke_failure_behavior: stop_before_training
-  code_commit: 1de963f9b700ee7eafdc853101bf7b598531d18b
+  code_commit: f4321e9ef486b3bdef2ac90295fa13b25f6257b0
+
+program_risk_audit:
+  overall: medium_continue_with_evidence_gates
+  report: docs/PROGRAM_RISK_ASSESSMENT_ZH.md
+  tests_passed: 63
+  deterministic_fixes:
+    - pilot evaluation uses native allocator and the current P1 checkpoint path
+    - monitor validates checkpoint, manifest, metrics, and finite completion fields
+    - blind packet IDs must match the private mapping exactly
+    - exact resource smoke and formal training now share the same torch seed
+  highest_open_risk: native_full_gpu_path_not_yet_executed
 
 immediate_gate:
   action: monitor_job_6666633
