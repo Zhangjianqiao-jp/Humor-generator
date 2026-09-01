@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from humor_generator_v35.homer.contracts import SchemaError, parse_associations, parse_conflicts, validate_plan
+from humor_generator_v35.homer.repair import assert_lossless_repair, validator_feedback_messages
 
 
 def test_strict_homer_plan() -> None:
@@ -82,3 +83,42 @@ def test_contiguous_edge_chain_is_losslessly_reconstructed() -> None:
             '["cat","keyboard"],["park","office"],["office","deadline"]]}]',
             view="global",
         )
+
+
+def test_lossless_association_repair_changes_schema_only() -> None:
+    invalid = '[{"entity":"cat","imaginations":["keyboard","office","deadline"]}]'
+    repaired = '{"cat":["keyboard","office","deadline"]}'
+    assert_lossless_repair(invalid, repaired, channel="local")
+    with pytest.raises(ValueError, match="changed association"):
+        assert_lossless_repair(
+            invalid, '{"cat":["keyboard","office","vacation"]}', channel="local"
+        )
+
+
+def test_lossless_conflict_repair_only_inserts_opposition_structure() -> None:
+    invalid = "1. Dinosaurs playing modern instruments 2. Calm concert during an incoming meteor"
+    repaired = (
+        '[{"left":"Dinosaurs","right":"playing modern instruments"},'
+        '{"left":"Calm concert","right":"during an incoming meteor"}]'
+    )
+    assert_lossless_repair(invalid, repaired, channel="conflict")
+    with pytest.raises(ValueError, match="added or paraphrased"):
+        assert_lossless_repair(
+            invalid,
+            '[{"left":"Dinosaurs","right":"playing jazz instruments"},'
+            '{"left":"Calm concert","right":"during an incoming meteor"}]',
+            channel="conflict",
+        )
+
+
+def test_repair_turn_preserves_original_homer_messages() -> None:
+    original = [{"role": "system", "content": [{"type": "text", "text": "HOMER"}]}]
+    repaired = validator_feedback_messages(
+        original,
+        invalid_output='{"cat":[]}',
+        validation_error="needs three steps",
+        channel="local",
+    )
+    assert repaired[:1] == original
+    assert repaired[-2]["role"] == "assistant"
+    assert repaired[-1]["role"] == "user"

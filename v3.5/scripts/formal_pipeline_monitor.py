@@ -104,11 +104,26 @@ def parse_submitted_job(result: subprocess.CompletedProcess[str]) -> str:
     return match.group(1)
 
 
-def submit_cache(retry_round: int) -> str:
+def submit_cache(
+    retry_round: int,
+    *,
+    target_clusters: list[str] | None = None,
+    validator_repair: bool = False,
+) -> str:
+    environment = [f"TRACE_RETRY_ROUND={retry_round}"]
+    if target_clusters:
+        environment.append("TRACE_CLUSTER_IDS=" + ":".join(target_clusters))
+    if validator_repair:
+        environment.append("TRACE_VALIDATOR_REPAIR=1")
+    job_file = (
+        "jobs/recover_two_planner_traces.pjm"
+        if validator_repair and target_clusters == ["nycc_325", "nycc_775"]
+        else "jobs/cache_formal_planner_traces.pjm"
+    )
     return parse_submitted_job(command([
         "pjsub", "-N", f"cache_strict{retry_round}",
-        "-x", f"TRACE_RETRY_ROUND={retry_round}",
-        "jobs/cache_formal_planner_traces.pjm",
+        "-x", ",".join(environment),
+        job_file,
     ]))
 
 
@@ -144,7 +159,14 @@ def verify_trace_gate() -> None:
         raise RuntimeError(f"trace gate failed:\n{result.stdout}\n{result.stderr}")
 
 
-def initialize(state_path: Path, initial_job_id: str, retry_round: int) -> dict[str, Any]:
+def initialize(
+    state_path: Path,
+    initial_job_id: str,
+    retry_round: int,
+    *,
+    target_clusters: list[str] | None = None,
+    validator_repair: bool = False,
+) -> dict[str, Any]:
     if state_path.is_file():
         return json.loads(state_path.read_text())
     state = {
@@ -154,6 +176,8 @@ def initialize(state_path: Path, initial_job_id: str, retry_round: int) -> dict[
         "status": "monitoring_cache",
         "cache_job_id": initial_job_id,
         "cache_retry_round": retry_round,
+        "target_clusters": target_clusters or [],
+        "validator_repair": validator_repair,
         "training_jobs": {},
         "events": [],
     }
@@ -268,7 +292,11 @@ def advance_once(
         append_event(state, "retry_limit_reached", evidence=evidence, max_retry_rounds=max_retry_rounds)
         atomic_json(state_path, state)
         return True
-    job_id = submit_cache(next_round)
+    job_id = submit_cache(
+        next_round,
+        target_clusters=list(state.get("target_clusters", [])),
+        validator_repair=bool(state.get("validator_repair", False)),
+    )
     state.update({
         "status": "monitoring_cache",
         "cache_job_id": job_id,
@@ -285,13 +313,21 @@ def main() -> None:
     parser.add_argument("--initial-job-id", required=True)
     parser.add_argument("--retry-round", type=int, default=0)
     parser.add_argument("--max-retry-rounds", type=int, default=4)
+    parser.add_argument("--target-clusters", nargs="+")
+    parser.add_argument("--validator-repair", action="store_true")
     parser.add_argument("--poll-seconds", type=int, default=1200)
     parser.add_argument("--confirm-absence-seconds", type=int, default=60)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     if args.poll_seconds < 1 or args.confirm_absence_seconds < 0:
         raise ValueError("invalid monitoring intervals")
-    state = initialize(args.state, args.initial_job_id, args.retry_round)
+    state = initialize(
+        args.state,
+        args.initial_job_id,
+        args.retry_round,
+        target_clusters=args.target_clusters,
+        validator_repair=args.validator_repair,
+    )
     while True:
         done = advance_once(
             state, args.state,

@@ -13,11 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import plan_to_record, read_jsonl, save_trace
-from humor_generator_v35.homer.contracts import parse_conflicts, validate_plan
+from humor_generator_v35.homer.contracts import parse_associations, parse_conflicts, validate_plan
 from humor_generator_v35.homer.prompts import (
     conflict_messages,
     global_imagination_messages,
     local_imagination_messages,
+)
+from humor_generator_v35.homer.repair import (
+    REPAIR_POLICY_VERSION,
+    assert_lossless_repair,
+    validator_feedback_messages,
 )
 from humor_generator_v35.latent.state_capture import AlignedMessageStates
 from humor_generator_v35.qwen_backend import QwenBackend
@@ -57,6 +62,19 @@ def repository_commit() -> str:
     return commit
 
 
+def alignment_record(report) -> dict:
+    if isinstance(report, dict):
+        return report
+    return {
+        "replay": report.replay.__dict__,
+        "processed_score_token_accuracy": report.processed_score_token_accuracy,
+        "raw_head_token_accuracy_diagnostic": report.raw_head_token_accuracy,
+        "emitted_token_mean_logprob": report.emitted_token_mean_logprob,
+        "sampling_mode": report.sampling_mode,
+        "communication_state_definition": report.communication_state_definition,
+    }
+
+
 def main() -> None:
     parser = ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=ROOT / "data/processed/latent_bridge_v35")
@@ -69,6 +87,8 @@ def main() -> None:
     parser.add_argument("--attempts", type=int, default=5)
     parser.add_argument("--seed", type=int, default=20260830)
     parser.add_argument("--retry-round", type=int, default=0)
+    parser.add_argument("--cluster-ids", nargs="+")
+    parser.add_argument("--enable-validator-repair", action="store_true")
     args = parser.parse_args()
     args.dataset = args.dataset.resolve()
     args.output = args.output.resolve()
@@ -83,12 +103,19 @@ def main() -> None:
         "homer_prompts_sha256": sha256(ROOT / "src/humor_generator_v35/homer/prompts.py"),
         "adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),
     }
+    repair_prompt_hash = sha256(ROOT / "src/humor_generator_v35/homer/repair.py")
 
     rows: dict[str, dict] = {}
     for split in args.splits:
         for row in read_jsonl(args.dataset / f"{split}.jsonl"):
             rows.setdefault(row["cluster_id"], {**row, "split": split})
     selected = [rows[key] for key in sorted(rows, key=lambda x: int(x.rsplit("_", 1)[1]))]
+    if args.cluster_ids:
+        requested = set(args.cluster_ids)
+        unknown = sorted(requested - set(rows))
+        if unknown:
+            raise ValueError(f"unknown cluster IDs: {unknown}")
+        selected = [row for row in selected if row["cluster_id"] in requested]
     if args.max_clusters is not None:
         selected = selected[: args.max_clusters]
 
@@ -112,6 +139,7 @@ def main() -> None:
             last_outputs: dict[str, str] = {}
             for attempt in range(args.attempts):
                 attempt_outputs: dict[str, str] = {}
+                repairs: dict[str, dict] = {}
                 seed = (
                     args.seed
                     + args.retry_round * 10_000_000
@@ -120,40 +148,141 @@ def main() -> None:
                 )
                 temperature = 0.0 if attempt == 0 else 0.7
                 top_p = 1.0 if attempt == 0 else 0.95
+                conflict_prompt = conflict_messages(row["standard_description"])
                 try:
                     conflict_text, conflict_states, conflict_alignment = backend.generate_and_verify_states(
-                        conflict_messages(row["standard_description"]), max_new_tokens=384, seed=seed,
+                        conflict_prompt, max_new_tokens=384, seed=seed,
                         temperature=temperature, top_p=top_p,
-                    )
-                    # Strict conflict parsing precedes both association calls.
-                    conflicts = parse_conflicts(conflict_text)
-                    conflict_states = AlignedMessageStates(
-                        conflict_states.token_ids, conflict_states.states, conflict_text
                     )
                     attempt_outputs["conflict"] = conflict_text
                 except Exception as exc:
                     last_error = f"conflict/alignment: {exc}"
                     last_outputs = attempt_outputs
                     continue
+                try:
+                    conflicts = parse_conflicts(conflict_text)
+                except Exception as exc:
+                    if not args.enable_validator_repair:
+                        last_error = f"conflict/alignment: {exc}"
+                        last_outputs = attempt_outputs
+                        continue
+                    repair_seed = seed + 1_000_000
+                    try:
+                        repaired, _repair_states, repair_alignment = backend.generate_and_verify_states(
+                            validator_feedback_messages(
+                                conflict_prompt,
+                                invalid_output=conflict_text,
+                                validation_error=str(exc),
+                                channel="conflict",
+                            ),
+                            max_new_tokens=384,
+                            seed=repair_seed,
+                            temperature=temperature,
+                            top_p=top_p,
+                        )
+                        conflicts = parse_conflicts(repaired)
+                        assert_lossless_repair(conflict_text, repaired, channel="conflict")
+                        conflict_states, conflict_alignment = backend.replay_assistant_states(
+                            conflict_prompt, repaired
+                        )
+                        repairs["conflict"] = {
+                            "invalid_output": conflict_text,
+                            "validation_error": str(exc),
+                            "repaired_output": repaired,
+                            "seed": repair_seed,
+                            "generation_alignment": alignment_record(repair_alignment),
+                        }
+                        conflict_text = repaired
+                    except Exception as repair_exc:
+                        last_error = f"conflict/repair: {repair_exc}"
+                        last_outputs = {**attempt_outputs, "conflict_repair": locals().get("repaired", "")}
+                        continue
+                conflict_states = AlignedMessageStates(
+                    conflict_states.token_ids, conflict_states.states, conflict_text
+                )
                 normalized = " ".join(
                     f"{i}. {pair.render()}" for i, pair in enumerate(conflicts, 1)
                 )
+                local_prompt = local_imagination_messages(row["standard_description"], normalized)
+                global_prompt = global_imagination_messages(row["image"], normalized)
                 try:
                     local_text, local_states, local_alignment = backend.generate_and_verify_states(
-                        local_imagination_messages(row["standard_description"], normalized),
+                        local_prompt,
                         max_new_tokens=512, seed=seed + 1,
                         temperature=temperature, top_p=top_p,
                     )
                     attempt_outputs["local"] = local_text
+                    try:
+                        parse_associations(local_text, view="local")
+                    except Exception as exc:
+                        if not args.enable_validator_repair:
+                            raise
+                        repair_seed = seed + 1_000_001
+                        repaired, _repair_states, repair_alignment = backend.generate_and_verify_states(
+                            validator_feedback_messages(
+                                local_prompt,
+                                invalid_output=local_text,
+                                validation_error=str(exc),
+                                channel="local",
+                            ),
+                            max_new_tokens=512,
+                            seed=repair_seed,
+                            temperature=temperature,
+                            top_p=top_p,
+                        )
+                        parse_associations(repaired, view="local")
+                        assert_lossless_repair(local_text, repaired, channel="local")
+                        local_states, local_alignment = backend.replay_assistant_states(
+                            local_prompt, repaired
+                        )
+                        repairs["local"] = {
+                            "invalid_output": local_text,
+                            "validation_error": str(exc),
+                            "repaired_output": repaired,
+                            "seed": repair_seed,
+                            "generation_alignment": alignment_record(repair_alignment),
+                        }
+                        local_text = repaired
                     local_states = AlignedMessageStates(
                         local_states.token_ids, local_states.states, local_text
                     )
                     global_text, global_states, global_alignment = backend.generate_and_verify_states(
-                        global_imagination_messages(row["image"], normalized),
+                        global_prompt,
                         max_new_tokens=512, seed=seed + 2,
                         temperature=temperature, top_p=top_p,
                     )
                     attempt_outputs["global"] = global_text
+                    try:
+                        parse_associations(global_text, view="global")
+                    except Exception as exc:
+                        if not args.enable_validator_repair:
+                            raise
+                        repair_seed = seed + 1_000_002
+                        repaired, _repair_states, repair_alignment = backend.generate_and_verify_states(
+                            validator_feedback_messages(
+                                global_prompt,
+                                invalid_output=global_text,
+                                validation_error=str(exc),
+                                channel="global",
+                            ),
+                            max_new_tokens=512,
+                            seed=repair_seed,
+                            temperature=temperature,
+                            top_p=top_p,
+                        )
+                        parse_associations(repaired, view="global")
+                        assert_lossless_repair(global_text, repaired, channel="global")
+                        global_states, global_alignment = backend.replay_assistant_states(
+                            global_prompt, repaired
+                        )
+                        repairs["global"] = {
+                            "invalid_output": global_text,
+                            "validation_error": str(exc),
+                            "repaired_output": repaired,
+                            "seed": repair_seed,
+                            "generation_alignment": alignment_record(repair_alignment),
+                        }
+                        global_text = repaired
                     global_states = AlignedMessageStates(
                         global_states.token_ids, global_states.states, global_text
                     )
@@ -171,14 +300,7 @@ def main() -> None:
                     "global": global_states,
                 })
                 alignment = {
-                    name: {
-                        "replay": report.replay.__dict__,
-                        "processed_score_token_accuracy": report.processed_score_token_accuracy,
-                        "raw_head_token_accuracy_diagnostic": report.raw_head_token_accuracy,
-                        "emitted_token_mean_logprob": report.emitted_token_mean_logprob,
-                        "sampling_mode": report.sampling_mode,
-                        "communication_state_definition": report.communication_state_definition,
-                    }
+                    name: alignment_record(report)
                     for name, report in {
                         "conflict": conflict_alignment,
                         "local": local_alignment,
@@ -206,6 +328,12 @@ def main() -> None:
                     "plan": plan_to_record(plan),
                     "alignment": alignment,
                 }
+                if repairs:
+                    record["validator_repair"] = {
+                        "policy_version": REPAIR_POLICY_VERSION,
+                        "repair_prompt_sha256": repair_prompt_hash,
+                        "channels": repairs,
+                    }
                 index.write(json.dumps(record, ensure_ascii=False) + "\n")
                 index.flush()
                 completed_success += 1

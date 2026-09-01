@@ -450,3 +450,55 @@ class QwenBackend:
             sampling_mode="sample" if temperature > 0 else "greedy",
             communication_state_definition="teacher_forced_post_token",
         )
+
+    @torch.no_grad()
+    def replay_assistant_states(
+        self,
+        messages: list[dict[str, Any]],
+        text: str,
+    ) -> tuple[AlignedMessageStates, dict[str, Any]]:
+        """Capture post-token states for fixed text under the original prompt.
+
+        This is used only after validator-feedback serialization repair.  The
+        repaired answer is generated in a separate recovery turn, then replayed
+        under the unchanged HOMER prompt so its communication states remain
+        conditioned on the same input as ordinary traces.  It is intentionally
+        reported as teacher-forced replay, not generation/replay alignment.
+        """
+        prompt_inputs = self.encode(messages, add_generation_prompt=True)
+        prompt_length = prompt_inputs["input_ids"].shape[1]
+        replay_inputs = self.encode(
+            [*messages, {"role": "assistant", "content": [{"type": "text", "text": text}]}],
+            add_generation_prompt=False,
+        )
+        token_ids = replay_inputs["input_ids"][:, prompt_length:]
+        if token_ids.shape[1] < 1:
+            raise AssertionError("repaired assistant answer replayed to zero tokens")
+        decoded = self.processor.batch_decode(
+            token_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0].strip()
+        if decoded != text.strip():
+            raise AssertionError("repaired assistant text does not round-trip exactly")
+        layer = find_last_decoder_layer(self.model)
+        capture = SequenceStateCapture()
+        handle = layer.register_forward_hook(capture)
+        try:
+            self.model(
+                **replay_inputs,
+                use_cache=False,
+                output_hidden_states=False,
+                logits_to_keep=1,
+            )
+        finally:
+            handle.remove()
+        states = teacher_forced_token_states(
+            capture.require(),
+            prompt_length=prompt_length,
+            generated_token_ids=token_ids,
+        )
+        return states, {
+            "state_capture_mode": "teacher_forced_replay_after_validator_repair",
+            "exact_text_roundtrip": True,
+            "assistant_token_count": int(token_ids.shape[1]),
+            "communication_state_definition": "teacher_forced_post_token",
+        }

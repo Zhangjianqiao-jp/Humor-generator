@@ -68,8 +68,10 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.5
 The real-trace GPU engineering smoke has passed. The first training stage is
 only three serial 64-train/24-validation SFT-receiver pilots: Learned+KL,
 Typed+KL, Typed without KL. Subsets use seeded hash sampling. After optimization,
-one GPU job creates fixed 3-seed validation generations and an anonymous pilot
-packet; automation stops for independent rating. Full-data and Base-receiver
+one GPU job creates fixed 3-seed Text-HOMER, StateBridge, and learned-bridge
+validation generations plus an anonymous mirrored Group-of-3 pilot packet;
+automation stops for independent rating. Group-of-10 remains the confirmatory
+paper endpoint. Full-data and Base-receiver
 experiments are evidence-gated follow-ups, not an automatic matrix.
 
 ## Evaluation

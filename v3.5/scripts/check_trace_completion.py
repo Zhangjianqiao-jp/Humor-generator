@@ -65,12 +65,31 @@ def main() -> None:
                 raise ValueError(f"invalid split {record.get('split')!r}")
             if set(record.get("alignment", {})) != {"conflict", "local", "global"}:
                 raise ValueError("missing channel alignment evidence")
+            repairs = record.get("validator_repair")
+            repaired_channels = set()
+            if repairs is not None:
+                if repairs.get("policy_version") != "validator-feedback-format-only-v1":
+                    raise ValueError("unknown validator repair policy")
+                if not re.fullmatch(r"[0-9a-f]{64}", repairs.get("repair_prompt_sha256", "")):
+                    raise ValueError("invalid validator repair prompt hash")
+                current_repair_hash = sha256(ROOT / "src/humor_generator_v35/homer/repair.py")
+                if repairs["repair_prompt_sha256"] != current_repair_hash:
+                    raise ValueError("stale validator repair prompt hash")
+                repaired_channels = set(repairs.get("channels", {}))
             for channel, evidence in record["alignment"].items():
-                replay = evidence.get("replay", {})
-                if replay.get("mean_cosine", 0) < 0.98 or replay.get("min_cosine", 0) < 0.90:
-                    raise ValueError(f"failed causal replay evidence for {channel}")
-                if evidence.get("sampling_mode") not in {"greedy", "sample"}:
-                    raise ValueError(f"missing sampling mode for {channel}")
+                if channel in repaired_channels:
+                    if evidence.get("state_capture_mode") != "teacher_forced_replay_after_validator_repair":
+                        raise ValueError(f"invalid repaired replay mode for {channel}")
+                    if evidence.get("exact_text_roundtrip") is not True:
+                        raise ValueError(f"failed repaired text replay for {channel}")
+                    if evidence.get("assistant_token_count", 0) < 1:
+                        raise ValueError(f"empty repaired replay for {channel}")
+                else:
+                    replay = evidence.get("replay", {})
+                    if replay.get("mean_cosine", 0) < 0.98 or replay.get("min_cosine", 0) < 0.90:
+                        raise ValueError(f"failed causal replay evidence for {channel}")
+                    if evidence.get("sampling_mode") not in {"greedy", "sample"}:
+                        raise ValueError(f"missing sampling mode for {channel}")
                 if evidence.get("communication_state_definition") != "teacher_forced_post_token":
                     raise ValueError(f"invalid communication state definition for {channel}")
         except Exception as exc:

@@ -22,6 +22,10 @@ out=outputs/pilot_validation
 mkdir -p "$out"
 common="--receiver sft --split validation --seeds 20260830 20260831 20260832 --exclude-clusters-file outputs/pilot/typed_sft_kl/run_manifest.json"
 
+python scripts/generate_formal_baseline.py --condition text_homer --label text_homer \
+  --config configs/pilot/learned_sft_kl.yaml --output "$out/text_homer.jsonl" $common
+python scripts/generate_formal_baseline.py --condition statebridge --label statebridge \
+  --config configs/pilot/learned_sft_kl.yaml --output "$out/statebridge.jsonl" $common
 python scripts/generate_formal_baseline.py --condition full_plan_text --label full_plan_text \
   --config configs/pilot/learned_sft_kl.yaml --output "$out/full_plan_text.jsonl" $common
 python scripts/generate_formal_baseline.py --condition budget_text --label budget_text \
@@ -46,13 +50,19 @@ python scripts/generate_formal_baseline.py --condition typed_learned_latent --la
   --output "$out/typed_no_kl.jsonl" $common
 
 python scripts/build_group_packets.py \
-  --generations "$out/full_plan_text.jsonl" "$out/budget_text.jsonl" \
+  --generations "$out/text_homer.jsonl" "$out/statebridge.jsonl" \
+    "$out/full_plan_text.jsonl" "$out/budget_text.jsonl" \
     "$out/token_embedding.jsonl" "$out/learned_kl.jsonl" "$out/typed_kl.jsonl" \
     "$out/typed_quantized.jsonl" "$out/typed_no_kl.jsonl" \
   --packet "$out/blind_packet.jsonl" \
   --private-mapping "$out/private_mapping.jsonl" \
   --group-size 3 --family pilot_architecture --mirror-sides \
   --calibration data/cache/judge_calibration.json \
+  --comparison text_homer:statebridge \
+  --comparison text_homer:learned_kl \
+  --comparison text_homer:typed_kl \
+  --comparison statebridge:learned_kl \
+  --comparison statebridge:typed_kl \
   --comparison token_embedding:learned_kl \
   --comparison token_embedding:typed_kl \
   --comparison typed_no_kl:typed_kl \

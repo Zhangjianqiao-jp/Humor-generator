@@ -1,7 +1,7 @@
 #!/bin/sh
-#PJM -L rscgrp=c-batch
+#PJM -L rscgrp=b-batch
 #PJM -L gpu=1
-#PJM -L elapse=08:00:00
+#PJM -L elapse=02:00:00
 #PJM -j
 #PJM -S
 
@@ -17,18 +17,7 @@ export TOKENIZERS_PARALLELISM=false
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
-: "${TRACE_RETRY_ROUND:=0}"
-: "${TRACE_CLUSTER_IDS:=}"
-: "${TRACE_VALIDATOR_REPAIR:=0}"
-
-cluster_args=""
-if [ -n "$TRACE_CLUSTER_IDS" ]; then
-  cluster_args=$(printf '%s' "$TRACE_CLUSTER_IDS" | tr ':' ' ')
-fi
-repair_arg=""
-if [ "$TRACE_VALIDATOR_REPAIR" = "1" ]; then
-  repair_arg="--enable-validator-repair"
-fi
+: "${TRACE_RETRY_ROUND:=7}"
 
 python scripts/check_environment.py
 python scripts/check_v35_isolation.py
@@ -36,9 +25,9 @@ python scripts/verify_frozen_artifacts.py
 python scripts/verify_clustered_dataset.py
 python scripts/cache_planner_traces.py \
   --splits train validation \
+  --cluster-ids nycc_325 nycc_775 \
   --attempts 5 \
   --retry-round "$TRACE_RETRY_ROUND" \
-  ${cluster_args:+--cluster-ids $cluster_args} \
-  $repair_arg \
+  --enable-validator-repair \
   --output data/cache/planner_traces_homer_strict_v35
 test -s data/cache/planner_traces_homer_strict_v35/index.jsonl

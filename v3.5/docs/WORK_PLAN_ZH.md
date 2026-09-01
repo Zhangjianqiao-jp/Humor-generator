@@ -47,6 +47,7 @@ Learned 与 Typed 的 trainable parameter count 必须完全相同。官方 Stat
 - `semantics` 保存 Planner 的真实原始输出，而不是占位说明；
 - plan、sampling、seed、attempt、模型 revision、adapter 与 tensor SHA-256 全部写入 index；
 - 每条 trace 还必须记录实际生成它的 Git commit，并固定 `trace_inputs.jsonl`、HOMER prompt 源文件和 frozen-adapter manifest SHA-256。受控重试可以来自多个 commit，但只有后三种实际输入/模型身份哈希完全一致时才能合并；不能把迁移代码的 commit 冒充为 tensor 的生成 commit。`trace_inputs` 只包含实际进入 Planner 的 cluster/split/image hash/description，使 caption 清洗不会伪造 trace 失效，同时任何真实 Planner 输入变化都会被门禁拒绝。未提交或 v3.5 工作树不干净时，正式 trace 生成直接失败。
+- 若原始输出只违反 schema，允许统一的 `validator-feedback-format-only-v1` 恢复：在未改动的 HOMER 对话后附原始错误输出和 validator error，要求同一 Planner 只修复序列化或显式 opposition delimiter。自动校验修复前后语义字符串守恒；任何新增、删除或改写都会拒绝。最终 communication states 必须把修复文本放回原始 HOMER prompt 做 teacher-forced post-token replay，不能把 repair prompt 下的 states 混入正式 trace。原始/修复输出、error、seed、生成参数、repair prompt hash 和 alignment 均写入 index。
 
 正式 train/validation trace 路径固定为 `data/cache/planner_traces_homer_strict_v35`。旧 v3.0 trace 禁止复制或引用。test trace 在模型/bridge 选择冻结后另行生成，避免测试集参与开发。
 
@@ -99,7 +100,7 @@ Gate E 通过前禁止正式训练。
 2. Typed + KL；
 3. Typed + no-KL。
 
-64/24 clusters 通过 `SHA256(seed, split, cluster_id)` 固定抽样，不按编号截断。24 张只用于 early stopping；真实 pilot 生成在剩余 40 张 outer-validation 图片上进行，避免用模型选择图片重复证明模型收益。三个优化作业串行完成后，使用 3 个共同 seeds 生成 `full-plan text / budget text / token embedding / Learned+KL / Typed+KL / Typed-quantized / Typed-no-KL`，并构造匿名、双向 Group-of-3 packet。流程随后停止等待独立评审；不得仅凭 validation loss 自动扩展。优胜条件同时要求 validation NLL、matched-vs-hard-negative margin和 outer-validation 真实生成不退化。
+64/24 clusters 通过 `SHA256(seed, split, cluster_id)` 固定抽样，不按编号截断。24 张只用于 early stopping；真实 pilot 生成在剩余 40 张 outer-validation 图片上进行，避免用模型选择图片重复证明模型收益。三个优化作业串行完成后，使用 3 个共同 seeds 生成 `Text-HOMER / StateBridge / full-plan text / budget text / token embedding / Learned+KL / Typed+KL / Typed-quantized / Typed-no-KL`，并构造匿名、双向 Group-of-3 packet。流程随后停止等待独立评审；不得仅凭 validation loss 自动扩展。Group-of-3 只承担低成本筛选；最终主结论必须使用 Group-of-10。优胜条件同时要求 validation NLL、matched-vs-hard-negative margin和 outer-validation 真实生成不退化。
 
 ### Confirmatory C：只扩展 pilot 优胜者
 
@@ -169,10 +170,10 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - v2.5/v3.0 executable isolation：通过；
 - frozen adapters SHA-256：通过；
 - image-clustered split/hash/leakage：通过；
-- CPU tests：56/56 通过（以后以最新 test 输出为准）；
+- CPU tests：59/59 通过（以后以最新 test 输出为准）；
 - 正式 v3.5 GPU trace/bridge smoke：作业 6649172 已通过；
 - 数据质量修复：Electronic Sheep 的标量 `UNKNOWN` 曾被错误迭代成 `U/N/K` caption；已删除 133 个无效训练行。各 split 数量保持 602/64/97/24/23，但具体 cluster 成员和部分 standard-description 来源发生变化，不能据“数量相同”复用全部 trace；
-- 正式 trace 生成：旧目标作业 6653791 已取消。逐条核验后保留 546/666 条兼容 trace；52 条不兼容记录及 tensor 已可恢复地隔离，其中 34 条 description 改变、18 条不再属于 train+validation。新作业 6654222 正在补齐 120 条；tmux 监控只在严格数据/trace gate 后串行触发 pilot；
+- 正式 trace 生成：当前 664/666。只剩训练集 `nycc_325` 与 `nycc_775`；前者进入三个 pilot 的固定 64-cluster 子集，禁止绕过。下一作业仅恢复这两条，固定原 Qwen revision、Planner adapter 与 HOMER prompt，并启用有语义守恒检查的 validator-feedback repair；该短作业使用当时有空闲容量且 7B 4-bit 足以运行的单张 `b-batch` GPU，而不是等待已满的 `c-batch`。达到严格 666/666 后监控才串行触发 pilot；
 - 正式训练：未启动，后续由 trace gate 串行触发三个 pilot；每个 pilot 只申请 1 GPU、4 小时上限；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。
