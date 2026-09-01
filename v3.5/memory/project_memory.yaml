@@ -1,0 +1,194 @@
+schema_version: 1
+memory_id: humor_generator_v35
+scope: v3.5_only
+
+project:
+  objective: >-
+    Determine whether structured continuous communication from a frozen 7B
+    humor Planner improves a frozen 7B image-caption Generator relative to
+    strong text and training-free latent baselines.
+  research_question: >-
+    Can a typed learned latent bridge transmit grounding, conflict, and
+    associative-imagination information more effectively than Text-HOMER,
+    budget-matched text/token controls, and StateBridge without reducing image
+    grounding or absolute humor quality?
+  non_goals:
+    - Do not import or execute v2.5 or v3.0 pipelines.
+    - Do not jointly train the Planner and Generator in the first study.
+    - Do not run preference learning before stable bridge benefit is established.
+    - Do not claim latent superiority from reconstruction loss or diversity alone.
+
+architecture:
+  planner:
+    base: Qwen/Qwen2.5-VL-7B-Instruct
+    revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+    adapter: artifacts/checkpoints/planner_sft
+    frozen: true
+    outputs: [grounding_description, conflict_scripts, local_association, global_association]
+  generator:
+    base: Qwen/Qwen2.5-VL-7B-Instruct
+    revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+    adapter: artifacts/checkpoints/generator_sft
+    frozen: true
+    receiver_primary: sft
+  bridge:
+    only_trainable_component: true
+    communication_state: teacher_forced_post_token
+    total_slots: 24
+    typed_slots: {conflict: 8, local_association: 8, global_association: 8}
+    bottleneck_dim: 256
+
+data_contract:
+  split_unit: NYCC_image_cluster
+  manifest: data/processed/latent_bridge_v35/manifest.json
+  manifest_sha256: c26c5999645d01089a937d0cb86e1982ccd4ea737f807fa698e398279a7197d8
+  splits:
+    train: 602
+    validation: 64
+    internal_test: 97
+    official_hia_unseen_test: 24
+    official_hia_seen_diagnostic: 23
+  primary_confirmatory_images: 121
+  leakage_contract:
+    - Split by image cluster, never caption row.
+    - Official HIA test clusters never fit the bridge.
+    - The 23 adapter-seen official images are diagnostic only.
+
+trace_contract:
+  index: data/cache/planner_traces_homer_strict_v35/index.jsonl
+  required_clusters: 666
+  required_schema: 3
+  validation:
+    - At least two explicit conflict pairs.
+    - Every association is exactly root-to-step1-to-step2-to-step3.
+    - Hidden states and replayed emitted tokens align without trimming or padding.
+    - Model revision, adapter, prompts, seed, generation and tensor hashes are recorded.
+  validator_repair:
+    policy: validator-feedback-format-only-v1
+    constraints:
+      - Preserve semantic strings exactly.
+      - Replay repaired text under the original HOMER prompt.
+      - Record both invalid and repaired outputs and repair provenance.
+
+conditions:
+  text:
+    - text_homer
+    - full_plan_text
+    - budget_text
+  training_free_latent:
+    - token_embedding
+    - statebridge
+  learned:
+    - learned_kl
+    - typed_kl
+    - typed_no_kl
+    - typed_quantized
+  fairness:
+    - Learned and Typed bridges have equal trainable parameter counts.
+    - All communication controls use a 24-slot budget where applicable.
+    - StateBridge three-channel 24-slot mode is labelled an adaptation, not an exact reproduction.
+
+experiment_plan:
+  phases:
+    - id: E
+      name: engineering_smoke
+      status: complete
+      evidence: docs/ENGINEERING_SMOKE_REPORT_ZH.md
+    - id: T
+      name: formal_train_validation_traces
+      status: complete
+      exit_gate: exactly_666_validated_traces
+      evidence: data/cache/planner_traces_homer_strict_v35/index.jsonl
+    - id: P1
+      name: learned_sft_kl_pilot
+      status: blocked_on_single_mig_backward_smoke
+      config: configs/pilot/learned_sft_kl.yaml
+      budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
+    - id: P2
+      name: typed_sft_kl_pilot
+      status: pending
+      config: configs/pilot/typed_sft_kl.yaml
+      budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
+    - id: P3
+      name: typed_sft_no_kl_pilot
+      status: pending
+      config: configs/pilot/typed_sft_no_kl.yaml
+      budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
+    - id: P4
+      name: outer_validation_generation
+      status: pending
+      design: {images: 40, shared_seeds: 3, screening_group_size: 3}
+      stop_after: independent_blind_rating_required
+    - id: C
+      name: confirmatory_training_and_test
+      status: evidence_gated
+      design:
+        full_train_clusters: 602
+        validation_clusters: 64
+        seeds: 3
+        primary_test_images: 121
+        candidates_per_image: 10
+        group_size: 10
+    - id: PL
+      name: preference_learning
+      status: disabled_until_bridge_go
+
+evaluation:
+  pilot:
+    protocol: mirrored_blind_group_of_3
+    statistical_unit: image_cluster
+    role: screening_only
+  confirmatory:
+    protocol: mirrored_blind_group_of_10
+    statistical_unit: image_cluster
+    raters: multiple_independent
+    uncertainty: hierarchical_image_rater_bootstrap_95ci
+  required_metrics:
+    - overall_win_rate
+    - best_pick_win_rate
+    - absolute_good_weak_bad
+    - humor
+    - grounding
+    - originality
+    - specificity
+    - hallucination
+    - generic_template_rate
+    - good_only_diversity
+    - human_angle_coverage
+
+decision_rules:
+  pilot_go_requires:
+    - Validation NLL does not regress.
+    - Matched versus hard-negative semantic margin improves.
+    - Outer-validation generation does not regress against Text-HOMER and StateBridge.
+    - Grounding, hallucination, and absolute good rate do not regress.
+  confirmatory_claim_requires:
+    - Directionally consistent results across at least three seeds.
+    - Image-clustered confidence intervals and multiple-rater analysis.
+    - Quality-preserving diversity gains on the good-caption subset.
+  no_go:
+    - Stop bridge scaling if pilot gains exist only in loss-space.
+    - Do not use DPO to rescue an unproven communication mechanism.
+
+resource_policy:
+  priority: earliest_safe_start
+  rules:
+    - Query all legal GPU groups before accepting a delayed reservation.
+    - Prefer available MIG slices when model smoke confirms sufficient memory.
+    - Keep at most one active copy after a faster duplicate reaches RUN.
+    - Serialize pilots so released resources can be reused immediately.
+    - Never increase resource requests merely for safety margin.
+    - Multi-slice MIG is forbidden for this PyTorch/PEFT path after allocator failure; validate one slice before resuming.
+
+authoritative_references:
+  - {id: homer, venue: ICLR_2026, url: "https://openreview.net/pdf?id=SzaRhPom4o"}
+  - {id: interlat, venue: ACL_2026, url: "https://aclanthology.org/2026.acl-long.1248/"}
+  - {id: statebridge, venue: COLM_2026, url: "https://arxiv.org/abs/2608.13317"}
+  - {id: humor_in_ai, venue: NeurIPS_2024, url: "https://proceedings.neurips.cc/paper_files/paper/2024/file/e297fb6cd1690ee5b39c5bb4c58ad801-Paper-Datasets_and_Benchmarks_Track.pdf"}
+
+canonical_docs:
+  - docs/WORK_PLAN_ZH.md
+  - docs/METHOD_AUDIT_V35_ZH.md
+  - docs/HOMER_REPRODUCTION_LEDGER_ZH.md
+  - docs/GROUP3_JUDGE_PROMPT_ZH.md
+  - docs/ENGINEERING_SMOKE_REPORT_ZH.md

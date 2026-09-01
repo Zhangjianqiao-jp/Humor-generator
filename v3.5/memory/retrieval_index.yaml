@@ -1,0 +1,31 @@
+schema_version: 1
+topics:
+  current_status:
+    files: [memory/working_state.yaml]
+    freshness: always_revalidate
+  research_goal_and_gates:
+    files: [memory/project_memory.yaml, docs/WORK_PLAN_ZH.md]
+  method_risks_and_claim_limits:
+    files: [docs/METHOD_AUDIT_V35_ZH.md, memory/project_memory.yaml]
+  homer_prompt_and_reproduction:
+    files: [docs/HOMER_REPRODUCTION_LEDGER_ZH.md, src/humor_generator_v35/homer/prompts.py]
+  trace_provenance:
+    files:
+      - data/cache/planner_traces_homer_strict_v35/index.jsonl
+      - scripts/check_trace_completion.py
+  bridge_training:
+    files:
+      - scripts/train_bridge.py
+      - configs/pilot/learned_sft_kl.yaml
+      - configs/pilot/typed_sft_kl.yaml
+      - configs/pilot/typed_sft_no_kl.yaml
+  evaluation_and_blinding:
+    files:
+      - docs/GROUP3_JUDGE_PROMPT_ZH.md
+      - jobs/pilot_validation_generation.pjm
+      - configs/evaluation/group_evaluation.yaml
+  material_history:
+    files: [memory/episodes.jsonl]
+  legacy_boundary:
+    files: [README.md]
+    note: v2.5_and_v3.0_are_non_executable_evidence_only

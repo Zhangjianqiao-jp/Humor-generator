@@ -1,0 +1,73 @@
+schema_version: 1
+memory_id: humor_generator_v35_working
+volatile: true
+observed_at: "2026-09-01T14:29:55+09:00"
+must_revalidate: true
+source_commit: 9871f4f8dee8c7685690c7c711407452b0e61128
+branch: latent
+
+current_phase: P1_blocked_on_single_mig_backward_smoke
+trace_gate:
+  status: passed
+  available: 666
+  required: 666
+  index_sha256: f4ffa1ef4a39e616ced0d94f1f6334da930d79c726873889aba05a30bfedfcef
+  recovery_note: >-
+    nycc_325 and nycc_775 succeeded on new raw generations; validator repair
+    was enabled but was not invoked in either final accepted trace.
+
+last_job:
+  job_id: "6665808"
+  name: p_l_sft_m
+  scheduler_state: failed
+  resource_group: b-batch-mig
+  gpu_slices: 2
+  started_at: "2026-09-01T14:25:50+09:00"
+  failed_before_first_example_completed: true
+  error: >-
+    PyTorch CUDACachingAllocator internal assertion NVML_SUCCESS during the
+    first PEFT MLP forward on a model sharded across two MIG slices.
+  evidence: p_l_sft_m.6665808.out
+  interpretation: allocator_or_multi_mig_runtime_failure_not_oom_and_not_scientific_result
+
+immediate_gate:
+  action: run_single_mig_real_backward_smoke
+  job: jobs/single_mig_bridge_backward_smoke.pjm
+  resource_group: b-batch-mig
+  gpu_slices: 1
+  success_requires:
+    - finite loss
+    - finite gradient norm
+    - nonzero bridge update
+    - no allocator or OOM error
+
+remaining_sequence_after_smoke_pass:
+  - learned_sft_kl_pilot
+  - typed_sft_kl_pilot
+  - typed_sft_no_kl_pilot
+  - outer_validation_40_images_x_3_seeds
+  - mirrored_group_of_3_packet
+  - stop_for_independent_raters
+
+eta:
+  single_mig_smoke: "normally under 20 minutes; hard cap 30 minutes"
+  current_pilot_after_smoke: "unknown until one-MIG throughput is measured; hard cap 4 hours"
+  three_pilots_and_generation: "provisional 8-16 GPU-hours after a stable resource path is confirmed"
+  excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
+
+next_agent_actions:
+  - Submit and verify the one-MIG backward smoke reaches RUN.
+  - Require `single_mig_typed_sft_backward.json` with status pass.
+  - If it passes, restart P1 from an empty output directory using one MIG slice.
+  - If it fails for memory, do not retry MIG; use the earliest full GPU allocation.
+  - Never infer success from job disappearance; require `complete.json`.
+
+automation:
+  tmux_session: stopped_pending_resource_smoke
+  reason: prevent_automatic_resubmission_after_allocator_failure
+
+verification_commands:
+  - pjstat
+  - tail -n 120 p_l_sft_m.6665808.out
+  - .venv/bin/python scripts/check_trace_completion.py
+  - .venv/bin/python scripts/validate_project_memory.py

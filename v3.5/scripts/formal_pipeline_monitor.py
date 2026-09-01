@@ -128,18 +128,33 @@ def submit_cache(
     return parse_submitted_job(command(argv))
 
 
-def submit_training(name: str, job_name: str, config: str, output: str) -> str:
-    return parse_submitted_job(command([
-        "pjsub", "-N", job_name,
+def submit_training(
+    name: str,
+    job_name: str,
+    config: str,
+    output: str,
+    *,
+    resource_group: str | None = None,
+    gpu_count: int = 1,
+) -> str:
+    argv = ["pjsub", "-N", job_name]
+    if resource_group:
+        argv.extend(["-L", f"rscgrp={resource_group},elapse=04:00:00,gpu={gpu_count}"])
+    argv.extend([
         "-x", f"BRIDGE_CONFIG={config},BRIDGE_OUTPUT={output}",
         "jobs/formal_bridge_train.pjm",
-    ]))
+    ])
+    return parse_submitted_job(command(argv))
 
 
-def submit_pilot_evaluation() -> str:
-    return parse_submitted_job(command([
-        "pjsub", "-N", "pilot_val_gen", "jobs/pilot_validation_generation.pjm",
-    ]))
+def submit_pilot_evaluation(
+    *, resource_group: str | None = None, gpu_count: int = 1,
+) -> str:
+    argv = ["pjsub", "-N", "pilot_val_gen"]
+    if resource_group:
+        argv.extend(["-L", f"rscgrp={resource_group},elapse=04:00:00,gpu={gpu_count}"])
+    argv.append("jobs/pilot_validation_generation.pjm")
+    return parse_submitted_job(command(argv))
 
 
 def verify_trace_gate() -> None:
@@ -168,6 +183,8 @@ def initialize(
     target_clusters: list[str] | None = None,
     validator_repair: bool = False,
     cache_resource_group: str | None = None,
+    training_resource_group: str | None = None,
+    training_gpu_count: int = 1,
 ) -> dict[str, Any]:
     if state_path.is_file():
         return json.loads(state_path.read_text())
@@ -181,6 +198,8 @@ def initialize(
         "target_clusters": target_clusters or [],
         "validator_repair": validator_repair,
         "cache_resource_group": cache_resource_group,
+        "training_resource_group": training_resource_group,
+        "training_gpu_count": training_gpu_count,
         "training_jobs": {},
         "events": [],
     }
@@ -255,7 +274,11 @@ def advance_once(
                 return True
             # At most one formal GPU job exists at a time. Submit the next
             # pilot only after the preceding complete.json passed.
-            job_id = submit_training(name, job_name, config, output)
+            job_id = submit_training(
+                name, job_name, config, output,
+                resource_group=state.get("training_resource_group"),
+                gpu_count=int(state.get("training_gpu_count", 1)),
+            )
             jobs[name] = {
                 "job_id": job_id, "complete": False, "recorded_at": iso(),
             }
@@ -279,7 +302,10 @@ def advance_once(
             append_event(state, "pilot_validation_generation_missing", job_id=job_id)
             atomic_json(state_path, state)
             return True
-        job_id = submit_pilot_evaluation()
+        job_id = submit_pilot_evaluation(
+            resource_group=state.get("training_resource_group"),
+            gpu_count=int(state.get("training_gpu_count", 1)),
+        )
         state["pilot_evaluation_job"] = {"job_id": job_id, "recorded_at": iso()}
         state["status"] = "monitoring_pilot_validation_generation"
         append_event(state, "pilot_validation_generation_submitted", job_id=job_id)
@@ -320,11 +346,20 @@ def main() -> None:
     parser.add_argument("--target-clusters", nargs="+")
     parser.add_argument("--validator-repair", action="store_true")
     parser.add_argument("--cache-resource-group", choices=["b-batch", "c-batch"])
+    parser.add_argument(
+        "--training-resource-group",
+        choices=["b-batch", "b-batch-mig", "c-batch"],
+    )
+    parser.add_argument("--training-gpu-count", type=int, default=1)
     parser.add_argument("--poll-seconds", type=int, default=1200)
     parser.add_argument("--confirm-absence-seconds", type=int, default=60)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
-    if args.poll_seconds < 1 or args.confirm_absence_seconds < 0:
+    if (
+        args.poll_seconds < 1
+        or args.confirm_absence_seconds < 0
+        or args.training_gpu_count < 1
+    ):
         raise ValueError("invalid monitoring intervals")
     state = initialize(
         args.state,
@@ -333,6 +368,8 @@ def main() -> None:
         target_clusters=args.target_clusters,
         validator_repair=args.validator_repair,
         cache_resource_group=args.cache_resource_group,
+        training_resource_group=args.training_resource_group,
+        training_gpu_count=args.training_gpu_count,
     )
     while True:
         done = advance_once(
