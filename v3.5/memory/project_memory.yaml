@@ -31,6 +31,7 @@ architecture:
     adapter: artifacts/checkpoints/generator_sft
     frozen: true
     receiver_primary: sft
+    visual_token_budget: {min: 256, max: 1280, shared_across_all_conditions: true}
   bridge:
     only_trainable_component: true
     communication_state: teacher_forced_post_token
@@ -86,6 +87,7 @@ conditions:
   fairness:
     - Learned and Typed bridges have equal trainable parameter counts.
     - All communication controls use a 24-slot budget where applicable.
+    - All text, training-free latent, and learned conditions use the same 256--1280 visual-token budget.
     - StateBridge three-channel 24-slot mode is labelled an adaptation, not an exact reproduction.
 
 experiment_plan:
@@ -101,8 +103,9 @@ experiment_plan:
       evidence: data/cache/planner_traces_homer_strict_v35/index.jsonl
     - id: P1
       name: learned_sft_kl_pilot
-      status: queued_native_full_gpu
+      status: visualcap_v2_pending_gpu_stress
       config: configs/pilot/learned_sft_kl.yaml
+      output: outputs/pilot/learned_sft_kl_visualcap_v2
       budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
     - id: P2
       name: typed_sft_kl_pilot

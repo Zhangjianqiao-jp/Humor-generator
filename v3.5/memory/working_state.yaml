@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T15:43:39+09:00"
+observed_at: "2026-09-01T19:10:00+09:00"
 must_revalidate: true
-source_commit: f4321e9ef486b3bdef2ac90295fa13b25f6257b0
+source_commit: ef175638cfb1592f8801ed36aed4762da4eaef60
 branch: latent
 
-current_phase: P1_queued_native_full_gpu
+current_phase: P1_visualcap_v2_engineering_verified_pending_gpu_stress
 trace_gate:
   status: passed
   available: 666
@@ -17,31 +17,33 @@ trace_gate:
     was enabled but was not invoked in either final accepted trace.
 
 latest_formal_attempt:
-  job_id: "6665918"
-  name: p_l_sft_1m
+  job_id: "6666633"
+  name: p1_native_c
   scheduler_state: failed
-  resource_group: b-batch-mig
-  gpu_slices: 1
-  started_at: "2026-09-01T14:33:41+09:00"
-  failed_before_first_example_completed: true
+  resource_group: c-batch
+  gpu_slices: 0
+  full_gpu: NVIDIA_H100_80GB_HBM3
+  started_at: "2026-09-01T16:55:00+09:00"
+  failed_before_first_example_completed: false
   error: >-
-    PyTorch CUDACachingAllocator NVML_SUCCESS internal assertion in the vision
-    tower PEFT MLP while preparing the first formal P1 image.
-  evidence: p_l_sft_1m.6665918.out
-  preserved_output: outputs/failed/learned_sft_kl_6665918_single_mig
-  interpretation: single_mig_runtime_incompatible_not_scientific_result
+    Real CUDA OOM after the first-example smoke passed: 78.47 GiB in use,
+    720 MiB free, and a further 1.15 GiB allocation requested.
+  evidence: p1_native_c.6666633.out
+  preserved_output: outputs/pilot/learned_sft_kl_native_full
+  interpretation: dynamic_resolution_input_scale_failure_not_scientific_result
 
 resource_diagnosis:
   two_mig_formal_job: "6665808 failed with the same allocator family"
   one_mig_smoke_job: "6665915 passed on nycc_101/nycc_102"
   one_mig_smoke_peak_allocated_bytes: 6990769664
   conclusion: >-
-    The convenient single-example smoke was a false-negative resource gate;
-    all MIG configurations are disallowed for formal bridge training.
-  compatible_idle_full_gpu_at_submission: false
-  retained_job: "6666633"
+    MIG remains disallowed. The full-H100 allocator path works, but the old
+    first-only smoke was also a false-negative because epoch row 2 nycc_888 is
+    4750x4494 versus row 1 nycc_415 at 797x661.
+  compatible_idle_full_gpu_at_submission: true_for_job_6666633
+  retained_job: null
   retained_resource_group: c-batch
-  predicted_start: "2026-09-01T20:00:00+09:00"
+  predicted_start: null
   cancelled_slower_duplicate: "6666632 on b-batch; predicted 2026-09-04T03:00:00+09:00"
   second_b_batch_probe: "6667285 cancelled; node FREE did not mean allocatable GPU and scheduler predicted 2026-09-04T09:00:00+09:00"
 
@@ -50,28 +52,31 @@ native_full_gpu_fix:
   expandable_segments: false
   device_map: {"": 0}
   minimum_visible_memory_gib: 40
-  exact_formal_first_example_smoke: required_in_same_job
-  smoke_cluster: nycc_415
+  exact_formal_first_plus_max_image_smoke: required_in_same_job
+  smoke_clusters_expected: [nycc_415, nycc_888]
+  visual_token_budget: {min: 256, max: 1280, shared_across_conditions: true}
+  gradient_checkpointing: true
+  per_example_memory_provenance: current_example.json
   smoke_failure_behavior: stop_before_training
-  code_commit: f4321e9ef486b3bdef2ac90295fa13b25f6257b0
+  code_commit: ef175638cfb1592f8801ed36aed4762da4eaef60
 
 program_risk_audit:
   overall: medium_continue_with_evidence_gates
   report: docs/PROGRAM_RISK_ASSESSMENT_ZH.md
-  tests_passed: 63
+  tests_passed: 65
   deterministic_fixes:
     - pilot evaluation uses native allocator and the current P1 checkpoint path
     - monitor validates checkpoint, manifest, metrics, and finite completion fields
     - blind packet IDs must match the private mapping exactly
     - exact resource smoke and formal training now share the same torch seed
-  highest_open_risk: native_full_gpu_path_not_yet_executed
+  highest_open_risk: visualcap_v2_max_image_backward_not_yet_executed_on_gpu
 
 immediate_gate:
-  action: monitor_job_6666633
+  action: submit_visualcap_v2_p1_after_commit
   required_resource: one_full_c_batch_gpu
   success_requires:
     - check_cuda_resource reports one device, native allocator, and at least 40 GiB.
-    - Exact P1 first-example smoke writes resource_smoke.json.
+    - First and max-image P1 smoke writes resource_smoke.json with <=1280 visual tokens.
     - Formal training writes complete.json after validation and early stopping.
 
 remaining_sequence_after_resource_gate:
@@ -83,13 +88,14 @@ remaining_sequence_after_resource_gate:
   - stop_for_independent_raters
 
 eta:
-  scheduler_wait: "scheduler predicts start at 2026-09-01 20:00 JST"
+  scheduler_wait: "unknown until visualcap_v2 P1 submission"
   current_pilot_after_start: "approximately 1-3 hours; hard cap 4 hours"
   three_pilots_and_generation_after_start: "provisional 6-10 GPU-hours"
   excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
 
 next_agent_actions:
-  - Revalidate job 6666633 with `pjstat 6666633`.
+  - Commit visualcap_v2 code so run_manifest provenance is immutable.
+  - Submit Learned+KL visualcap_v2 on the fastest full-GPU group.
   - Do not retry b-batch-mig or b-inter-mig.
   - Inspect resource_smoke.json before interpreting any training metrics.
   - The monitor may submit P2 only after P1 complete.json exists.
@@ -102,8 +108,8 @@ automation:
   behavior: advance only through complete.json evidence gates
 
 verification_commands:
-  - pjstat 6666633
-  - tail -n 160 p1_native_c.6666633.out
-  - cat outputs/pilot/learned_sft_kl_native_full/resource_smoke.json
+  - pjstat
+  - cat outputs/pilot/learned_sft_kl_visualcap_v2/resource_smoke.json
+  - cat outputs/pilot/learned_sft_kl_visualcap_v2/current_example.json
   - .venv/bin/python scripts/check_trace_completion.py
   - .venv/bin/python scripts/validate_project_memory.py
