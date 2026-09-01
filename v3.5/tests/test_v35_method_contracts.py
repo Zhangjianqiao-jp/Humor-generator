@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 
 from humor_generator_v35.evaluation.diversity import candidate_set_metrics, summarize_diversity
@@ -10,6 +12,9 @@ from humor_generator_v35.training.formal_bridge import (
     full_plan_text_messages, hard_negative_cluster_map, latent_messages,
 )
 from humor_generator_v35.data.clustered import _finalists
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _states(length: int, offset: int) -> AlignedMessageStates:
@@ -101,3 +106,15 @@ def test_diversity_reports_quality_conditioned_and_angle_endpoints() -> None:
     report = summarize_diversity(rows, min_candidates=3)
     assert report["per_cluster"][0]["good_only"] is not None
     assert report["per_cluster"][0]["human_angle_coverage"] == 2
+
+
+def test_formal_jobs_use_native_full_gpu_contract_and_current_p1_path() -> None:
+    training = (ROOT / "jobs/formal_bridge_train.pjm").read_text()
+    generation = (ROOT / "jobs/pilot_validation_generation.pjm").read_text()
+    fallback = (ROOT / "scripts/submit_formal_bridge_matrix.sh").read_text()
+    for script in (training, generation):
+        assert "PYTORCH_ALLOC_CONF=backend:native" in script
+        assert "expandable_segments" not in script
+    expected = "outputs/pilot/learned_sft_kl_native_full"
+    assert expected in generation
+    assert expected in fallback

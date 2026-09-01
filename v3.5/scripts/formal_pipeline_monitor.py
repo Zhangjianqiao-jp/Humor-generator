@@ -10,6 +10,7 @@ from __future__ import annotations
 from argparse import ArgumentParser
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -92,6 +93,68 @@ def cache_evidence() -> dict[str, Any]:
             and available == required
             and len(records) == len(available)
         ),
+    }
+
+
+def training_completion_evidence(output: Path) -> dict[str, Any]:
+    """Validate the artifact set; complete.json existence alone is insufficient."""
+    required = {
+        "complete": output / "complete.json",
+        "checkpoint": output / "best_bridge.pt",
+        "manifest": output / "run_manifest.json",
+        "metrics": output / "metrics.jsonl",
+    }
+    missing = [name for name, path in required.items() if not path.is_file() or path.stat().st_size == 0]
+    if missing:
+        return {"complete": False, "reason": "missing_or_empty", "artifacts": missing}
+    try:
+        completion = json.loads(required["complete"].read_text())
+        manifest = json.loads(required["manifest"].read_text())
+        metrics = read_jsonl(required["metrics"])
+        best = float(completion["best_validation_total"])
+        valid = (
+            completion.get("status") == "complete"
+            and int(completion.get("epochs_completed", 0)) >= 1
+            and int(completion.get("global_step", 0)) >= 1
+            and math.isfinite(best)
+            and int(manifest.get("policy_trainable_parameters", -1)) == 0
+            and int(manifest.get("bridge_trainable_parameters", 0)) > 0
+            and bool(metrics)
+            and all("validation" in row and "train" in row for row in metrics)
+        )
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        return {"complete": False, "reason": "parse_error", "error": str(exc)}
+    return {
+        "complete": valid,
+        "reason": "validated" if valid else "contract_failed",
+        "epochs_completed": completion.get("epochs_completed"),
+        "global_step": completion.get("global_step"),
+        "best_validation_total": best,
+    }
+
+
+def evaluation_packet_evidence(packet: Path) -> dict[str, Any]:
+    mapping = packet.with_name("private_mapping.jsonl")
+    if not packet.is_file() or not mapping.is_file():
+        return {"complete": False, "reason": "packet_or_mapping_missing"}
+    try:
+        packets = read_jsonl(packet)
+        mappings = read_jsonl(mapping)
+        packet_ids = [row["blind_id"] for row in packets]
+        mapping_ids = [row["blind_id"] for row in mappings]
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        return {"complete": False, "reason": "parse_error", "error": str(exc)}
+    valid = (
+        bool(packets)
+        and len(packet_ids) == len(set(packet_ids))
+        and len(mapping_ids) == len(set(mapping_ids))
+        and set(packet_ids) == set(mapping_ids)
+    )
+    return {
+        "complete": valid,
+        "reason": "validated" if valid else "packet_mapping_contract_failed",
+        "packets": len(packets),
+        "mappings": len(mappings),
     }
 
 
@@ -253,14 +316,24 @@ def advance_once(
             state["trace_gate_recorded"] = True
         jobs = state.setdefault("training_jobs", {})
         for name, job_name, config, output in TRAINING:
-            complete = ROOT / output / "complete.json"
-            if complete.is_file():
+            output_path = ROOT / output
+            completion = training_completion_evidence(output_path)
+            if completion["complete"]:
                 if name not in jobs or not jobs[name].get("complete"):
                     jobs[name] = {
                         **jobs.get(name, {}), "complete": True, "completed_at": iso(),
+                        "completion_evidence": completion,
                     }
                     append_event(state, "training_completed", experiment=name)
                 continue
+            if (output_path / "complete.json").exists():
+                state["status"] = f"blocked_invalid_complete_{name}"
+                append_event(
+                    state, "invalid_training_completion", experiment=name,
+                    evidence=completion,
+                )
+                atomic_json(state_path, state)
+                return True
             existing = jobs.get(name)
             if existing is not None:
                 job_id = str(existing.get("job_id") or "")
@@ -286,9 +359,18 @@ def advance_once(
             append_event(state, "training_submitted", experiment=name, job_id=job_id)
             atomic_json(state_path, state)
             return False
-        if PILOT_EVALUATION_PACKET.is_file():
+        packet_evidence = evaluation_packet_evidence(PILOT_EVALUATION_PACKET)
+        if packet_evidence["complete"]:
             state["status"] = "pilot_validation_packet_ready_for_independent_raters"
-            append_event(state, "pilot_validation_packet_ready", packet=str(PILOT_EVALUATION_PACKET))
+            append_event(
+                state, "pilot_validation_packet_ready",
+                packet=str(PILOT_EVALUATION_PACKET), evidence=packet_evidence,
+            )
+            atomic_json(state_path, state)
+            return True
+        if PILOT_EVALUATION_PACKET.exists():
+            state["status"] = "blocked_invalid_pilot_validation_packet"
+            append_event(state, "invalid_pilot_validation_packet", evidence=packet_evidence)
             atomic_json(state_path, state)
             return True
         evaluation = state.get("pilot_evaluation_job")

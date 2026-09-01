@@ -14,9 +14,13 @@ module load cuda/12.6.1
 export PYTHONPATH=src
 export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+unset PYTORCH_CUDA_ALLOC_CONF
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/check_cuda_resource.py
 
 out=outputs/pilot_validation
 mkdir -p "$out"
@@ -34,7 +38,7 @@ python scripts/generate_formal_baseline.py --condition token_embedding --label t
   --config configs/pilot/learned_sft_kl.yaml --output "$out/token_embedding.jsonl" $common
 python scripts/generate_formal_baseline.py --condition learned_latent --label learned_kl \
   --config configs/pilot/learned_sft_kl.yaml \
-  --checkpoint outputs/pilot/learned_sft_kl/best_bridge.pt \
+  --checkpoint outputs/pilot/learned_sft_kl_native_full/best_bridge.pt \
   --output "$out/learned_kl.jsonl" $common
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_kl \
   --config configs/pilot/typed_sft_kl.yaml \

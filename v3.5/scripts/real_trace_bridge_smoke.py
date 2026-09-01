@@ -43,6 +43,7 @@ def main() -> None:
         if row["cluster_id"] in traces
     ]
     seed = int(config["training"]["seed"])
+    torch.manual_seed(seed)
     rows = fixed_hash_sample_clusters(
         rows,
         config["training"].get("max_train_clusters"),
