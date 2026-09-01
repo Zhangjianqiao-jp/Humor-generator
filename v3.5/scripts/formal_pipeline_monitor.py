@@ -23,7 +23,7 @@ CACHE = ROOT / "data/cache/planner_traces_homer_strict_v35"
 DATASET = ROOT / "data/processed/latent_bridge_v35"
 JOB_ID = re.compile(r"Job\s+(\d+)\s+submitted")
 TRAINING = (
-    ("pilot_learned_sft_kl", "p_l_sft_k", "configs/pilot/learned_sft_kl.yaml", "outputs/pilot/learned_sft_kl"),
+    ("pilot_learned_sft_kl", "p_l_sft_k", "configs/pilot/learned_sft_kl.yaml", "outputs/pilot/learned_sft_kl_native_full"),
     ("pilot_typed_sft_kl", "p_t_sft_k", "configs/pilot/typed_sft_kl.yaml", "outputs/pilot/typed_sft_kl"),
     ("pilot_typed_sft_no_kl", "p_t_sft_n", "configs/pilot/typed_sft_no_kl.yaml", "outputs/pilot/typed_sft_no_kl"),
 )
