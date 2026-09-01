@@ -5,6 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from audit_dataset_records import audit
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data/processed/latent_bridge_v35"
@@ -16,6 +18,7 @@ def digest(path: Path) -> str:
 
 
 def main() -> None:
+    exhaustive = audit(output_dir=ROOT / "results/preflight/dataset_audit")
     manifest = json.loads((DATA / "manifest.json").read_text())
     clusters: dict[str, set[str]] = {}
     split_names = (
@@ -63,7 +66,16 @@ def main() -> None:
     required = clusters["train"] | clusters["validation"]
     if {row["cluster_id"] for row in trace_rows} != required or len(trace_rows) != len(required):
         raise RuntimeError("trace-input manifest does not exactly cover train+validation clusters")
-    print(json.dumps({"status": "pass", "split_clusters": manifest["split_clusters"]}))
+    print(json.dumps({
+        "status": "pass",
+        "split_clusters": manifest["split_clusters"],
+        "exhaustive_row_audit": {
+            "rows_checked": exhaustive["rows_checked"],
+            "unique_images_checked": exhaustive["unique_images_checked"],
+            "source_inputs_checked": exhaustive["source_inputs_checked"],
+            "clusters_checked": exhaustive["clusters_checked"],
+        },
+    }))
 
 
 if __name__ == "__main__":

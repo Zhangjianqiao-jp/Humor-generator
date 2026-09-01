@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 artifacts/
 outputs/
+results/preflight/
 data/cache/
 data/external/
 data/processed/

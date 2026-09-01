@@ -22,11 +22,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
-python scripts/check_environment.py
-python scripts/check_v35_isolation.py
-python scripts/verify_frozen_artifacts.py
-python scripts/verify_clustered_dataset.py
-python scripts/check_trace_completion.py
+python scripts/run_formal_preflight.py --output "$BRIDGE_OUTPUT/preflight.json"
 python scripts/check_cuda_resource.py
 python scripts/real_trace_bridge_smoke.py \
   --config "$BRIDGE_CONFIG" \

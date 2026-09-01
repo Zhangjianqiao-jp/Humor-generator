@@ -14,6 +14,10 @@
 
 ## 已核验事实
 
+- preflight gate：compile、67 项测试及四个正式 CLI smoke 通过；逐条数据证据见
+  `docs/FORMAL_PREFLIGHT_REPORT_ZH.md`。
+- 数据逐条 gate：2846/2846 rows、949/949 unique images、367/367 upstream inputs、
+  666/666 Planner traces 全部通过 byte/schema/decode/tensor/provenance 检查。
 - 数据 gate：train/validation trace 为 `666/666`，缺失、重复、额外及 failure 均为 0。
 - split gate：train/validation/internal-test/official-unseen 两两 cluster 交集均为 0；
   `official_hia_seen_diagnostic` 不进入主要结论。

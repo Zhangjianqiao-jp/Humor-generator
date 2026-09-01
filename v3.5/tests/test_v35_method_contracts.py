@@ -138,3 +138,29 @@ def test_resource_smoke_covers_first_and_max_raw_pixel_sample() -> None:
     assert "exact_formal_first_plus_max_raw_pixel_example" in smoke
     assert "stress = max(selected" in smoke
     assert "configure_frozen_receiver" in smoke
+
+
+def test_formal_job_is_fail_closed_in_smoke_data_gpu_train_order() -> None:
+    job = (ROOT / "jobs/formal_bridge_train.pjm").read_text()
+    preflight = job.index("run_formal_preflight.py")
+    resource = job.index("check_cuda_resource.py")
+    stress = job.index("real_trace_bridge_smoke.py")
+    training = job.index("train_bridge.py")
+    assert preflight < resource < stress < training
+    checker = (ROOT / "scripts/run_formal_preflight.py").read_text()
+    assert checker.index('"scripts/train_bridge.py", "--help"') < checker.index(
+        '"scripts/verify_clustered_dataset.py"'
+    )
+    assert '"scripts/check_trace_completion.py"' in checker
+
+
+def test_dataset_audit_checks_every_byte_level_dependency() -> None:
+    audit = (ROOT / "scripts/audit_dataset_records.py").read_text()
+    for contract in (
+        "image SHA-256 mismatch",
+        "image.verify()",
+        'manifest.get("input_sha256", {})',
+        "duplicate row_id",
+        "cluster leakage",
+    ):
+        assert contract in audit
