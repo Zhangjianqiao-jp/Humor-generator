@@ -24,7 +24,7 @@ python scripts/check_cuda_resource.py
 
 out=outputs/pilot_validation
 mkdir -p "$out"
-common="--receiver sft --split validation --seeds 20260830 20260831 20260832 --exclude-clusters-file outputs/pilot/typed_sft_kl/run_manifest.json"
+common="--receiver sft --split validation --seeds 20260830 20260831 20260832 --exclude-clusters-file outputs/pilot/typed_sft_kl_visualcap_v2/run_manifest.json"
 
 python scripts/generate_formal_baseline.py --condition text_homer --label text_homer \
   --config configs/pilot/learned_sft_kl.yaml --output "$out/text_homer.jsonl" $common
@@ -38,19 +38,19 @@ python scripts/generate_formal_baseline.py --condition token_embedding --label t
   --config configs/pilot/learned_sft_kl.yaml --output "$out/token_embedding.jsonl" $common
 python scripts/generate_formal_baseline.py --condition learned_latent --label learned_kl \
   --config configs/pilot/learned_sft_kl.yaml \
-  --checkpoint outputs/pilot/learned_sft_kl_native_full/best_bridge.pt \
+  --checkpoint outputs/pilot/learned_sft_kl_visualcap_v2/best_bridge.pt \
   --output "$out/learned_kl.jsonl" $common
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_kl \
   --config configs/pilot/typed_sft_kl.yaml \
-  --checkpoint outputs/pilot/typed_sft_kl/best_bridge.pt \
+  --checkpoint outputs/pilot/typed_sft_kl_visualcap_v2/best_bridge.pt \
   --output "$out/typed_kl.jsonl" $common
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_quantized \
   --config configs/pilot/typed_sft_kl.yaml \
-  --checkpoint outputs/pilot/typed_sft_kl/best_bridge.pt --quantize-bridge-output \
+  --checkpoint outputs/pilot/typed_sft_kl_visualcap_v2/best_bridge.pt --quantize-bridge-output \
   --output "$out/typed_quantized.jsonl" $common
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_no_kl \
   --config configs/pilot/typed_sft_no_kl.yaml \
-  --checkpoint outputs/pilot/typed_sft_no_kl/best_bridge.pt \
+  --checkpoint outputs/pilot/typed_sft_no_kl_visualcap_v2/best_bridge.pt \
   --output "$out/typed_no_kl.jsonl" $common
 
 python scripts/build_group_packets.py \

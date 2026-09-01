@@ -27,6 +27,7 @@ from humor_generator_v35.training.formal_bridge import (
     mean_metrics,
     prepare_example,
 )
+from humor_generator_v35.training.memory_safe import configure_frozen_receiver
 
 
 def sha256(path: Path) -> str:
@@ -81,6 +82,8 @@ def main() -> None:
         revision=config["model"]["revision"],
         adapter=None if adapter is None else ROOT / adapter,
         load_in_4bit=True,
+        min_visual_tokens=int(config["model"]["min_visual_tokens"]),
+        max_visual_tokens=int(config["model"]["max_visual_tokens"]),
     )
     device = model_device(backend.model)
     if device.type != "cuda":
@@ -109,12 +112,13 @@ def main() -> None:
             **common_bridge_args,
         )
     ).to(device)
+    freeze_report = configure_frozen_receiver(backend.model, bridge)
     resume_state = None
     if args.resume:
         resume_state = torch.load(args.resume, map_location="cpu", weights_only=True)
         bridge.load_state_dict(resume_state["bridge"])
-    policy_trainable = sum(p.numel() for p in backend.model.parameters() if p.requires_grad)
-    bridge_trainable = sum(p.numel() for p in bridge.parameters() if p.requires_grad)
+    policy_trainable = freeze_report.policy_trainable
+    bridge_trainable = freeze_report.bridge_trainable
     if policy_trainable != 0 or bridge_trainable == 0:
         raise RuntimeError("freeze/trainable-parameter contract failed")
 
@@ -169,6 +173,10 @@ def main() -> None:
         "bridge_trainable_parameters": bridge_trainable,
         "receiver_embedding_mean_norm": target_norm,
         "device": str(device),
+        "gradient_checkpointing": freeze_report.gradient_checkpointing,
+        "use_cache": freeze_report.use_cache,
+        "min_visual_tokens": int(config["model"]["min_visual_tokens"]),
+        "max_visual_tokens": int(config["model"]["max_visual_tokens"]),
         "negative_policy": "description_tfidf_nearest_same-source_different-conflict",
         "train_negative_diagnostics": train_negative_diagnostics,
         "validation_negative_diagnostics": validation_negative_diagnostics,
@@ -206,12 +214,37 @@ def main() -> None:
             window_start = (index // accumulation) * accumulation
             window_size = min(accumulation, len(rows) - window_start)
             example = prepare_example(row, traces[row["cluster_id"]], seed=seed + epoch)
+            current = {
+                "status": "preparing_example",
+                "epoch": epoch + 1,
+                "examples_in_epoch": index + 1,
+                "examples_per_epoch": len(rows),
+                "cluster_id": row["cluster_id"],
+                "row_id": row["row_id"],
+                "image": row["image"],
+                "cuda_allocated_bytes": int(torch.cuda.memory_allocated(device)),
+                "cuda_reserved_bytes": int(torch.cuda.memory_reserved(device)),
+            }
+            (args.output / "current_example.json").write_text(
+                json.dumps(current, indent=2) + "\n"
+            )
+            print(json.dumps(current), flush=True)
             metrics = task.backward_example(
                 example,
                 train_shuffle[row["cluster_id"]],
                 loss_scale=1.0 / window_size,
             )
             train_metrics.append(metrics)
+            current.update({
+                "status": "example_complete",
+                "cuda_allocated_bytes": int(torch.cuda.memory_allocated(device)),
+                "cuda_reserved_bytes": int(torch.cuda.memory_reserved(device)),
+                "cuda_peak_allocated_bytes": int(torch.cuda.max_memory_allocated(device)),
+                "metrics": metrics,
+            })
+            (args.output / "current_example.json").write_text(
+                json.dumps(current, indent=2) + "\n"
+            )
             if (index + 1) % int(config["training"].get("log_every_examples", 10)) == 0:
                 progress = {
                     "status": "training",

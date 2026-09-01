@@ -10,6 +10,8 @@ model:
   frozen: true
   gradient_checkpointing: true
   use_cache: false
+  min_visual_tokens: 256
+  max_visual_tokens: 1280
   receiver_image: false
   artifact_manifest: manifests/frozen_7b_adapters.json
 

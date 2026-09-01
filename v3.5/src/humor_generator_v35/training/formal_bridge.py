@@ -330,13 +330,15 @@ class FrozenReceiverBridgeTask:
                 temperature=float(self.loss_config["temperature"]),
             )
         matched_logp = sequence_log_probability(matched_logits, targets)
+        metric_caption_nll = caption_nll.detach()
+        metric_teacher_kl = teacher_kl.detach()
         matched_loss = (
             float(self.loss_config["caption_nll"]) * caption_nll
             + float(self.loss_config["text_teacher_forward_kl"]) * teacher_kl
             - shuffled_weight * (coefficient * matched_logp).mean()
         )
         (loss_scale * matched_loss).backward()
-        del matched_logits, matched_loss
+        del caption_nll, teacher_kl, matched_logp, matched_logits, matched_loss
 
         shuffled_logits = self._latent_logits(
             embeddings, attention_mask, positions,
@@ -345,14 +347,14 @@ class FrozenReceiverBridgeTask:
         shuffled_logp = sequence_log_probability(shuffled_logits, targets)
         (loss_scale * shuffled_weight * (coefficient * shuffled_logp).mean()).backward()
         total = (
-            float(self.loss_config["caption_nll"]) * caption_nll.detach()
-            + float(self.loss_config["text_teacher_forward_kl"]) * teacher_kl.detach()
+            float(self.loss_config["caption_nll"]) * metric_caption_nll
+            + float(self.loss_config["text_teacher_forward_kl"]) * metric_teacher_kl
             + shuffled_weight * margin_value
         )
         return {
             "total": float(total.cpu()),
-            "caption_nll": float(caption_nll.detach().cpu()),
-            "teacher_kl": float(teacher_kl.detach().cpu()),
+            "caption_nll": float(metric_caption_nll.cpu()),
+            "teacher_kl": float(metric_teacher_kl.cpu()),
             "shuffled_margin": float(margin_value.cpu()),
         }
 

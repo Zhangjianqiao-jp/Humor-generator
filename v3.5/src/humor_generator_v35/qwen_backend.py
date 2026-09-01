@@ -99,10 +99,21 @@ class GenerationAlignmentReport:
 
 
 class QwenBackend:
-    def __init__(self, model: Any, processor: Any, process_vision_info: Any) -> None:
+    def __init__(
+        self,
+        model: Any,
+        processor: Any,
+        process_vision_info: Any,
+        *,
+        min_visual_tokens: int | None = None,
+        max_visual_tokens: int | None = None,
+    ) -> None:
         self.model = model
         self.processor = processor
         self.process_vision_info = process_vision_info
+        self.min_visual_tokens = min_visual_tokens
+        self.max_visual_tokens = max_visual_tokens
+        self.last_encode_diagnostics: dict[str, Any] | None = None
 
     @classmethod
     def load(
@@ -112,6 +123,8 @@ class QwenBackend:
         revision: str | None = None,
         adapter: str | Path | None = None,
         load_in_4bit: bool = True,
+        min_visual_tokens: int | None = None,
+        max_visual_tokens: int | None = None,
     ) -> "QwenBackend":
         try:
             from peft import PeftModel
@@ -143,8 +156,32 @@ class QwenBackend:
         for parameter in model.parameters():
             parameter.requires_grad_(False)
         model.eval()
-        processor = AutoProcessor.from_pretrained(model_name, revision=revision, trust_remote_code=True)
-        return cls(model, processor, process_vision_info)
+        processor_kwargs: dict[str, Any] = {}
+        if (min_visual_tokens is None) != (max_visual_tokens is None):
+            raise ValueError("min_visual_tokens and max_visual_tokens must be configured together")
+        if min_visual_tokens is not None and max_visual_tokens is not None:
+            if min_visual_tokens < 1 or max_visual_tokens < min_visual_tokens:
+                raise ValueError("invalid visual-token budget")
+            # Qwen2/2.5-VL's public processor contract uses a 28x28-pixel
+            # budget per merged visual token.  Passing the bounds into the
+            # processor makes the policy identical for text and latent arms.
+            processor_kwargs.update(
+                min_pixels=int(min_visual_tokens) * 28 * 28,
+                max_pixels=int(max_visual_tokens) * 28 * 28,
+            )
+        processor = AutoProcessor.from_pretrained(
+            model_name,
+            revision=revision,
+            trust_remote_code=True,
+            **processor_kwargs,
+        )
+        return cls(
+            model,
+            processor,
+            process_vision_info,
+            min_visual_tokens=min_visual_tokens,
+            max_visual_tokens=max_visual_tokens,
+        )
 
     @classmethod
     def load_with_adapters(
@@ -209,7 +246,24 @@ class QwenBackend:
             kwargs["images"] = image_inputs
         if video_inputs is not None:
             kwargs["videos"] = video_inputs
-        return self.processor(**kwargs).to(model_device(self.model))
+        encoded = self.processor(**kwargs)
+        image_token_id = getattr(getattr(self.model, "config", None), "image_token_id", None)
+        visual_tokens = 0
+        if image_token_id is not None and "input_ids" in encoded:
+            visual_tokens = int(encoded["input_ids"].eq(int(image_token_id)).sum())
+        if self.max_visual_tokens is not None and visual_tokens > self.max_visual_tokens:
+            raise RuntimeError(
+                f"processor exceeded max_visual_tokens={self.max_visual_tokens}: {visual_tokens}"
+            )
+        grid = encoded.get("image_grid_thw")
+        self.last_encode_diagnostics = {
+            "sequence_tokens": int(encoded["input_ids"].shape[1]),
+            "visual_tokens": visual_tokens,
+            "image_grid_thw": None if grid is None else grid.tolist(),
+            "min_visual_tokens": self.min_visual_tokens,
+            "max_visual_tokens": self.max_visual_tokens,
+        }
+        return encoded.to(model_device(self.model))
 
     @torch.no_grad()
     def multimodal_embeddings_and_positions(

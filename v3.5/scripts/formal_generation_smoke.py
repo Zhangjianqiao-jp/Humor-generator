@@ -42,6 +42,8 @@ def main() -> None:
     backend = QwenBackend.load(
         config["model"]["name"], revision=config["model"]["revision"],
         adapter=None if adapter is None else ROOT / adapter, load_in_4bit=True,
+        min_visual_tokens=int(config["model"]["min_visual_tokens"]),
+        max_visual_tokens=int(config["model"]["max_visual_tokens"]),
     )
     device = model_device(backend.model)
     width = int(backend.model.get_input_embeddings().weight.shape[1])

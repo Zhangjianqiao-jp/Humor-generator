@@ -246,6 +246,8 @@ def main() -> None:
         revision=config["model"]["revision"],
         adapter=None if adapter is None else ROOT / adapter,
         load_in_4bit=True,
+        min_visual_tokens=int(config["model"]["min_visual_tokens"]),
+        max_visual_tokens=int(config["model"]["max_visual_tokens"]),
     )
     bridge = None if args.checkpoint is None else load_bridge(config, args.checkpoint, backend)
     traces = load_trace_index(args.trace_index)

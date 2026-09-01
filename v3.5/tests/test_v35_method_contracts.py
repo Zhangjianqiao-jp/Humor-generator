@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import torch
+import yaml
 
 from humor_generator_v35.evaluation.diversity import candidate_set_metrics, summarize_diversity
 from humor_generator_v35.latent.budget import channel_causal_tail, concatenate_budgeted
@@ -115,6 +116,25 @@ def test_formal_jobs_use_native_full_gpu_contract_and_current_p1_path() -> None:
     for script in (training, generation):
         assert "PYTORCH_ALLOC_CONF=backend:native" in script
         assert "expandable_segments" not in script
-    expected = "outputs/pilot/learned_sft_kl_native_full"
+    expected = "outputs/pilot/learned_sft_kl_visualcap_v2"
     assert expected in generation
     assert expected in fallback
+
+
+def test_all_formal_comparison_configs_share_visual_token_budget() -> None:
+    configs = [
+        *sorted((ROOT / "configs/pilot").glob("*.yaml")),
+        *sorted((ROOT / "configs/formal").glob("*.yaml")),
+    ]
+    budgets = set()
+    for path in configs:
+        model = yaml.safe_load(path.read_text())["model"]
+        budgets.add((model.get("min_visual_tokens"), model.get("max_visual_tokens")))
+    assert budgets == {(256, 1280)}
+
+
+def test_resource_smoke_covers_first_and_max_raw_pixel_sample() -> None:
+    smoke = (ROOT / "scripts/real_trace_bridge_smoke.py").read_text()
+    assert "exact_formal_first_plus_max_raw_pixel_example" in smoke
+    assert "stress = max(selected" in smoke
+    assert "configure_frozen_receiver" in smoke

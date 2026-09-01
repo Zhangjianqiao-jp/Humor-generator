@@ -9,6 +9,7 @@ import sys
 
 import torch
 import yaml
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -27,6 +28,7 @@ from humor_generator_v35.training.formal_bridge import (
     load_trace_index,
     prepare_example,
 )
+from humor_generator_v35.training.memory_safe import configure_frozen_receiver
 from train_bridge import fixed_hash_sample_clusters
 
 
@@ -52,15 +54,25 @@ def main() -> None:
     )
     if len({row["cluster_id"] for row in rows}) < 2:
         raise RuntimeError("real trace smoke requires two clusters")
-    # This is deliberately the exact first example used by epoch zero of the
-    # formal pilot, not a convenient low-cost row.
+    # Cover both the exact first example and the raw-pixel maximum in the fixed
+    # pilot subset.  The old first-only smoke missed a 4750x4494 second row and
+    # therefore could not establish that the formal workload fit in memory.
     selected = cluster_balanced_rows(rows, epoch=0, seed=seed)
+    def raw_pixels(row: dict) -> int:
+        with Image.open(row["image"]) as image:
+            return image.width * image.height
+    stress = max(selected, key=lambda row: (raw_pixels(row), row["cluster_id"]))
+    smoke_rows = [selected[0]]
+    if stress["cluster_id"] != selected[0]["cluster_id"]:
+        smoke_rows.append(stress)
     negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
 
     adapter = config["model"].get("adapter")
     backend = QwenBackend.load(
         config["model"]["name"], revision=config["model"]["revision"],
         adapter=None if adapter is None else ROOT / adapter, load_in_4bit=True,
+        min_visual_tokens=int(config["model"]["min_visual_tokens"]),
+        max_visual_tokens=int(config["model"]["max_visual_tokens"]),
     )
     device = model_device(backend.model)
     backend.model.eval()
@@ -87,6 +99,7 @@ def main() -> None:
             **common_bridge_args,
         )
     ).to(device)
+    freeze_report = configure_frozen_receiver(backend.model, bridge)
     task = FrozenReceiverBridgeTask(
         backend, bridge, root=ROOT, trace_index=traces,
         loss_config=config["loss"],
@@ -98,9 +111,29 @@ def main() -> None:
         weight_decay=float(config["training"]["weight_decay"]),
     )
     before = next(bridge.parameters()).detach().float().clone()
-    example = prepare_example(selected[0], traces[selected[0]["cluster_id"]], seed=seed)
-    negative_cluster = negative_map[selected[0]["cluster_id"]]
-    metrics = task.backward_example(example, negative_cluster)
+    sample_reports = []
+    metrics = None
+    for row in smoke_rows:
+        torch.cuda.reset_peak_memory_stats(device)
+        example = prepare_example(row, traces[row["cluster_id"]], seed=seed)
+        negative_cluster = negative_map[row["cluster_id"]]
+        sample_metrics = task.backward_example(
+            example, negative_cluster, loss_scale=1.0 / len(smoke_rows)
+        )
+        with Image.open(row["image"]) as image:
+            size = [image.width, image.height]
+        sample_reports.append({
+            "cluster": row["cluster_id"],
+            "row_id": row["row_id"],
+            "image_size": size,
+            "raw_image_pixels": size[0] * size[1],
+            "hard_negative_cluster": negative_cluster,
+            "encode_diagnostics": backend.last_encode_diagnostics,
+            "loss": sample_metrics,
+            "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
+            "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+        })
+        metrics = sample_metrics
     gradient_norm = float(torch.nn.utils.clip_grad_norm_(bridge.parameters(), 1.0))
     optimizer.step()
     update_norm = float((next(bridge.parameters()).detach().float() - before).norm())
@@ -112,18 +145,19 @@ def main() -> None:
         "status": "pass",
         "scientific_training": False,
         "real_planner_traces": True,
-        "cluster": selected[0]["cluster_id"],
-        "row_id": selected[0]["row_id"],
-        "selection": "exact_formal_epoch_0_first_example",
-        "hard_negative_cluster": negative_cluster,
+        "clusters": [row["cluster_id"] for row in smoke_rows],
+        "selection": "exact_formal_first_plus_max_raw_pixel_example",
+        "samples": sample_reports,
         "hard_negative_diagnostics": negative_diagnostics,
-        "policy_trainable_parameters": sum(
-            p.numel() for p in backend.model.parameters() if p.requires_grad
-        ),
-        "bridge_trainable_parameters": sum(p.numel() for p in bridge.parameters()),
+        "policy_trainable_parameters": freeze_report.policy_trainable,
+        "bridge_trainable_parameters": freeze_report.bridge_trainable,
+        "gradient_checkpointing": freeze_report.gradient_checkpointing,
+        "use_cache": freeze_report.use_cache,
+        "min_visual_tokens": int(config["model"]["min_visual_tokens"]),
+        "max_visual_tokens": int(config["model"]["max_visual_tokens"]),
         "gradient_norm": gradient_norm,
         "update_norm": update_norm,
-        "loss": metrics,
+        "last_loss": metrics,
         "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
     }
