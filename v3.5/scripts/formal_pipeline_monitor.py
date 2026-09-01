@@ -109,6 +109,7 @@ def submit_cache(
     *,
     target_clusters: list[str] | None = None,
     validator_repair: bool = False,
+    resource_group: str | None = None,
 ) -> str:
     environment = [f"TRACE_RETRY_ROUND={retry_round}"]
     if target_clusters:
@@ -120,11 +121,11 @@ def submit_cache(
         if validator_repair and target_clusters == ["nycc_325", "nycc_775"]
         else "jobs/cache_formal_planner_traces.pjm"
     )
-    return parse_submitted_job(command([
-        "pjsub", "-N", f"cache_strict{retry_round}",
-        "-x", ",".join(environment),
-        job_file,
-    ]))
+    argv = ["pjsub", "-N", f"cache_strict{retry_round}"]
+    if resource_group:
+        argv.extend(["-L", f"rscgrp={resource_group},elapse=02:00:00,gpu=1"])
+    argv.extend(["-x", ",".join(environment), job_file])
+    return parse_submitted_job(command(argv))
 
 
 def submit_training(name: str, job_name: str, config: str, output: str) -> str:
@@ -166,6 +167,7 @@ def initialize(
     *,
     target_clusters: list[str] | None = None,
     validator_repair: bool = False,
+    cache_resource_group: str | None = None,
 ) -> dict[str, Any]:
     if state_path.is_file():
         return json.loads(state_path.read_text())
@@ -178,6 +180,7 @@ def initialize(
         "cache_retry_round": retry_round,
         "target_clusters": target_clusters or [],
         "validator_repair": validator_repair,
+        "cache_resource_group": cache_resource_group,
         "training_jobs": {},
         "events": [],
     }
@@ -296,6 +299,7 @@ def advance_once(
         next_round,
         target_clusters=list(state.get("target_clusters", [])),
         validator_repair=bool(state.get("validator_repair", False)),
+        resource_group=state.get("cache_resource_group"),
     )
     state.update({
         "status": "monitoring_cache",
@@ -315,6 +319,7 @@ def main() -> None:
     parser.add_argument("--max-retry-rounds", type=int, default=4)
     parser.add_argument("--target-clusters", nargs="+")
     parser.add_argument("--validator-repair", action="store_true")
+    parser.add_argument("--cache-resource-group", choices=["b-batch", "c-batch"])
     parser.add_argument("--poll-seconds", type=int, default=1200)
     parser.add_argument("--confirm-absence-seconds", type=int, default=60)
     parser.add_argument("--once", action="store_true")
@@ -327,6 +332,7 @@ def main() -> None:
         args.retry_round,
         target_clusters=args.target_clusters,
         validator_repair=args.validator_repair,
+        cache_resource_group=args.cache_resource_group,
     )
     while True:
         done = advance_once(
