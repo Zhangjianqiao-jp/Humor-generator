@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "humor-generator-v3"
+version = "0.1.0"
+description = "Evidence-gated HOMER reproduction and latent communication research"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "accelerate==1.14.0",
+  "bitsandbytes==0.50.0",
+  "nltk==3.10.3",
+  "numpy==2.5.1",
+  "peft==0.20.0",
+  "pillow==12.3.0",
+  "PyYAML==6.0.3",
+  "qwen-vl-utils==0.0.14",
+  "safetensors==0.8.0",
+  "scikit-learn==1.7.2",
+  "scipy==1.16.3",
+  "torch==2.12.0",
+  "torchvision==0.27.0",
+  "transformers==5.14.1",
+]
+
+[project.optional-dependencies]
+homer = []
+test = ["pytest==9.1.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+addopts = "-q"

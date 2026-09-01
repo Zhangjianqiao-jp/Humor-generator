@@ -1,0 +1,47 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=03:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+teacher_dir=outputs/newyorker_compact_viewpoint_teacher_7b
+mkdir -p "$teacher_dir"
+
+python scripts/generate_lora_sft.py \
+  --config configs/generate_hic_viewpoint_teacher_7b.yaml \
+  --base-only \
+  --input-jsonl data/processed/newyorker_compact_viewpoint_label_inputs/train.jsonl \
+  --output-jsonl "$teacher_dir/train.jsonl" \
+  --num-candidates 1 \
+  --prompt-template-file prompts/teacher_gold_captions_to_compact_viewpoint.txt \
+  --max-new-tokens 384 \
+  --seed 4242
+
+python scripts/generate_lora_sft.py \
+  --config configs/generate_hic_viewpoint_teacher_7b.yaml \
+  --base-only \
+  --input-jsonl data/processed/newyorker_compact_viewpoint_label_inputs/validation.jsonl \
+  --output-jsonl "$teacher_dir/validation.jsonl" \
+  --num-candidates 1 \
+  --prompt-template-file prompts/teacher_gold_captions_to_compact_viewpoint.txt \
+  --max-new-tokens 384 \
+  --seed 4343
+
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$teacher_dir/train.jsonl" \
+  --kind compact-viewpoint
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$teacher_dir/validation.jsonl" \
+  --kind compact-viewpoint

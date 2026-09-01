@@ -1,0 +1,155 @@
+{
+  "source": "results/preference_diagnostics/sft_pref_alignment_3b_v1/module_gradient_scores.csv",
+  "source_scope": "current SFT attention LoRA only; MLP was not measured",
+  "selection_metric": "normalized_grad_norm",
+  "target_budget": 7372800,
+  "top_k": 30,
+  "seed": 20260824,
+  "family_counts": {
+    "v_proj": 12,
+    "o_proj": 18
+  },
+  "placements": [
+    {
+      "placement": "attention",
+      "adapter_strategy": "separate_preference",
+      "lora": {
+        "target_modules": [
+          "q_proj",
+          "k_proj",
+          "v_proj",
+          "o_proj"
+        ],
+        "rank": 16,
+        "alpha": 32,
+        "dropout": 0.05,
+        "trainable_parameter_count": 7372800
+      },
+      "selection_evidence": "complete attention placement"
+    },
+    {
+      "placement": "mlp",
+      "adapter_strategy": "separate_preference",
+      "lora": {
+        "target_modules": [
+          "gate_proj",
+          "up_proj",
+          "down_proj"
+        ],
+        "rank": 5,
+        "alpha": 10,
+        "dropout": 0.05,
+        "trainable_parameter_count": 7050240
+      },
+      "selection_evidence": "complete MLP placement"
+    },
+    {
+      "placement": "all_linear",
+      "adapter_strategy": "separate_preference",
+      "lora": {
+        "target_modules": [
+          "q_proj",
+          "k_proj",
+          "v_proj",
+          "o_proj",
+          "gate_proj",
+          "up_proj",
+          "down_proj"
+        ],
+        "rank": 4,
+        "alpha": 8,
+        "dropout": 0.05,
+        "trainable_parameter_count": 7483392
+      },
+      "selection_evidence": "complete language-backbone linear placement"
+    },
+    {
+      "placement": "gradient_selected",
+      "adapter_strategy": "separate_preference",
+      "lora": {
+        "target_modules": [
+          "base_model.model.model.language_model.layers.0.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.27.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.23.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.34.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.18.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.18.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.28.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.14.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.20.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.17.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.9.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.24.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.27.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.14.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.0.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.11.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.23.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.24.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.26.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.28.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.10.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.35.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.2.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.1.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.31.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.26.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.15.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.10.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.21.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.20.self_attn.v_proj"
+        ],
+        "rank": 73,
+        "alpha": 146,
+        "dropout": 0.05,
+        "trainable_parameter_count": 7400448
+      },
+      "selection_evidence": "top 30 existing attention-LoRA tangent gradients by normalized_grad_norm"
+    },
+    {
+      "placement": "random_selected",
+      "adapter_strategy": "separate_preference",
+      "lora": {
+        "target_modules": [
+          "base_model.model.model.language_model.layers.6.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.32.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.13.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.25.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.7.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.29.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.4.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.12.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.30.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.16.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.9.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.19.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.5.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.8.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.3.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.22.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.33.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.2.self_attn.o_proj",
+          "base_model.model.model.language_model.layers.16.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.34.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.21.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.30.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.19.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.33.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.12.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.3.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.7.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.35.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.4.self_attn.v_proj",
+          "base_model.model.model.language_model.layers.13.self_attn.v_proj"
+        ],
+        "rank": 73,
+        "alpha": 146,
+        "dropout": 0.05,
+        "trainable_parameter_count": 7400448
+      },
+      "selection_evidence": "seeded random, matched counts by module family to gradient-selected (seed=20260824)"
+    }
+  ],
+  "go_condition": "gradient-selected must clearly and stably beat random-selected and show parameter-efficiency advantage",
+  "no_go_action": "stop Fisher/SVD/dynamic-rank/large layer-wise search and retain the best simple placement"
+}

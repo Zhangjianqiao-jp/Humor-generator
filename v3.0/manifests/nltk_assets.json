@@ -1,0 +1,46 @@
+{
+  "archives": {
+    "corpora/omw-1.4.zip": {
+      "bytes": 26634772,
+      "sha256": "3b941e664852f3297b6040236626065796a2aaf7d7f9eec8779a3beaa1096c2d"
+    },
+    "corpora/stopwords.zip": {
+      "bytes": 37733,
+      "sha256": "48c0e52d8b52546e827f53761fb30300c0ab94f70660d28bd65ba0a86270946b"
+    },
+    "corpora/wordnet.zip": {
+      "bytes": 10775600,
+      "sha256": "cbda5ea6eef7f36a97a43d4a75f85e07fccbb4f23657d27b4ccbc93e2646ab59"
+    },
+    "taggers/averaged_perceptron_tagger.zip": {
+      "bytes": 2526731,
+      "sha256": "e1f13cf2532daadfd6f3bc481a49859f0b8ea6432ccdcd83e6a49a5f19008de9"
+    },
+    "taggers/averaged_perceptron_tagger_eng.zip": {
+      "bytes": 1539115,
+      "sha256": "6025f530624335c67d6547d44757b357b4e79bae030a0383e9887a92c1718f0b"
+    },
+    "tokenizers/punkt.zip": {
+      "bytes": 13905355,
+      "sha256": "51c3078994aeaf650bfc8e028be4fb42b4a0d177d41c012b6a983979653660ec"
+    },
+    "tokenizers/punkt_tab.zip": {
+      "bytes": 4319076,
+      "sha256": "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106"
+    }
+  },
+  "nltk_version": "3.10.3",
+  "note": "Extracted runtime files are git-ignored; zip archives are byte-verified.",
+  "packages": [
+    "punkt",
+    "punkt_tab",
+    "averaged_perceptron_tagger",
+    "averaged_perceptron_tagger_eng",
+    "stopwords",
+    "wordnet",
+    "omw-1.4"
+  ],
+  "schema_version": 1,
+  "upstream_repository": "https://github.com/nltk/nltk_data.git",
+  "upstream_revision": "550b6625bcef1f2abff2ff770a5a0d272c9c6b2a"
+}

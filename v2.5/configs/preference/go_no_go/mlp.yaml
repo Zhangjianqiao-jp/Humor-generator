@@ -1,0 +1,12 @@
+placement: mlp
+adapter_strategy: separate_preference
+lora:
+  target_modules:
+  - gate_proj
+  - up_proj
+  - down_proj
+  rank: 5
+  alpha: 10
+  dropout: 0.05
+  trainable_parameter_count: 7050240
+selection_evidence: complete MLP placement

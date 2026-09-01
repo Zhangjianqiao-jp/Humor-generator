@@ -1,0 +1,43 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=00:30:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=14
+
+config=configs/7b_generator/dpo_quality64_full_diagnostic.yaml
+pairs=data/processed/newyorker_published_dpo_reference_7b_generator/dpo_validation.jsonl
+adapter=outputs/7b-generator-dpo/dpo_mlp_quality64_full/best
+output=results/7b_generator/dpo_quality64_full_diagnostics/image_shuffle
+
+python scripts/verify_lora_adapter.py "$adapter"
+test "$(wc -l < "$pairs")" -eq 384
+
+# Two-image smoke proves both correct and deranged-image forward paths.
+python scripts/preference_diagnostics/image_shuffle.py \
+  --config "$config" --pairs "$pairs" --adapter "$adapter" \
+  --output-dir "${output}_smoke" --max-samples 2 --seed 20260828
+
+# One deterministic validation pair per image: 24 independent image units.
+python scripts/preference_diagnostics/image_shuffle.py \
+  --config "$config" --pairs "$pairs" --adapter "$adapter" \
+  --output-dir "$output" --max-samples 24 --seed 20260828
+
+test "$(python - <<'PY'
+import json
+from pathlib import Path
+print(json.loads(Path('results/7b_generator/dpo_quality64_full_diagnostics/image_shuffle/summary.json').read_text())['unique_images'])
+PY
+)" -eq 24
+echo "[7b-quality64-diagnostic] image shuffle complete; test47 was not read"

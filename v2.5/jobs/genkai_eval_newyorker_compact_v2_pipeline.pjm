@@ -1,0 +1,46 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+python scripts/generate_lora_sft.py \
+  --config configs/lora_sft_newyorker_compact_v2_7b_qlora.yaml \
+  --adapter outputs/newyorker_compact_v2_planner_7b_qlora/best_val_loss \
+  --input-jsonl data/processed/newyorker_compact_sft_v2/planner_test.jsonl \
+  --output-jsonl outputs/newyorker_compact_v2_pipeline/planner_test_generations.jsonl \
+  --num-candidates 1 \
+  --unique-images \
+  --limit 8
+
+python scripts/verify_sft_generations.py \
+  --input-jsonl outputs/newyorker_compact_v2_pipeline/planner_test_generations.jsonl \
+  --kind planner
+
+python scripts/build_captioner_inputs_from_plans.py \
+  --planner-generations outputs/newyorker_compact_v2_pipeline/planner_test_generations.jsonl \
+  --output-jsonl outputs/newyorker_compact_v2_pipeline/captioner_inputs_from_generated_plans.jsonl
+
+python scripts/generate_lora_sft.py \
+  --config configs/lora_sft_newyorker_compact_v2_3b_qlora.yaml \
+  --adapter outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss \
+  --input-jsonl outputs/newyorker_compact_v2_pipeline/captioner_inputs_from_generated_plans.jsonl \
+  --output-jsonl outputs/newyorker_compact_v2_pipeline/captioner_test_generations.jsonl \
+  --num-candidates 3 \
+  --unique-images \
+  --limit 8
+
+python scripts/verify_sft_generations.py \
+  --input-jsonl outputs/newyorker_compact_v2_pipeline/captioner_test_generations.jsonl \
+  --kind captioner

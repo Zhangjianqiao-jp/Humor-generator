@@ -1,0 +1,92 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+eval_dir=outputs/newyorker_caption_aware_v3_joint_vs_direct_eval
+mkdir -p "$eval_dir/smoke"
+
+planner_config=configs/lora_sft_caption_aware_viewpoint_v3_7b_qlora.yaml
+captioner_config=configs/lora_sft_newyorker_compact_v2_3b_qlora.yaml
+planner_best=outputs/newyorker_caption_aware_viewpoint_v3_7b_qlora/best_val_loss
+planner_final=outputs/newyorker_caption_aware_viewpoint_v3_7b_qlora/final_lora
+captioner=outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+test_images=data/processed/newyorker_hic_compact_json_test/test_images_unique.jsonl
+planner_prompt=prompts/7b_image_to_caption_aware_compact_viewpoint.txt
+
+python scripts/verify_lora_adapter.py "$planner_best" "$planner_final" "$captioner"
+
+# One-image end-to-end smoke before the full run.
+python scripts/generate_lora_sft.py \
+  --config "$planner_config" --adapter "$planner_best" \
+  --input-jsonl "$test_images" --output-jsonl "$eval_dir/smoke/plans.jsonl" \
+  --num-candidates 1 --prompt-file "$planner_prompt" --max-new-tokens 384 \
+  --limit 1 --seed 4242
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$eval_dir/smoke/plans.jsonl" --kind compact-viewpoint
+python scripts/build_captioner_inputs_from_plans.py \
+  --planner-generations "$eval_dir/smoke/plans.jsonl" \
+  --output-jsonl "$eval_dir/smoke/inputs.jsonl" --format compact-viewpoint
+python scripts/generate_lora_sft.py \
+  --config "$captioner_config" --adapter "$captioner" \
+  --input-jsonl "$eval_dir/smoke/inputs.jsonl" \
+  --output-jsonl "$eval_dir/smoke/captions.jsonl" \
+  --num-candidates 1 --seed 7777
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$eval_dir/smoke/captions.jsonl" --kind captioner
+
+# Planner generations from both checkpoints.
+for checkpoint in best final; do
+  if [ "$checkpoint" = best ]; then adapter="$planner_best"; else adapter="$planner_final"; fi
+  python scripts/generate_lora_sft.py \
+    --config "$planner_config" --adapter "$adapter" \
+    --input-jsonl "$test_images" --output-jsonl "$eval_dir/plans_${checkpoint}.jsonl" \
+    --num-candidates 1 --prompt-file "$planner_prompt" --max-new-tokens 384 \
+    --seed 4242
+  python scripts/verify_sft_generations.py \
+    --input-jsonl "$eval_dir/plans_${checkpoint}.jsonl" --kind compact-viewpoint
+  python scripts/build_captioner_inputs_from_plans.py \
+    --planner-generations "$eval_dir/plans_${checkpoint}.jsonl" \
+    --output-jsonl "$eval_dir/inputs_${checkpoint}.jsonl" --format compact-viewpoint
+done
+
+# Same 3B adapter and seed for both joint conditions.
+for checkpoint in best final; do
+  python scripts/generate_lora_sft.py \
+    --config "$captioner_config" --adapter "$captioner" \
+    --input-jsonl "$eval_dir/inputs_${checkpoint}.jsonl" \
+    --output-jsonl "$eval_dir/captions_joint_${checkpoint}.jsonl" \
+    --num-candidates 3 --seed 7777
+  python scripts/verify_sft_generations.py \
+    --input-jsonl "$eval_dir/captions_joint_${checkpoint}.jsonl" --kind captioner
+done
+
+python scripts/generate_lora_sft.py \
+  --config "$captioner_config" --adapter "$captioner" \
+  --input-jsonl "$test_images" --output-jsonl "$eval_dir/captions_direct.jsonl" \
+  --num-candidates 3 \
+  --prompt "Generate one short, natural, image-specific humorous caption for this image. Do not explain." \
+  --seed 7777
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$eval_dir/captions_direct.jsonl" --kind captioner
+
+python scripts/build_multisystem_blind_caption_comparison.py \
+  --system joint_best="$eval_dir/captions_joint_best.jsonl" \
+  --system joint_final="$eval_dir/captions_joint_final.jsonl" \
+  --system direct="$eval_dir/captions_direct.jsonl" \
+  --blind-output "$eval_dir/blind_candidates.jsonl" \
+  --key-output "$eval_dir/blind_key.json" \
+  --seed 20260821

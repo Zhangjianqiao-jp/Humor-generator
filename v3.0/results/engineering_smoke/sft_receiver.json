@@ -1,0 +1,46 @@
+{
+  "status": "pass",
+  "scientific_training": false,
+  "synthetic_sender_states": true,
+  "receiver": "sft_qwen_7b",
+  "adapter": "/home/pj26000152/ku60000936/projects/Humor-generator/v2.5/outputs/7b-generator/best_val_loss",
+  "alignment": {
+    "generated_tokens": 38,
+    "hidden_width": 3584,
+    "validated_conflict_pairs": 2,
+    "semantics": "state_used_to_predict_corresponding_token",
+    "teacher_replay_mean_cosine": 0.9998589754104614,
+    "teacher_replay_min_cosine": 0.9994775056838989,
+    "teacher_replay_relative_l2": 0.016490701586008072,
+    "processed_score_token_accuracy": 1.0,
+    "raw_head_token_accuracy_diagnostic": 0.8947368264198303
+  },
+  "token_contract": {
+    "text_prompt_tokens": 178,
+    "latent_prompt_tokens": 65,
+    "caption_tokens": 10,
+    "latent_slots": 24
+  },
+  "freeze": {
+    "policy_trainable": 0,
+    "bridge_trainable": 9106944,
+    "gradient_checkpointing": true,
+    "use_cache": false
+  },
+  "loss": {
+    "caption_nll": 4.15625,
+    "teacher_kl": 2.579904317855835,
+    "matched_shuffled_margin": 0.7924121618270874,
+    "total": 5.5254435539245605,
+    "bridge_gradient_norm": 170.26084899902344,
+    "first_parameter_update_norm": 0.01035354658961296
+  },
+  "memory_bytes": {
+    "peak_allocated": 6264811008,
+    "peak_reserved": 6364856320
+  },
+  "notes": [
+    "The one-step bridge smoke uses synthetic sender states and is not a quality experiment.",
+    "The contrastive term is differentiated by an exact-gradient two-pass recomputation to avoid retaining two receiver graphs."
+  ]
+}

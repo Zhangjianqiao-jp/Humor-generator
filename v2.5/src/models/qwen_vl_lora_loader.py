@@ -23,6 +23,7 @@ def load_qwen_vl_with_lora(
     load_in_4bit: bool = False,
     bnb_4bit_quant_type: str = "nf4",
     bnb_4bit_use_double_quant: bool = True,
+    new_adapter_name: str | None = None,
 ) -> tuple[Any, Any]:
     try:
         from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
@@ -45,6 +46,12 @@ def load_qwen_vl_with_lora(
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_name, **model_kwargs)
+    if load_in_4bit:
+        model = prepare_model_for_kbit_training(model)
+        print(
+            "[model] prepared 4-bit QLoRA base: "
+            f"quant_type={bnb_4bit_quant_type}, double_quant={bnb_4bit_use_double_quant}"
+        )
     processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=trust_remote_code)
     image_processor = getattr(processor, "image_processor", None)
     if image_min_pixels is not None:
@@ -74,15 +81,29 @@ def load_qwen_vl_with_lora(
         adapter_path = Path(adapter_path)
         if not adapter_path.is_dir():
             raise FileNotFoundError(f"LoRA adapter directory does not exist: {adapter_path}")
-        model = PeftModel.from_pretrained(model, adapter_path, is_trainable=is_trainable)
+        model = PeftModel.from_pretrained(
+            model,
+            adapter_path,
+            adapter_name="sft" if new_adapter_name else "default",
+            is_trainable=is_trainable and not new_adapter_name,
+        )
         print(f"[model] loaded LoRA adapter: {adapter_path}")
-    else:
-        if load_in_4bit:
-            model = prepare_model_for_kbit_training(model)
-            print(
-                "[model] prepared 4-bit QLoRA base: "
-                f"quant_type={bnb_4bit_quant_type}, double_quant={bnb_4bit_use_double_quant}"
+        if new_adapter_name:
+            preference_config = LoraConfig(
+                r=lora_rank,
+                lora_alpha=lora_alpha,
+                target_modules=target_modules,
+                lora_dropout=lora_dropout,
+                bias=bias,
+                task_type="CAUSAL_LM",
             )
+            model.add_adapter(new_adapter_name, preference_config)
+            model.set_adapter(["sft", new_adapter_name])
+            print(
+                f"[model] stacked frozen SFT adapter with new trainable adapter={new_adapter_name}; "
+                f"targets={target_modules}"
+            )
+    else:
         lora_config = LoraConfig(
             r=lora_rank,
             lora_alpha=lora_alpha,
@@ -95,7 +116,9 @@ def load_qwen_vl_with_lora(
 
     if is_trainable:
         for name, param in model.named_parameters():
-            if "lora_" not in name:
+            if new_adapter_name:
+                param.requires_grad = "lora_" in name and f".{new_adapter_name}." in name
+            elif "lora_" not in name:
                 param.requires_grad = False
     else:
         for _, param in model.named_parameters():

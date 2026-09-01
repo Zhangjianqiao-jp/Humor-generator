@@ -1,0 +1,58 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=02:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+source_dir=outputs/newyorker_caption_aware_v3_joint_vs_direct_eval
+eval_dir=outputs/newyorker_caption_aware_v3_counterfactual_eval
+captioner_config=configs/lora_sft_newyorker_compact_v2_3b_qlora.yaml
+captioner=outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+mkdir -p "$eval_dir/smoke"
+
+python scripts/verify_lora_adapter.py "$captioner"
+python scripts/build_counterfactual_plan_inputs.py \
+  --correct-inputs "$source_dir/inputs_final.jsonl" \
+  --swapped-output "$eval_dir/inputs_swapped.jsonl" \
+  --corrupted-output "$eval_dir/inputs_target_corrupted.jsonl" \
+  --seed 20260821
+
+# One-image end-to-end smoke before the full counterfactual generation.
+python scripts/generate_lora_sft.py \
+  --config "$captioner_config" --adapter "$captioner" \
+  --input-jsonl "$eval_dir/inputs_swapped.jsonl" \
+  --output-jsonl "$eval_dir/smoke/captions_swapped.jsonl" \
+  --num-candidates 1 --limit 1 --seed 7777
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$eval_dir/smoke/captions_swapped.jsonl" --kind captioner
+
+for condition in swapped target_corrupted; do
+  python scripts/generate_lora_sft.py \
+    --config "$captioner_config" --adapter "$captioner" \
+    --input-jsonl "$eval_dir/inputs_${condition}.jsonl" \
+    --output-jsonl "$eval_dir/captions_${condition}.jsonl" \
+    --num-candidates 3 --seed 7777
+  python scripts/verify_sft_generations.py \
+    --input-jsonl "$eval_dir/captions_${condition}.jsonl" --kind captioner
+done
+
+python scripts/build_multisystem_blind_caption_comparison.py \
+  --system correct="$source_dir/captions_joint_final.jsonl" \
+  --system swapped="$eval_dir/captions_swapped.jsonl" \
+  --system target_corrupted="$eval_dir/captions_target_corrupted.jsonl" \
+  --system direct="$source_dir/captions_direct.jsonl" \
+  --blind-output "$eval_dir/blind_candidates.jsonl" \
+  --key-output "$eval_dir/blind_key.json" \
+  --seed 20260822

@@ -1,0 +1,45 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=03:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+config=configs/latent_communication/eval_validation_group3.yaml
+out=results/latent_communication/validation_group3
+test -s outputs/latent_communication/bridge_sft/best.pt
+
+# One-image end-to-end smoke first. It regenerates the Planner trace online.
+python scripts/evaluate_latent_communication.py --config "$config" --limit 1
+for mode in text latent hybrid; do
+  test -s "$out/${mode}_seed20260828.jsonl"
+done
+
+# Full 24-image validation generation; the sealed 47-image test is untouched.
+python scripts/evaluate_latent_communication.py --config "$config"
+
+for seed in 20260828 20260829 20260830; do
+  python scripts/build_group_winrate_eval.py \
+    --system text="$out/text_seed${seed}.jsonl" \
+    --system latent="$out/latent_seed${seed}.jsonl" \
+    --system hybrid="$out/hybrid_seed${seed}.jsonl" \
+    --comparison latent:text \
+    --comparison hybrid:text \
+    --comparison hybrid:latent \
+    --public-output "$out/blind_group3_seed${seed}.jsonl" \
+    --key-output "$out/private_key_seed${seed}.json" \
+    --template-output "$out/rater_template_seed${seed}.json" \
+    --candidates-per-group 3 \
+    --seed "$seed"
+done

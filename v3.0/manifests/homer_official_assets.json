@@ -1,0 +1,67 @@
+{
+  "source": {
+    "repository": "https://github.com/Shang-hub/HOMER-Official-Implementation",
+    "commit": "d1334f295cc1a8f8f6dc67ba7e846c5939dddcec",
+    "commit_date": "2026-02-25T21:07:04+08:00",
+    "license_status": "No LICENSE or COPYING file was present at the pinned commit; do not redistribute these assets."
+  },
+  "joke_corpus": {
+    "upstream_path": "data/Our_joke_database/humor_rag_large_database.csv",
+    "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/data/Our_joke_database/humor_rag_large_database.csv",
+    "sha256": "681059f010868c1021eeb9150828536b9cfe99ad5d81288acd98efb2c19d7d31",
+    "bytes": 38530985,
+    "paper_declared_rows": 335570,
+    "physical_lines": 335570,
+    "csv_records": 335569,
+    "unique_ids": 335569,
+    "unique_exact_jokes": 335569,
+    "empty_jokes": 0,
+    "count_note": "The released file has 335,570 physical lines only when the CSV header is included; it has 335,569 data records."
+  },
+  "standard_descriptions": {
+    "humor_in_ai_train": {
+      "upstream_path": "data/datasets/humorbench/gpt4o_description/train.jsonl",
+      "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/data/datasets/humorbench/gpt4o_description/train.jsonl",
+      "sha256": "09151b799306b4dd2f6bbd5e67657cf988a4a5a96639fceba7625ad5cb8d9602",
+      "bytes": 94446,
+      "records": 271,
+      "provenance": "GPT-4o descriptions distributed in the HOMER official implementation; source benchmark is yguooo/newyorker_caption_ranking."
+    },
+    "humor_in_ai_validation": {
+      "upstream_path": "data/datasets/humorbench/gpt4o_description/validation.jsonl",
+      "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/data/datasets/humorbench/gpt4o_description/validation.jsonl",
+      "sha256": "80d91d34dac4a00a0e976983329c94844ba05ec0372306bd80af1524815f7171",
+      "bytes": 14863,
+      "records": 44,
+      "provenance": "GPT-4o descriptions distributed in the HOMER official implementation; source benchmark is yguooo/newyorker_caption_ranking."
+    },
+    "humor_in_ai_test": {
+      "upstream_path": "data/datasets/humorbench/gpt4o_description/test.jsonl",
+      "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/data/datasets/humorbench/gpt4o_description/test.jsonl",
+      "sha256": "b7d9ff114f684d77bcf923780ba59ca67f0346ce90d551b4f52e218156273e8c",
+      "bytes": 16226,
+      "records": 47,
+      "provenance": "GPT-4o descriptions distributed in the HOMER official implementation; source benchmark is yguooo/newyorker_caption_ranking."
+    },
+    "electronic_sheep": {
+      "upstream_path": "data/datasets/electronic_sheep/description/description.jsonl",
+      "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/data/datasets/electronic_sheep/description/description.jsonl",
+      "sha256": "05f3c96a721c111f5d01fd6bc253f849e392db8b120e90817b26e30cd44b0597",
+      "bytes": 109571,
+      "records": 679,
+      "provenance": "Human MTurk image_description selected from Electronic Sheep annotations; every released HOMER description exactly matches one of the three source annotations for its contest."
+    }
+  },
+  "upstream_dataset_revisions": {
+    "humor_in_ai": {
+      "repository": "https://huggingface.co/datasets/yguooo/newyorker_caption_ranking",
+      "revision_observed": "1cd70477b6a99a473690a25a2fed359f75184c64",
+      "license": "CC-BY-NC-4.0"
+    },
+    "electronic_sheep": {
+      "repository": "https://github.com/jmhessel/caption_contest_corpus",
+      "revision_observed": "d5f68b6bd6a0ccbfc35c4a724989650d9065ec84",
+      "data_license": "CC-BY-4.0"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "scientific_evaluation": false,
+  "cluster_id": "nycc_102",
+  "policy_trainable_parameters": 0,
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "repetition_penalty": 1.0
+  },
+  "empty_conditions": [
+    "typed_learned_latent"
+  ],
+  "outputs": {
+    "matched_text": "\"Here, let me do what the whole damn tree was made for!\"",
+    "statebridge": "addCriterion\n\n addCriterion",
+    "learned_latent": "user",
+    "typed_learned_latent": "[EMPTY OUTPUT]"
+  },
+  "latent_metadata": {
+    "statebridge": {
+      "statebridge_original_tokens": 322,
+      "statebridge_transmitted_tokens": 64,
+      "statebridge_truncation": "causal_tail",
+      "statebridge_solver": {
+        "sender_rank": 63,
+        "receiver_rank": 37,
+        "solver": "dense_rank_mismatch_fallback"
+      }
+    },
+    "learned_latent": {
+      "latent_slots": 8
+    },
+    "typed_learned_latent": {
+      "latent_slots": 24
+    }
+  },
+  "peak_allocated_bytes": 10881070080,
+  "peak_reserved_bytes": 10984882176
+}

@@ -1,0 +1,20 @@
+Analyze the image and return one compact visual-humor plan for a downstream caption generator.
+
+Return only valid JSON with exactly these keys:
+{
+  "scene": "one short literal image description",
+  "type": "scale_contrast|role_mismatch|object_misuse|action_pose_incongruity|text_image_contrast|expression_context_contrast|foreground_background_misread|knowledge_reference|dialogue_or_nonvisual|unclear_or_weak",
+  "target": "one concise non-caption description of the likely visual joke mechanism",
+  "primary_view": "full_image|object_crop|relation_crop|scale_reference_crop|face_expression_crop|text_region_crop|foreground_background_view|context_scene_view|pose_action_view",
+  "views": ["one or more allowed viewpoints"],
+  "anchors": [
+    {
+      "label": "short visible anchor label",
+      "evidence": "short visible evidence",
+      "role": "why this anchor matters to the joke"
+    }
+  ],
+  "external_knowledge": false
+}
+
+Ground visible facts in the image. Do not write a caption or punchline. Do not output markdown, comments, confidence scores, explanations, or extra keys. Use English. Return JSON only.

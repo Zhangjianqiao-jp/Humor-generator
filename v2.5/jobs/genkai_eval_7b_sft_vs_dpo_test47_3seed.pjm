@@ -1,0 +1,94 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=4
+
+input=data/processed/preference_objective_eval/fixed_hint_official_test47.jsonl
+model=Qwen/Qwen2.5-VL-7B-Instruct
+sft=outputs/7b-generator/best_val_loss
+dpo=outputs/7b-generator-dpo/dpo_mlp_fullpairs/final
+root=outputs/7b-generator-dpo/eval_test47_3seed
+packet=results/7b_generator/dpo_test47_3seed_blind
+
+test "$(wc -l < "$input")" -eq 47
+test -s "$sft/adapter_model.safetensors"
+test -s "$dpo/adapter_model.safetensors"
+mkdir -p "$root" "$packet"
+
+generate() {
+  policy=$1
+  adapter=$2
+  seed=$3
+  directory="$root/${policy}_s${seed}"
+  mkdir -p "$directory"
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$directory/generations.jsonl" \
+    --model-name "$model" \
+    --adapter-dir "$adapter" \
+    --load-in-4bit \
+    --use-row-prompt \
+    --num-candidates 3 \
+    --limit 47 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed "$seed"
+  test "$(wc -l < "$directory/generations.jsonl")" -eq 47
+}
+
+# Real one-image smoke for both checkpoints before the result-bearing runs.
+for policy in sft dpo; do
+  eval adapter=\$$policy
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$root/${policy}_smoke.jsonl" \
+    --model-name "$model" \
+    --adapter-dir "$adapter" \
+    --load-in-4bit \
+    --use-row-prompt \
+    --num-candidates 1 \
+    --limit 1 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed 20260827
+  test "$(wc -l < "$root/${policy}_smoke.jsonl")" -eq 1
+done
+
+for seed in 20260827 20260828 20260829; do
+  generate sft "$sft" "$seed"
+  generate dpo "$dpo" "$seed"
+done
+
+python scripts/build_group_winrate_eval.py \
+  --system sft_s20260827="$root/sft_s20260827/generations.jsonl" \
+  --system dpo_s20260827="$root/dpo_s20260827/generations.jsonl" \
+  --system sft_s20260828="$root/sft_s20260828/generations.jsonl" \
+  --system dpo_s20260828="$root/dpo_s20260828/generations.jsonl" \
+  --system sft_s20260829="$root/sft_s20260829/generations.jsonl" \
+  --system dpo_s20260829="$root/dpo_s20260829/generations.jsonl" \
+  --comparison dpo_s20260827:sft_s20260827 \
+  --comparison dpo_s20260828:sft_s20260828 \
+  --comparison dpo_s20260829:sft_s20260829 \
+  --public-output "$packet/trials.jsonl" \
+  --key-output "$packet/key.json" \
+  --template-output "$packet/decisions_template.json" \
+  --candidates-per-group 3 \
+  --seed 20260827
+
+test "$(wc -l < "$packet/trials.jsonl")" -eq 141
+echo "[test47-3seed] generated six policies and a 141-trial anonymous packet"

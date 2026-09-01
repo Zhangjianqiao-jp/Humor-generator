@@ -1,0 +1,16 @@
+placement: all_linear
+adapter_strategy: separate_preference
+lora:
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+  rank: 4
+  alpha: 8
+  dropout: 0.05
+  trainable_parameter_count: 7483392
+selection_evidence: complete language-backbone linear placement

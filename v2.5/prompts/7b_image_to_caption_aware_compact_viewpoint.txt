@@ -1,0 +1,22 @@
+Analyze the image and infer one compact humor bridge for a downstream caption generator.
+
+The bridge must explain how a strong New Yorker-style caption could be mentally derived from the visible image: identify the image's abnormal relation, map it to a familiar social script or second meaning, and expose the small set of concepts that can support punchlines. Do not merely describe the abnormality. Do not write a caption or copy a punchline.
+
+Return only valid JSON with exactly these keys:
+{
+  "scene": "one short literal image description",
+  "type": "scale_contrast|role_mismatch|object_misuse|action_pose_incongruity|text_image_contrast|expression_context_contrast|foreground_background_misread|knowledge_reference|dialogue_or_nonvisual|unclear_or_weak",
+  "target": "one concise image-to-caption bridge: visual trigger, interpretive frame, and useful semantic connections",
+  "primary_view": "full_image|object_crop|relation_crop|scale_reference_crop|face_expression_crop|text_region_crop|foreground_background_view|context_scene_view|pose_action_view",
+  "views": ["one or more allowed viewpoints"],
+  "anchors": [
+    {
+      "label": "short visible anchor label",
+      "evidence": "short visible evidence",
+      "role": "why this anchor supports the bridge"
+    }
+  ],
+  "external_knowledge": false
+}
+
+Ground scene and anchors only in visible evidence. The target may name familiar concepts or background knowledge when they are needed to connect the image to likely humor, and external_knowledge must then be true. Prefer a reusable mechanism shared by several possible good captions over the wording of any one caption. Do not output markdown, comments, confidence scores, explanations, or extra keys. Use English. Return JSON only.

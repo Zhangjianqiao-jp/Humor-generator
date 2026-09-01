@@ -1,0 +1,60 @@
+experiment:
+  name: homer_text_paper_reproduction
+  formal_training_enabled: false
+  stage: engineering_smoke_only
+
+paper_evidence:
+  paper: arXiv:2602.06423v2
+  venue: ICLR 2026
+  # Explicit project substitution: HOMER only says Qwen-VL (7B), so we pin the
+  # user's locally cached Qwen2.5-VL revision instead of claiming weight parity.
+  model_name: Qwen/Qwen2.5-VL-7B-Instruct
+  model_revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+  model_manifest: manifests/local_qwen2_5_vl_7b.json
+  model_provenance: local_project_substitution
+  homer_exact_model_match: false
+  # Official HOMER assets pinned below; this does not resolve the undisclosed
+  # Qwen-VL weight revision used for the paper's baseline.
+  description_provenance: manifests/homer_official_assets.json
+
+protocol:
+  strict_reproduction: true
+  reproduction_scope: homer_method_and_data_with_pinned_qwen2_5_substitution
+  standard_description_required: true
+  conflict_pairs_min: 2
+  association_chain_length: 3
+  local_view: standard_description
+  global_view: image
+  random_conflict_selection: true
+  random_target_selection: true
+  dfs_path_enumeration: true
+  random_path_selection: true
+
+joke_corpus:
+  # The paper/README says 335,570 jokes. The released CSV has 335,570 physical
+  # lines including its header, i.e. 335,569 actual joke records.
+  paper_declared_rows: 335570
+  released_csv_records: 335569
+  manifest: manifests/homer_official_assets.json
+  top_k: 5
+  delta: 5
+  rating_threshold: 3.0
+  near_duplicate_word_overlap: 0.80
+  retrieval_backend: official_query_fitted_tfidf
+  retrieval_backend_disclosed_by_paper: false
+  nltk_manifest: manifests/nltk_assets.json
+
+evaluation:
+  datasets: [humor_in_ai_365, electronic_sheep_679]
+  candidates_per_image: 5
+  pass_at_k: [1, 3, 5]
+  repetitions: 5
+  temperature: 1.0
+  evaluator_temperature: 0.0
+  formal_claims_enabled: false
+
+references:
+  - https://arxiv.org/abs/2602.06423
+  - https://github.com/Shang-hub/HOMER-Official-Implementation
+  - https://aclanthology.org/2023.acl-long.41/
+  - https://arxiv.org/abs/2406.10522

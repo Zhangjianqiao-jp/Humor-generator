@@ -1,0 +1,107 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=03:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+input=data/processed/preference_objective_eval/fixed_hint_validation.jsonl
+model=Qwen/Qwen2.5-VL-7B-Instruct
+adapter=outputs/7b-generator/best_val_loss
+root=outputs/7b-generator-eval
+judge_config=configs/7b_generator/eval_judge_7b.yaml
+seed=20260825
+
+test -f "$adapter/adapter_model.safetensors"
+python scripts/verify_lora_adapter.py "$adapter"
+mkdir -p "$root/base" "$root/sft"
+
+# Real GPU generation smoke for both policies before the result-bearing run.
+python scripts/generate_lora_candidates.py \
+  --input-jsonl "$input" \
+  --output-jsonl "$root/base/smoke.jsonl" \
+  --model-name "$model" \
+  --base-only \
+  --use-row-prompt \
+  --num-candidates 1 \
+  --limit 1 \
+  --max-new-tokens 48 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --seed "$seed"
+
+python scripts/generate_lora_candidates.py \
+  --input-jsonl "$input" \
+  --output-jsonl "$root/sft/smoke.jsonl" \
+  --model-name "$model" \
+  --adapter-dir "$adapter" \
+  --use-row-prompt \
+  --num-candidates 1 \
+  --limit 1 \
+  --max-new-tokens 48 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --seed "$seed"
+
+run_system() {
+  name=$1
+  mode=$2
+  directory="$root/$name"
+  if [ "$mode" = base ]; then
+    adapter_args="--base-only"
+  else
+    adapter_args="--adapter-dir $adapter"
+  fi
+  # shellcheck disable=SC2086
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$directory/generations.jsonl" \
+    --model-name "$model" \
+    $adapter_args \
+    --use-row-prompt \
+    --num-candidates 3 \
+    --limit 24 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed "$seed"
+  python scripts/judge_best_candidate_qwen.py \
+    --config "$judge_config" \
+    --input-jsonl "$directory/generations.jsonl" \
+    --output-jsonl "$directory/judgments.jsonl" \
+    --summary-json "$directory/judge_summary.json" \
+    --max-candidates 3 \
+    --max-new-tokens 256 \
+    --log-every 6
+}
+
+run_system base base
+run_system sft adapter
+
+python scripts/summarize_7b_sft_eval.py \
+  --root "$root" \
+  --output results/7b_generator/sft_base_comparison.json
+
+packet=results/7b_generator/blind_base_vs_sft
+python scripts/build_group_winrate_eval.py \
+  --system base="$root/base/generations.jsonl" \
+  --system sft="$root/sft/generations.jsonl" \
+  --comparison sft:base \
+  --public-output "$packet/trials.jsonl" \
+  --key-output "$packet/key.json" \
+  --template-output "$packet/decisions_template.json" \
+  --candidates-per-group 3 \
+  --seed "$seed"
+
+echo "[7b-eval] Base vs SFT generation, auxiliary 7B judge, and blind packet passed"

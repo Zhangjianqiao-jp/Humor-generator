@@ -1,0 +1,75 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+comparison_dir=outputs/newyorker_compact_viewpoint_joint_vs_direct_3b
+mkdir -p "$comparison_dir"
+
+python scripts/verify_lora_adapter.py \
+  outputs/newyorker_compact_viewpoint_7b_qlora/best_val_loss \
+  outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+
+python scripts/generate_lora_sft.py \
+  --config configs/lora_sft_hic_viewpoint_7b_qlora.yaml \
+  --adapter outputs/newyorker_compact_viewpoint_7b_qlora/best_val_loss \
+  --input-jsonl data/processed/newyorker_hic_compact_json_test/test_images_unique.jsonl \
+  --output-jsonl "$comparison_dir/planner_test_generations.jsonl" \
+  --num-candidates 1 \
+  --prompt-file prompts/7b_image_to_compact_viewpoint.txt \
+  --max-new-tokens 384 \
+  --seed 4242
+
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$comparison_dir/planner_test_generations.jsonl" \
+  --kind compact-viewpoint
+
+python scripts/build_captioner_inputs_from_plans.py \
+  --planner-generations "$comparison_dir/planner_test_generations.jsonl" \
+  --output-jsonl "$comparison_dir/joint_inputs.jsonl" \
+  --format compact-viewpoint
+
+python scripts/generate_lora_sft.py \
+  --config configs/lora_sft_newyorker_compact_v2_3b_qlora.yaml \
+  --adapter outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss \
+  --input-jsonl "$comparison_dir/joint_inputs.jsonl" \
+  --output-jsonl "$comparison_dir/joint_captions.jsonl" \
+  --num-candidates 3 \
+  --seed 7777
+
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$comparison_dir/joint_captions.jsonl" \
+  --kind captioner
+
+python scripts/generate_lora_sft.py \
+  --config configs/lora_sft_newyorker_compact_v2_3b_qlora.yaml \
+  --adapter outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss \
+  --input-jsonl data/processed/newyorker_hic_compact_json_test/test_images_unique.jsonl \
+  --output-jsonl "$comparison_dir/direct_3b_captions.jsonl" \
+  --num-candidates 3 \
+  --prompt "Generate one short, natural, image-specific humorous caption for this image. Do not explain." \
+  --seed 7777
+
+python scripts/verify_sft_generations.py \
+  --input-jsonl "$comparison_dir/direct_3b_captions.jsonl" \
+  --kind captioner
+
+python scripts/build_blind_caption_comparison.py \
+  --joint "$comparison_dir/joint_captions.jsonl" \
+  --direct "$comparison_dir/direct_3b_captions.jsonl" \
+  --blind-output "$comparison_dir/blind_candidates.jsonl" \
+  --key-output "$comparison_dir/blind_key.json" \
+  --seed 20260812

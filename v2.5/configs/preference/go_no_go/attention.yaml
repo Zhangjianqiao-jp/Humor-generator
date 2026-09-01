@@ -1,0 +1,13 @@
+placement: attention
+adapter_strategy: separate_preference
+lora:
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  trainable_parameter_count: 7372800
+selection_evidence: complete attention placement

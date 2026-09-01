@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv*/
+.auto-research/**/codex_attempt_*.jsonl
+.auto-research/**/codex_attempt_*_last.md
+.auto-research/**/runner.lock
+.auto-research/**/state.json
+.auto-research/**/task.json
 
 # Local datasets, checkpoints, and generated experiment outputs
 data/

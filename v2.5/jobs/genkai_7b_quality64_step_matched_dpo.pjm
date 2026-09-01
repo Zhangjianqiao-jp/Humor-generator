@@ -1,0 +1,62 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=02:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=4
+
+reference_root=data/processed/newyorker_published_dpo_reference_7b_generator_quality64
+pilot_train="$reference_root/dpo_train_step_matched_1264.jsonl"
+dpo_config=configs/7b_generator/dpo_quality64_step_matched.yaml
+
+python scripts/verify_lora_adapter.py outputs/7b-generator/best_val_loss
+test "$(wc -l < "$reference_root/dpo_train.jsonl")" -eq 17297
+
+python scripts/preference_diagnostics/select_step_matched_quality_pairs.py \
+  --input "$reference_root/dpo_train.jsonl" \
+  --output "$pilot_train" \
+  --manifest "$reference_root/step_matched_1264_manifest.json" \
+  --pairs 1264
+test "$(wc -l < "$pilot_train")" -eq 1264
+
+python scripts/train_lora_dpo.py --config "$dpo_config"
+python scripts/verify_lora_adapter.py \
+  outputs/7b-generator-dpo/dpo_mlp_quality64_step_matched/final
+
+test "$(python - <<'PY'
+import json
+from pathlib import Path
+rows = [json.loads(line) for line in Path('outputs/7b-generator-dpo/dpo_mlp_quality64_step_matched/train_metrics.jsonl').read_text().splitlines()]
+print(max(row.get('step', -1) for row in rows))
+PY
+)" -eq 158
+
+python scripts/compare_dpo_validation_gate.py \
+  --old outputs/7b-generator-dpo/dpo_mlp_fullpairs/train_metrics.jsonl \
+  --new outputs/7b-generator-dpo/dpo_mlp_quality64_step_matched/train_metrics.jsonl \
+  --output results/7b_generator/dpo_quality64_step_matched/validation_gate.json
+
+decision="$(python - <<'PY'
+import json
+from pathlib import Path
+print(json.loads(Path('results/7b_generator/dpo_quality64_step_matched/validation_gate.json').read_text())['decision'])
+PY
+)"
+if test "$decision" = "GO_FULL_QUALITY64"; then
+  echo "[quality64-dpo] validation GO; login monitor may submit full 17,297-pair DPO"
+else
+  echo "[quality64-dpo] validation NO-GO; full DPO not submitted"
+fi
+
+echo "[quality64-dpo] exactly 158-step DPO pilot and validation gate passed"

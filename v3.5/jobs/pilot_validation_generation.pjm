@@ -1,0 +1,55 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+out=outputs/pilot_validation
+mkdir -p "$out"
+common="--receiver sft --split validation --seeds 20260830 20260831 20260832"
+
+python scripts/generate_formal_baseline.py --condition full_plan_text --label full_plan_text \
+  --config configs/pilot/learned_sft_kl.yaml --output "$out/full_plan_text.jsonl" $common
+python scripts/generate_formal_baseline.py --condition token_embedding --label token_embedding \
+  --config configs/pilot/learned_sft_kl.yaml --output "$out/token_embedding.jsonl" $common
+python scripts/generate_formal_baseline.py --condition learned_latent --label learned_kl \
+  --config configs/pilot/learned_sft_kl.yaml \
+  --checkpoint outputs/pilot/learned_sft_kl/best_bridge.pt \
+  --output "$out/learned_kl.jsonl" $common
+python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_kl \
+  --config configs/pilot/typed_sft_kl.yaml \
+  --checkpoint outputs/pilot/typed_sft_kl/best_bridge.pt \
+  --output "$out/typed_kl.jsonl" $common
+python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_no_kl \
+  --config configs/pilot/typed_sft_no_kl.yaml \
+  --checkpoint outputs/pilot/typed_sft_no_kl/best_bridge.pt \
+  --output "$out/typed_no_kl.jsonl" $common
+
+python scripts/build_group_packets.py \
+  --generations "$out/full_plan_text.jsonl" "$out/token_embedding.jsonl" \
+    "$out/learned_kl.jsonl" "$out/typed_kl.jsonl" "$out/typed_no_kl.jsonl" \
+  --packet "$out/blind_packet.jsonl" \
+  --private-mapping "$out/private_mapping.jsonl" \
+  --group-size 3 --family pilot_architecture --mirror-sides \
+  --calibration data/cache/judge_calibration.json \
+  --comparison token_embedding:learned_kl \
+  --comparison token_embedding:typed_kl \
+  --comparison typed_no_kl:typed_kl \
+  --comparison full_plan_text:typed_kl
+
+test -s "$out/blind_packet.jsonl"
+test -s "$out/private_mapping.jsonl"

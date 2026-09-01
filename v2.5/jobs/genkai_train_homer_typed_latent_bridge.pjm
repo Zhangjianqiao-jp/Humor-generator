@@ -1,0 +1,20 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch
+#PJM -L gpu=1
+#PJM -L elapse=08:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+test -s outputs/latent_communication/homer_typed_bridge_smoke/best.pt
+python scripts/train_homer_latent_bridge.py --config configs/latent_communication/homer_bridge_sft.yaml

@@ -1,0 +1,40 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=02:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=4
+
+reference_config=configs/7b_generator/dpo_reference_quality64.yaml
+reference_root=data/processed/newyorker_published_dpo_reference_7b_generator_quality64
+
+python scripts/verify_lora_adapter.py outputs/7b-generator/best_val_loss
+
+# Full-H100 pressure gate: the eight longest caption pairs in one batch.
+python scripts/precompute_dpo_reference_logps.py \
+  --config "$reference_config" \
+  --splits train \
+  --stress-longest-text \
+  --output-dir "$reference_root/smoke_c_batch8"
+test "$(wc -l < "$reference_root/smoke_c_batch8/dpo_train.jsonl")" -eq 8
+
+python scripts/precompute_dpo_reference_logps.py \
+  --config "$reference_config" \
+  --splits train \
+  --resume
+test "$(wc -l < "$reference_root/dpo_train.jsonl")" -eq 17297
+
+# Chained submissions are performed by the login-node tmux monitor because
+# compute nodes do not expose pjsub.
+echo "[quality64-reference] 17,297 references complete on c-batch; login monitor may submit DPO"

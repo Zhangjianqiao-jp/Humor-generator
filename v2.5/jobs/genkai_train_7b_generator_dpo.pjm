@@ -1,0 +1,33 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=02:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=4
+
+config=configs/7b_generator/dpo_full.yaml
+reference_root=data/processed/newyorker_published_dpo_reference_7b_generator
+
+python scripts/verify_lora_adapter.py outputs/7b-generator/best_val_loss
+
+test "$(wc -l < "$reference_root/dpo_train.jsonl")" -eq 1264
+test "$(wc -l < "$reference_root/dpo_validation.jsonl")" -eq 384
+test "$(wc -l < "$reference_root/dpo_test.jsonl")" -eq 384
+
+python scripts/train_lora_dpo.py --config "$config"
+
+python scripts/verify_lora_adapter.py \
+  outputs/7b-generator-dpo/dpo_mlp_fullpairs/final
+
+echo "[7b-dpo] full-pair 7B DPO training passed"

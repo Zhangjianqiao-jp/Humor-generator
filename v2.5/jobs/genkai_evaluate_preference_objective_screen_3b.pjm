@@ -1,0 +1,87 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=03:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+input=data/processed/preference_objective_eval/fixed_hint_validation.jsonl
+model=Qwen/Qwen2.5-VL-3B-Instruct
+judge_config=configs/preference_diagnostics_captioner_3b.yaml
+
+run_system() {
+  name=$1
+  adapter=$2
+  directory=outputs/preference_screen_fullpairs/$name/eval
+  test -f "$adapter/adapter_model.safetensors"
+  mkdir -p "$directory"
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$directory/generations.jsonl" \
+    --model-name "$model" \
+    --adapter-dir "$adapter" \
+    --use-row-prompt \
+    --num-candidates 3 \
+    --limit 24 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed 20260824
+  python scripts/judge_best_candidate_qwen.py \
+    --config "$judge_config" \
+    --input-jsonl "$directory/generations.jsonl" \
+    --output-jsonl "$directory/judgments.jsonl" \
+    --summary-json "$directory/judge_summary.json" \
+    --max-candidates 3 \
+    --max-new-tokens 256 \
+    --log-every 6
+}
+
+screen_adapter() {
+  directory=$1
+  if [ -f "$directory/best/adapter_model.safetensors" ]; then
+    echo "$directory/best"
+  else
+    echo "$directory/final"
+  fi
+}
+
+run_system sft_baseline outputs/newyorker_compact_v2_captioner_3b_qlora/best_val_loss
+run_system dpo_attention "$(screen_adapter outputs/preference_screen_fullpairs/dpo_attention)"
+run_system simpo_attention "$(screen_adapter outputs/preference_screen_fullpairs/simpo_attention)"
+run_system ipo_attention "$(screen_adapter outputs/preference_screen_fullpairs/ipo_attention)"
+run_system anchored_attention "$(screen_adapter outputs/preference_screen_fullpairs/anchored_attention)"
+
+python scripts/preference_analysis/summarize_objective_screen.py \
+  --screen-root outputs/preference_screen_fullpairs \
+  --output-dir results/preference_learning/objective_screen_fullpairs
+
+packet=results/preference_learning/objective_screen_fullpairs/blind_group
+python scripts/build_group_winrate_eval.py \
+  --system sft=outputs/preference_screen_fullpairs/sft_baseline/eval/generations.jsonl \
+  --system dpo=outputs/preference_screen_fullpairs/dpo_attention/eval/generations.jsonl \
+  --system simpo=outputs/preference_screen_fullpairs/simpo_attention/eval/generations.jsonl \
+  --system ipo=outputs/preference_screen_fullpairs/ipo_attention/eval/generations.jsonl \
+  --system anchored=outputs/preference_screen_fullpairs/anchored_attention/eval/generations.jsonl \
+  --comparison dpo:sft \
+  --comparison simpo:sft \
+  --comparison ipo:sft \
+  --comparison anchored:sft \
+  --public-output "$packet/trials.jsonl" \
+  --key-output "$packet/key.json" \
+  --template-output "$packet/decisions_template.json" \
+  --candidates-per-group 3 \
+  --seed 20260824
+
+echo "[objective-eval] five-system fixed-hint evaluation and blind packet passed"

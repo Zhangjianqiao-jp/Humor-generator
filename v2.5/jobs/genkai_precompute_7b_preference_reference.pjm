@@ -1,0 +1,45 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch-mig
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=8
+
+adapter=outputs/7b-generator/best_val_loss
+reference_config=configs/7b_generator/dpo_reference_published.yaml
+smoke_config=configs/7b_generator/dpo_smoke.yaml
+reference_root=data/processed/newyorker_published_dpo_reference_7b_generator
+
+python scripts/verify_lora_adapter.py "$adapter"
+
+# One-pair end-to-end reference smoke writes only to a disposable directory.
+python scripts/precompute_dpo_reference_logps.py \
+  --config "$reference_config" \
+  --max-samples 1
+
+for split in train validation test; do
+  test "$(wc -l < "$reference_root/dpo_${split}.jsonl")" -eq 1
+done
+
+# Full result-bearing 7B reference computation overwrites the one-pair smoke.
+python scripts/precompute_dpo_reference_logps.py --config "$reference_config"
+
+test "$(wc -l < "$reference_root/dpo_train.jsonl")" -eq 1264
+test "$(wc -l < "$reference_root/dpo_validation.jsonl")" -eq 384
+test "$(wc -l < "$reference_root/dpo_test.jsonl")" -eq 384
+
+# Verify that the 7B NF4 policy can consume its exact reference values and update once.
+python scripts/train_lora_dpo.py --config "$smoke_config" --debug-one-step
+
+echo "[7b-reference] full 7B NF4 reference and one-step DPO smoke passed"

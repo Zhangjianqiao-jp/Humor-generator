@@ -1,0 +1,111 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv-genkai/bin/activate
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=4
+
+input=data/processed/preference_objective_eval/fixed_hint_validation.jsonl
+model=Qwen/Qwen2.5-VL-7B-Instruct
+sft=outputs/7b-generator/best_val_loss
+legacy_dpo=outputs/7b-generator-dpo/dpo_mlp_fullpairs/final
+quality64=outputs/7b-generator-dpo/dpo_mlp_quality64_step_matched/final
+root=outputs/7b-generator-dpo/eval_quality64_validation
+packet=results/7b_generator/dpo_quality64_validation_blind
+judge_config=configs/7b_generator/eval_judge_7b.yaml
+seed=20260828
+
+test "$(wc -l < "$input")" -eq 24
+for adapter in "$sft" "$legacy_dpo" "$quality64"; do
+  test -s "$adapter/adapter_model.safetensors"
+done
+mkdir -p "$root" "$packet"
+
+generate() {
+  policy=$1
+  adapter=$2
+  directory="$root/$policy"
+  mkdir -p "$directory"
+  python scripts/generate_lora_candidates.py \
+    --input-jsonl "$input" \
+    --output-jsonl "$directory/generations.jsonl" \
+    --model-name "$model" \
+    --adapter-dir "$adapter" \
+    --load-in-4bit \
+    --use-row-prompt \
+    --num-candidates 3 \
+    --limit 24 \
+    --max-new-tokens 48 \
+    --temperature 0.8 \
+    --top-p 0.9 \
+    --seed "$seed"
+  test "$(wc -l < "$directory/generations.jsonl")" -eq 24
+}
+
+judge() {
+  policy=$1
+  directory="$root/$policy"
+  python scripts/judge_best_candidate_qwen.py \
+    --config "$judge_config" \
+    --input-jsonl "$directory/generations.jsonl" \
+    --output-jsonl "$directory/judgments.jsonl" \
+    --summary-json "$directory/judge_summary.json" \
+    --max-candidates 3 \
+    --max-new-tokens 256 \
+    --log-every 6
+  test "$(wc -l < "$directory/judgments.jsonl")" -eq 24
+}
+
+# A real one-image smoke catches adapter/processor/CUDA regressions before the
+# result-bearing runs. Quality64 is sufficient because all adapters share the
+# same verified base and PEFT schema.
+python scripts/generate_lora_candidates.py \
+  --input-jsonl "$input" \
+  --output-jsonl "$root/quality64_smoke.jsonl" \
+  --model-name "$model" \
+  --adapter-dir "$quality64" \
+  --load-in-4bit \
+  --use-row-prompt \
+  --num-candidates 1 \
+  --limit 1 \
+  --max-new-tokens 48 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --seed "$seed"
+test "$(wc -l < "$root/quality64_smoke.jsonl")" -eq 1
+
+generate sft "$sft"
+generate legacy_dpo "$legacy_dpo"
+generate quality64 "$quality64"
+
+# These scores are diagnostic only. The position-balanced anonymous packet is
+# the primary validation artifact used for the GO/NO-GO decision.
+judge sft
+judge legacy_dpo
+judge quality64
+
+python scripts/build_group_winrate_eval.py \
+  --system sft="$root/sft/generations.jsonl" \
+  --system legacy_dpo="$root/legacy_dpo/generations.jsonl" \
+  --system quality64="$root/quality64/generations.jsonl" \
+  --comparison quality64:legacy_dpo \
+  --comparison quality64:sft \
+  --public-output "$packet/trials.jsonl" \
+  --key-output "$packet/key.json" \
+  --template-output "$packet/decisions_template.json" \
+  --candidates-per-group 3 \
+  --seed "$seed"
+
+test "$(wc -l < "$packet/trials.jsonl")" -eq 48
+echo "[quality64-validation] three-policy generation, auxiliary judge, and 48-trial blind packet passed"

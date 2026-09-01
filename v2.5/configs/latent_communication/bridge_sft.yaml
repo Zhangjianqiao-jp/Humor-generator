@@ -1,0 +1,45 @@
+experiment:
+  name: 7b_planner_to_7b_generator_latent_bridge_sft
+
+model:
+  model_name: Qwen/Qwen2.5-VL-7B-Instruct
+  device_map: auto
+  torch_dtype: bfloat16
+  load_in_4bit: true
+
+planner:
+  adapter_dir: outputs/newyorker_caption_aware_viewpoint_v3_7b_qlora/final_lora
+  prompt_file: prompts/7b_image_to_caption_aware_compact_viewpoint.txt
+  max_new_tokens: 384
+  max_state_tokens: 64
+  decoding: greedy
+
+generator:
+  adapter_dir: outputs/7b-generator/best_val_loss
+
+bridge:
+  type: learned_query_resampler
+  sender_layer: final
+  bottleneck_dim: 512
+  num_slots: 16
+  num_heads: 8
+  dropout: 0.05
+  vocabulary_anchor: false
+  note: Pure latent mode does not transmit decoded plan tokens to the Generator.
+
+data:
+  train_path: data/processed/newyorker_compact_sft_v2/caption_train.jsonl
+  val_path: data/processed/newyorker_compact_sft_v2/caption_validation.jsonl
+  sample_one_caption_per_image: true
+  image_max_pixels: 100352
+
+training:
+  seed: 20260828
+  num_epochs: 20
+  gradient_accumulation_steps: 8
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+
+output:
+  output_dir: outputs/latent_communication/bridge_sft

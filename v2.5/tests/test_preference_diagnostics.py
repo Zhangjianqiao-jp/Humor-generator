@@ -6,6 +6,11 @@ import pytest
 
 from scripts.preference_diagnostics.best_of_n import analyse
 from scripts.preference_diagnostics.build_preference_pairs import classify, close_length, flatten
+from scripts.preference_diagnostics.build_published_newyorker_dpo_pairs import (
+    load_ranking,
+    sample_published_pairs,
+    select_train_ready_pairs,
+)
 from scripts.preference_diagnostics.module_gradient_analysis import module_key
 from scripts.preference_diagnostics.humor_representation_probe import binary_auc, probe_layers
 from scripts.preference_diagnostics.judge_humor_candidates_qwen import normalize_scores, parse_score_payload
@@ -206,3 +211,66 @@ def test_paired_best_of_n_comparison_uses_matched_images() -> None:
     assert rows[0]["delta_hmax"] == pytest.approx(0)
     assert rows[1]["delta_hmax"] == pytest.approx(1.5)
     assert rows[1]["delta_pgood"] == pytest.approx(0.5)
+
+
+def test_published_pair_rule_enforces_rank_and_three_sigma_margin() -> None:
+    import random
+
+    ranking = [
+        {"rank": index, "caption": f"caption {index}", "mean": 3.0 - index * 0.4, "precision": 0.02}
+        for index in range(6)
+    ]
+    pairs, attempts = sample_published_pairs(ranking, pair_count=20, max_attempts=1000, rng=random.Random(2024))
+    assert len(pairs) == 20
+    assert attempts >= len(pairs)
+    for chosen, rejected, z_margin in pairs:
+        uncertainty = (chosen["precision"] ** 2 + rejected["precision"] ** 2) ** 0.5
+        assert chosen["rank"] < rejected["rank"]
+        assert chosen["mean"] - rejected["mean"] > 3 * uncertainty
+        assert z_margin > 3
+
+
+def test_published_ranking_uses_row_order_when_release_omits_rank(tmp_path) -> None:
+    path = tmp_path / "ranking.csv"
+    path.write_text(
+        "caption,mean,precision,votes,not_funny,somewhat_funny,funny\n"
+        "best,2.0,0.1,10,1,2,7\n"
+        "weaker,1.5,0.1,10,4,3,3\n",
+        encoding="utf-8",
+    )
+    rows = load_ranking(path)
+    assert [row["rank"] for row in rows] == [0, 1]
+    assert [row["caption"] for row in rows] == ["best", "weaker"]
+
+
+def test_published_train_ready_view_preserves_labels_and_controls_length() -> None:
+    base = {
+        "source_split": "train",
+        "contest_number": 530,
+        "chosen": "A concise office joke.",
+        "rejected": "A similarly sized weaker line.",
+        "score_margin": 0.4,
+        "chosen_rank": 1,
+        "rejected_rank": 100,
+    }
+    rows = [
+        {**base, "pair_id": "one", "z_margin": 3.2},
+        {**base, "pair_id": "duplicate", "z_margin": 3.2},
+        {
+            **base,
+            "pair_id": "harder",
+            "chosen": "A second compact joke.",
+            "rejected": "A second weaker line.",
+            "z_margin": 3.05,
+        },
+        {
+            **base,
+            "pair_id": "length-confound",
+            "chosen": "Tiny joke.",
+            "rejected": "This deliberately extremely long rejected caption creates a strong length shortcut.",
+            "z_margin": 3.01,
+        },
+    ]
+    selected = select_train_ready_pairs(rows, per_contest=2, max_relative_length_difference=0.4)
+    assert [row["z_margin"] for row in selected] == [3.05, 3.2]
+    assert all(row["selection"]["labels_unchanged"] for row in selected)

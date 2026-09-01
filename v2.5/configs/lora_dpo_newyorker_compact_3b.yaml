@@ -1,0 +1,41 @@
+# Offline DPO for the 3B image + compact-plan -> caption model.  The SFT
+# adapter and frozen reference log-probabilities must be produced first.
+model:
+  model_name: "Qwen/Qwen2.5-VL-3B-Instruct"
+  sft_adapter_dir: "outputs/newyorker_compact_captioner_3b/best_val_loss"
+  device_map: "auto"
+  torch_dtype: "bfloat16"
+  trust_remote_code: true
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+    bias: "none"
+
+data:
+  train_path: "data/processed/newyorker_compact_dpo_reference_3b/dpo_train.jsonl"
+  val_path: "data/processed/newyorker_compact_dpo_reference_3b/dpo_validation.jsonl"
+  image_max_pixels: 200704
+  max_seq_len: 768
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  num_epochs: 40
+  learning_rate: 0.00001
+  warmup_ratio: 0.05
+  lr_scheduler_type: "cosine"
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  beta: 0.1
+  seed: 42
+  gradient_checkpointing: true
+  logging_steps: 10
+  eval_steps: 50
+
+output:
+  output_dir: "outputs/newyorker_compact_captioner_3b_dpo"
+  latest_adapter_dir: "outputs/newyorker_compact_captioner_3b_dpo/latest"
+  best_adapter_dir: "outputs/newyorker_compact_captioner_3b_dpo/best_eval_dpo_loss"
+  final_adapter_dir: "outputs/newyorker_compact_captioner_3b_dpo/final_lora"
