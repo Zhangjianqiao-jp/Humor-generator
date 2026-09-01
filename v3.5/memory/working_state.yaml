@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T14:29:55+09:00"
+observed_at: "2026-09-01T14:32:26+09:00"
 must_revalidate: true
-source_commit: 9871f4f8dee8c7685690c7c711407452b0e61128
+source_commit: 3a098bd4f3f696990031d27f47a0261346283711
 branch: latent
 
-current_phase: P1_blocked_on_single_mig_backward_smoke
+current_phase: P1_single_mig_backward_smoke_running
 trace_gate:
   status: passed
   available: 666
@@ -31,7 +31,10 @@ last_job:
   interpretation: allocator_or_multi_mig_runtime_failure_not_oom_and_not_scientific_result
 
 immediate_gate:
-  action: run_single_mig_real_backward_smoke
+  action: wait_for_single_mig_real_backward_smoke
+  active_job_id: "6665915"
+  scheduler_state: RUN
+  started_at: "2026-09-01T14:32:21+09:00"
   job: jobs/single_mig_bridge_backward_smoke.pjm
   resource_group: b-batch-mig
   gpu_slices: 1
@@ -56,7 +59,7 @@ eta:
   excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
 
 next_agent_actions:
-  - Submit and verify the one-MIG backward smoke reaches RUN.
+  - Revalidate job 6665915 with `pjstat 6665915`.
   - Require `single_mig_typed_sft_backward.json` with status pass.
   - If it passes, restart P1 from an empty output directory using one MIG slice.
   - If it fails for memory, do not retry MIG; use the earliest full GPU allocation.
