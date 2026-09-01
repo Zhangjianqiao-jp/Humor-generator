@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T14:35:00+09:00"
+observed_at: "2026-09-01T15:13:30+09:00"
 must_revalidate: true
-source_commit: 5f627c07f199e9cd6c6df3d624f7bb410ea76339
+source_commit: 1de963f9b700ee7eafdc853101bf7b598531d18b
 branch: latent
 
-current_phase: P1_blocked_no_compatible_idle_gpu
+current_phase: P1_queued_native_full_gpu
 trace_gate:
   status: passed
   available: 666
@@ -38,16 +38,29 @@ resource_diagnosis:
   conclusion: >-
     The convenient single-example smoke was a false-negative resource gate;
     all MIG configurations are disallowed for formal bridge training.
-  compatible_idle_full_gpu_now: false
-  queued_jobs_retained: false
+  compatible_idle_full_gpu_at_submission: false
+  retained_job: "6666633"
+  retained_resource_group: c-batch
+  predicted_start: "2026-09-01T20:00:00+09:00"
+  cancelled_slower_duplicate: "6666632 on b-batch; predicted 2026-09-04T03:00:00+09:00"
+
+native_full_gpu_fix:
+  allocator: native
+  expandable_segments: false
+  device_map: {"": 0}
+  minimum_visible_memory_gib: 40
+  exact_formal_first_example_smoke: required_in_same_job
+  smoke_cluster: nycc_415
+  smoke_failure_behavior: stop_before_training
+  code_commit: 1de963f9b700ee7eafdc853101bf7b598531d18b
 
 immediate_gate:
-  action: wait_for_or_authorize_compatible_full_gpu
-  required_resource: full_b_batch_or_c_batch_gpu
-  before_submit:
-    - Verify an allocatable full node rather than aggregate free GPU counters.
-    - Run the exact P1 first selected image as the backward smoke.
-    - Preserve failed outputs; start formal P1 in a clean output directory.
+  action: monitor_job_6666633
+  required_resource: one_full_c_batch_gpu
+  success_requires:
+    - check_cuda_resource reports one device, native allocator, and at least 40 GiB.
+    - Exact P1 first-example smoke writes resource_smoke.json.
+    - Formal training writes complete.json after validation and early stopping.
 
 remaining_sequence_after_resource_gate:
   - learned_sft_kl_pilot
@@ -58,25 +71,27 @@ remaining_sequence_after_resource_gate:
   - stop_for_independent_raters
 
 eta:
-  scheduler_wait: "unknown while queueing is forbidden; no compatible full GPU was idle at observation time"
+  scheduler_wait: "scheduler predicts start at 2026-09-01 20:00 JST"
   current_pilot_after_start: "approximately 1-3 hours; hard cap 4 hours"
   three_pilots_and_generation_after_start: "provisional 6-10 GPU-hours"
   excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
 
 next_agent_actions:
-  - Revalidate `pjstat` and allocatable full-node status.
+  - Revalidate job 6666633 with `pjstat 6666633`.
   - Do not retry b-batch-mig or b-inter-mig.
-  - Do not submit a queued full-GPU job unless the user relaxes the no-queue rule.
-  - When a full GPU is available, stress-smoke the exact P1 sample before formal training.
+  - Inspect resource_smoke.json before interpreting any training metrics.
+  - The monitor may submit P2 only after P1 complete.json exists.
   - Never infer success from job disappearance; require `complete.json`.
 
 automation:
-  tmux_session: stopped
-  reason: prevent_repeated_MIG_failure_or_unapproved_queueing
+  tmux_session: v35-native-monitor
+  state: data/cache/formal_pipeline_monitor_state_v10.json
+  poll_seconds: 1200
+  behavior: advance only through complete.json evidence gates
 
 verification_commands:
-  - pjstat
-  - tail -n 120 p_l_sft_1m.6665918.out
-  - cat results/engineering_smoke/single_mig_typed_sft_backward.json
+  - pjstat 6666633
+  - tail -n 160 p1_native_c.6666633.out
+  - cat outputs/pilot/learned_sft_kl_native_full/resource_smoke.json
   - .venv/bin/python scripts/check_trace_completion.py
   - .venv/bin/python scripts/validate_project_memory.py

@@ -101,7 +101,7 @@ experiment_plan:
       evidence: data/cache/planner_traces_homer_strict_v35/index.jsonl
     - id: P1
       name: learned_sft_kl_pilot
-      status: blocked_no_compatible_idle_gpu
+      status: queued_native_full_gpu
       config: configs/pilot/learned_sft_kl.yaml
       budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
     - id: P2
@@ -180,6 +180,7 @@ resource_policy:
     - Never increase resource requests merely for safety margin.
     - MIG is forbidden for formal bridge training after both multi-slice and single-slice allocator failures on pilot data.
     - A smoke must exercise the exact pilot placement and a representative high-cost visual sample; a convenient first-row smoke is insufficient.
+    - Formal bridge jobs use one full GPU, a fixed device map to CUDA device 0, and the native PyTorch allocator.
 
 authoritative_references:
   - {id: homer, venue: ICLR_2026, url: "https://openreview.net/pdf?id=SzaRhPom4o"}
