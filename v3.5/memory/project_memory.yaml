@@ -54,6 +54,13 @@ data_contract:
     - Split by image cluster, never caption row.
     - Official HIA test clusters never fit the bridge.
     - The 23 adapter-seen official images are diagnostic only.
+  exhaustive_preflight:
+    rows: 2846
+    unique_images: 949
+    upstream_source_files: 367
+    image_clusters: 810
+    planner_traces: 666
+    policy: compile_and_cli_smoke_then_byte_schema_decode_tensor_provenance_audit
 
 trace_contract:
   index: data/cache/planner_traces_homer_strict_v35/index.jsonl

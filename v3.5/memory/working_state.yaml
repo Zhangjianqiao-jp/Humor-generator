@@ -1,9 +1,9 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T19:13:30+09:00"
+observed_at: "2026-09-01T19:28:00+09:00"
 must_revalidate: true
-source_commit: ef175638cfb1592f8801ed36aed4762da4eaef60
+source_commit: abc295268c031dc5cb04dd7aecb5f8708df82402
 branch: latent
 
 current_phase: P1_visualcap_v2_queued_for_gpu_stress_and_training
@@ -63,8 +63,17 @@ native_full_gpu_fix:
 program_risk_audit:
   overall: medium_continue_with_evidence_gates
   report: docs/PROGRAM_RISK_ASSESSMENT_ZH.md
-  tests_passed: 65
+  tests_passed: 67
+  formal_preflight: results/preflight/formal_preflight.json
+  exhaustive_dataset_audit:
+    rows: 2846/2846
+    unique_images: 949/949
+    upstream_inputs: 367/367
+    clusters: 810
+  exhaustive_trace_audit: 666/666
   deterministic_fixes:
+    - formal preflight now runs compile/tests/CLI smoke before exhaustive data and trace checks
+    - every dataset row, image byte hash/decode, source input hash, and Planner trace tensor is audited
     - pilot evaluation uses native allocator and the current P1 checkpoint path
     - monitor validates checkpoint, manifest, metrics, and finite completion fields
     - blind packet IDs must match the private mapping exactly
