@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T14:32:26+09:00"
+observed_at: "2026-09-01T14:35:00+09:00"
 must_revalidate: true
-source_commit: 3a098bd4f3f696990031d27f47a0261346283711
+source_commit: 5f627c07f199e9cd6c6df3d624f7bb410ea76339
 branch: latent
 
-current_phase: P1_single_mig_backward_smoke_running
+current_phase: P1_blocked_no_compatible_idle_gpu
 trace_gate:
   status: passed
   available: 666
@@ -16,35 +16,40 @@ trace_gate:
     nycc_325 and nycc_775 succeeded on new raw generations; validator repair
     was enabled but was not invoked in either final accepted trace.
 
-last_job:
-  job_id: "6665808"
-  name: p_l_sft_m
+latest_formal_attempt:
+  job_id: "6665918"
+  name: p_l_sft_1m
   scheduler_state: failed
   resource_group: b-batch-mig
-  gpu_slices: 2
-  started_at: "2026-09-01T14:25:50+09:00"
+  gpu_slices: 1
+  started_at: "2026-09-01T14:33:41+09:00"
   failed_before_first_example_completed: true
   error: >-
-    PyTorch CUDACachingAllocator internal assertion NVML_SUCCESS during the
-    first PEFT MLP forward on a model sharded across two MIG slices.
-  evidence: p_l_sft_m.6665808.out
-  interpretation: allocator_or_multi_mig_runtime_failure_not_oom_and_not_scientific_result
+    PyTorch CUDACachingAllocator NVML_SUCCESS internal assertion in the vision
+    tower PEFT MLP while preparing the first formal P1 image.
+  evidence: p_l_sft_1m.6665918.out
+  preserved_output: outputs/failed/learned_sft_kl_6665918_single_mig
+  interpretation: single_mig_runtime_incompatible_not_scientific_result
+
+resource_diagnosis:
+  two_mig_formal_job: "6665808 failed with the same allocator family"
+  one_mig_smoke_job: "6665915 passed on nycc_101/nycc_102"
+  one_mig_smoke_peak_allocated_bytes: 6990769664
+  conclusion: >-
+    The convenient single-example smoke was a false-negative resource gate;
+    all MIG configurations are disallowed for formal bridge training.
+  compatible_idle_full_gpu_now: false
+  queued_jobs_retained: false
 
 immediate_gate:
-  action: wait_for_single_mig_real_backward_smoke
-  active_job_id: "6665915"
-  scheduler_state: RUN
-  started_at: "2026-09-01T14:32:21+09:00"
-  job: jobs/single_mig_bridge_backward_smoke.pjm
-  resource_group: b-batch-mig
-  gpu_slices: 1
-  success_requires:
-    - finite loss
-    - finite gradient norm
-    - nonzero bridge update
-    - no allocator or OOM error
+  action: wait_for_or_authorize_compatible_full_gpu
+  required_resource: full_b_batch_or_c_batch_gpu
+  before_submit:
+    - Verify an allocatable full node rather than aggregate free GPU counters.
+    - Run the exact P1 first selected image as the backward smoke.
+    - Preserve failed outputs; start formal P1 in a clean output directory.
 
-remaining_sequence_after_smoke_pass:
+remaining_sequence_after_resource_gate:
   - learned_sft_kl_pilot
   - typed_sft_kl_pilot
   - typed_sft_no_kl_pilot
@@ -53,24 +58,25 @@ remaining_sequence_after_smoke_pass:
   - stop_for_independent_raters
 
 eta:
-  single_mig_smoke: "normally under 20 minutes; hard cap 30 minutes"
-  current_pilot_after_smoke: "unknown until one-MIG throughput is measured; hard cap 4 hours"
-  three_pilots_and_generation: "provisional 8-16 GPU-hours after a stable resource path is confirmed"
+  scheduler_wait: "unknown while queueing is forbidden; no compatible full GPU was idle at observation time"
+  current_pilot_after_start: "approximately 1-3 hours; hard cap 4 hours"
+  three_pilots_and_generation_after_start: "provisional 6-10 GPU-hours"
   excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
 
 next_agent_actions:
-  - Revalidate job 6665915 with `pjstat 6665915`.
-  - Require `single_mig_typed_sft_backward.json` with status pass.
-  - If it passes, restart P1 from an empty output directory using one MIG slice.
-  - If it fails for memory, do not retry MIG; use the earliest full GPU allocation.
+  - Revalidate `pjstat` and allocatable full-node status.
+  - Do not retry b-batch-mig or b-inter-mig.
+  - Do not submit a queued full-GPU job unless the user relaxes the no-queue rule.
+  - When a full GPU is available, stress-smoke the exact P1 sample before formal training.
   - Never infer success from job disappearance; require `complete.json`.
 
 automation:
-  tmux_session: stopped_pending_resource_smoke
-  reason: prevent_automatic_resubmission_after_allocator_failure
+  tmux_session: stopped
+  reason: prevent_repeated_MIG_failure_or_unapproved_queueing
 
 verification_commands:
   - pjstat
-  - tail -n 120 p_l_sft_m.6665808.out
+  - tail -n 120 p_l_sft_1m.6665918.out
+  - cat results/engineering_smoke/single_mig_typed_sft_backward.json
   - .venv/bin/python scripts/check_trace_completion.py
   - .venv/bin/python scripts/validate_project_memory.py

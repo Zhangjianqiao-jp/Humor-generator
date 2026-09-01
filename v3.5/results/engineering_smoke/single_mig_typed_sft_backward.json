@@ -1,0 +1,27 @@
+{
+  "status": "pass",
+  "scientific_training": false,
+  "real_planner_traces": true,
+  "clusters": [
+    "nycc_101",
+    "nycc_102"
+  ],
+  "hard_negative_cluster": "nycc_91",
+  "hard_negative_diagnostics": {
+    "mean_description_tfidf_similarity": 0.16776941373986926,
+    "same_source_fraction": 1.0,
+    "pairs": 602.0
+  },
+  "policy_trainable_parameters": 0,
+  "bridge_trainable_parameters": 3036160,
+  "gradient_norm": 289.71405029296875,
+  "update_norm": 0.005979446228593588,
+  "loss": {
+    "total": 6.1488847732543945,
+    "caption_nll": 5.125,
+    "teacher_kl": 1.914001226425171,
+    "shuffled_margin": 0.6688381433486938
+  },
+  "peak_allocated_bytes": 6990769664,
+  "peak_reserved_bytes": 7084179456
+}

@@ -58,10 +58,14 @@ def main() -> None:
     ids = [item["id"] for item in episodes]
     if len(ids) != len(set(ids)):
         raise ValueError("episode IDs must be unique")
+    known_ids = set(ids)
     for episode in episodes:
         require_paths(episode["evidence"], label=f"episode {episode['id']}")
         if not episode.get("lesson"):
             raise ValueError(f"episode {episode['id']} has no reusable lesson")
+        superseded_by = episode.get("superseded_by")
+        if superseded_by is not None and superseded_by not in known_ids:
+            raise ValueError(f"episode {episode['id']} has an unknown successor")
     print(json.dumps({
         "status": "pass",
         "phases": len(phases),
