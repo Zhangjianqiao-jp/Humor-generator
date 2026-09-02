@@ -289,6 +289,8 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - Hierarchical Phase A v2：作业 6688689 已完成并判定为**当前配置的操作性 No-Go**。validation NLL 从 1.1196 降至 0.6326，但 matched-minus-shuffled gap 仅 0.002664（工程 gate 0.02），`gap>0.2` 的比例为 0；conflict channel 权重从约 0.315 降至 0.0289。它说明当前 loss/router 没有形成足够的 plan 条件依赖，不得外推为“latent 方法失败”；
 - v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该数值既不能支持也不能反对 v2；
 - caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来绕过语义门。下一项只允许上述 Phase A3：通道平衡 reconstruction、channel-wise contextual InfoNCE、单通道 counterfactual、固定等权 gate；若 conflict 仍不过门，则进入预注册的 `C-text + A-latent`；
+- Phase A3 已实现并通过 CPU suite `76/76`：配置为 `configs/pilot/cross_attention_semantic_phase_a3.yaml`。真实双样本 GPU smoke 作业 `6689653` 已提交到预计更早的 `c-batch`，申请 1 GPU/30 分钟；调度器当前预计 `2026-09-03 10:00 JST`。同配置在 `b-batch` 的预测启动为 `2026-09-04 06:00`，故已取消后者；
+- 登录节点的 `tmux:v35_phase_a3_monitor` 只做静默、幂等的调度监控。它要求连续三次 job absent，并通过 `validate_phase_a3_smoke.py` 的冻结参数、真实两 cluster、逐通道 counterfactual、contextual InfoNCE、有限梯度与实际 update 门禁，才提交 1 GPU/1 小时的 `64/24` 作业；不调用 Codex、不消耗模型额度，也不会自动进入 caption training；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。
 
