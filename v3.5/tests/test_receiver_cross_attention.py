@@ -7,6 +7,9 @@ from humor_generator_v35.latent.cross_attention import (
     CHANNELS,
     ReceiverDrivenCrossAttentionBridge,
 )
+from humor_generator_v35.latent.legacy_cross_attention import (
+    LegacyV1ReceiverDrivenCrossAttentionBridge,
+)
 from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
 
 
@@ -45,6 +48,21 @@ def test_full_typed_memory_is_not_tail_truncated() -> None:
     memory, mask = bridge.pack_memory(states)
     assert memory.shape == (2, sum(value.shape[1] for value in states.values()), 16)
     assert mask.all()
+
+
+def test_legacy_v1_bridge_keeps_single_softmax_for_checkpoint_replay() -> None:
+    torch.manual_seed(5)
+    bridge = LegacyV1ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    with bridge.inject(model, _states()):
+        model(torch.randn(2, 5, 16))
+    weights = bridge.last_diagnostics[0].channel_weights
+    torch.testing.assert_close(torch.tensor(weights).sum(), torch.tensor(1.0), atol=1e-5, rtol=1e-5)
+    assert all(0.0 < value < 1.0 for value in weights)
 
 
 def test_attention_normalizes_each_channel_before_channel_fusion() -> None:

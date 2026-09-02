@@ -1,0 +1,44 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export OMP_NUM_THREADS=1
+
+# The two old checkpoints are evaluated with their own compatible bridge
+# architectures.  No parameters are updated and sealed test data is excluded.
+python scripts/check_environment.py
+python scripts/check_v35_isolation.py
+python scripts/verify_frozen_artifacts.py
+python scripts/verify_clustered_dataset.py
+python scripts/check_trace_completion.py
+
+python scripts/re_evaluate_failed_semantic_bridges.py \
+  --method v1 \
+  --config outputs/pilot/cross_attention_semantic_v1/config.yaml \
+  --checkpoint outputs/pilot/cross_attention_semantic_v1/best_bridge.pt \
+  --output outputs/re_evaluation/semantic_v1_corrected
+
+python scripts/re_evaluate_failed_semantic_bridges.py \
+  --method v2 \
+  --config outputs/pilot/hierarchical_cross_attention_semantic_v2/config.yaml \
+  --checkpoint outputs/pilot/hierarchical_cross_attention_semantic_v2/best_bridge.pt \
+  --output outputs/re_evaluation/semantic_v2_corrected
+
+test -s outputs/re_evaluation/semantic_v1_corrected/summary.json
+test -s outputs/re_evaluation/semantic_v2_corrected/summary.json
+test -s outputs/re_evaluation/semantic_v1_corrected/manifest.json
+test -s outputs/re_evaluation/semantic_v2_corrected/manifest.json
