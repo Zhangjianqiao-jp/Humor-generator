@@ -133,10 +133,14 @@ def test_all_formal_comparison_configs_share_visual_token_budget() -> None:
     assert budgets == {(256, 1280)}
 
 
-def test_resource_smoke_covers_first_and_max_raw_pixel_sample() -> None:
+def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
     smoke = (ROOT / "scripts/real_trace_bridge_smoke.py").read_text()
-    assert "exact_formal_first_plus_max_raw_pixel_example" in smoke
+    assert "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples" in smoke
     assert "stress = max(selected" in smoke
+    assert "memory_stress = max(selected" in smoke
+    assert "for row in (stress, memory_stress)" in smoke
+    assert 'config["bridge"]["layer_indices"]' in smoke
+    assert 'config["bridge"]["receiver_layers"]' not in smoke
     assert "configure_frozen_receiver" in smoke
 
 

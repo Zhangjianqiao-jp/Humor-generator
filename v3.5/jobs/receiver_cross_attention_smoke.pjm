@@ -1,0 +1,29 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OMP_NUM_THREADS=1
+
+python scripts/check_environment.py
+python scripts/check_v35_isolation.py
+python scripts/verify_frozen_artifacts.py
+python scripts/verify_clustered_dataset.py
+python scripts/check_trace_completion.py
+python scripts/real_trace_bridge_smoke.py \
+  --config configs/pilot/cross_attention_semantic_reconstruction.yaml \
+  --trace-index data/cache/planner_traces_homer_strict_v35/index.jsonl \
+  --output results/engineering_smoke/receiver_cross_attention_semantic.json
+test -s results/engineering_smoke/receiver_cross_attention_semantic.json

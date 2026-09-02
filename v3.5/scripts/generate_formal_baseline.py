@@ -30,6 +30,7 @@ from humor_generator_v35.latent.bridges import (
     LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm,
     nearest_vocabulary_embeddings,
 )
+from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.latent.budget import channel_causal_tail, concatenate_budgeted
 from humor_generator_v35.latent.statebridge import StateBridgeAlignment
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
@@ -38,6 +39,7 @@ from humor_generator_v35.training.formal_bridge import (
     latent_messages,
     load_trace_index,
 )
+from humor_generator_v35.training.cross_attention_bridge import zero_prefix_caption_messages
 
 
 CONDITIONS = {
@@ -48,6 +50,7 @@ CONDITIONS = {
     "statebridge",
     "learned_latent",
     "typed_learned_latent",
+    "receiver_cross_attention",
 }
 
 
@@ -74,15 +77,24 @@ def load_bridge(config: dict[str, Any], checkpoint: Path, backend: QwenBackend) 
         "target_norm": mean_embedding_norm(backend.model.get_input_embeddings().weight),
     }
     baseline = config["experiment"]["baseline"]
-    bridge = (
-        TypedLatentBridge(
-            width, width, slots=int(config["bridge"]["slots_per_channel"]), **kwargs
+    if baseline == "receiver_cross_attention":
+        bridge = ReceiverDrivenCrossAttentionBridge(
+            width, width,
+            layer_indices=[int(value) for value in config["bridge"]["layer_indices"]],
+            bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
+            heads=int(config["bridge"]["heads"]),
+            gate_init=float(config["bridge"].get("gate_init", 0.1)),
         )
-        if baseline == "typed_learned_latent"
-        else LearnedLatentBridge(
-            width, width, slots=int(config["bridge"]["total_slots"]), **kwargs
+    else:
+        bridge = (
+            TypedLatentBridge(
+                width, width, slots=int(config["bridge"]["slots_per_channel"]), **kwargs
+            )
+            if baseline == "typed_learned_latent"
+            else LearnedLatentBridge(
+                width, width, slots=int(config["bridge"]["total_slots"]), **kwargs
+            )
         )
-    )
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     bridge.load_state_dict(payload["bridge"])
     bridge.to(model_device(backend.model)).eval()
@@ -218,15 +230,26 @@ def main() -> None:
     )
     parser.add_argument(
         "--quantize-bridge-output", action="store_true",
-        help="Replace learned continuous slots with nearest receiver token embeddings.",
+        help="Legacy post-hoc nearest-neighbor diagnostic; invalid as a trained discrete method.",
+    )
+    parser.add_argument(
+        "--allow-invalid-posthoc-quantization-diagnostic", action="store_true",
+        help="Acknowledge train/test mismatch; never use this output as a candidate method.",
     )
     args = parser.parse_args()
-    if args.condition in {"learned_latent", "typed_learned_latent"} and args.checkpoint is None:
+    if args.condition in {
+        "learned_latent", "typed_learned_latent", "receiver_cross_attention"
+    } and args.checkpoint is None:
         parser.error("learned conditions require --checkpoint")
     if args.slots_per_channel < 2:
         parser.error("communication baselines need at least two states per channel")
     if len(set(args.seeds)) != len(args.seeds):
         parser.error("generation seeds must be unique")
+    if args.quantize_bridge_output and not args.allow_invalid_posthoc_quantization_diagnostic:
+        parser.error(
+            "post-hoc nearest-vocabulary quantization is deprecated: it was not trained "
+            "with VQ/FSQ and may only be run as an explicitly acknowledged failure diagnostic"
+        )
     condition_label = args.label or args.condition
     if not condition_label.replace("_", "").replace("-", "").isalnum():
         parser.error("--label must contain only letters, digits, '_' or '-'")
@@ -236,7 +259,9 @@ def main() -> None:
     expected_receiver = "sft" if config["model"].get("adapter") else "base"
     if expected_receiver != args.receiver:
         raise RuntimeError(f"config receiver is {expected_receiver}, CLI requested {args.receiver}")
-    if args.condition in {"learned_latent", "typed_learned_latent"}:
+    if args.condition in {
+        "learned_latent", "typed_learned_latent", "receiver_cross_attention"
+    }:
         if config["experiment"]["baseline"] != args.condition:
             raise RuntimeError("bridge config baseline does not match requested condition")
 
@@ -312,6 +337,31 @@ def main() -> None:
                         max_new_tokens=args.max_new_tokens,
                         seed=generation_seed,
                     )
+                elif args.condition == "receiver_cross_attention":
+                    if not isinstance(bridge, ReceiverDrivenCrossAttentionBridge):
+                        raise RuntimeError("cross-attention condition requires its trained bridge")
+                    trace_states = load_trace(
+                        ROOT / trace_record["trace_path"],
+                        expected_sha256=trace_record["trace_sha256"],
+                    )
+                    parameter = next(bridge.parameters())
+                    full_memory = {
+                        name: trace_states[name].states.to(
+                            device=parameter.device, dtype=parameter.dtype
+                        ) for name in TypedLatentBridge.channel_order
+                    }
+                    with bridge.inject(backend.model, full_memory):
+                        caption = backend.generate(
+                            zero_prefix_caption_messages(row["image"]),
+                            temperature=1.0,
+                            max_new_tokens=args.max_new_tokens,
+                            seed=generation_seed,
+                        )
+                    metadata.update({
+                        "latent_interface": "receiver_driven_full_state_cross_attention",
+                        "latent_tokens_inserted": 0,
+                        "memory_tokens": sum(value.shape[1] for value in full_memory.values()),
+                    })
                 else:
                     slots, latent_meta = latent_slots(
                         args.condition,
@@ -328,6 +378,7 @@ def main() -> None:
                         )
                         latent_meta.update({
                             "bridge_output_quantized": True,
+                            "scientific_status": "invalid_posthoc_failure_diagnostic",
                             "quantized_token_ids": token_ids.squeeze(0).tolist(),
                         })
                     caption = backend.generate_with_latent_prefix(
@@ -384,11 +435,19 @@ def main() -> None:
         "split": args.split,
         "seeds": args.seeds,
         "sampling": {"temperature": 1.0, "top_p": 1.0, "repetition_penalty": 1.0},
-        "communication_budget": {
-            "slots_per_channel": args.slots_per_channel,
-            "channels": list(TypedLatentBridge.channel_order),
-            "total_slots": 3 * args.slots_per_channel,
-        },
+        "communication_budget": (
+            {
+                "policy": "full_typed_states_no_truncation",
+                "channels": list(TypedLatentBridge.channel_order),
+                "latent_input_prefix_tokens": 0,
+            }
+            if args.condition == "receiver_cross_attention"
+            else {
+                "slots_per_channel": args.slots_per_channel,
+                "channels": list(TypedLatentBridge.channel_order),
+                "total_slots": 3 * args.slots_per_channel,
+            }
+        ),
         "config_sha256": file_sha256(config_path),
         "trace_index_sha256": file_sha256(args.trace_index),
         "checkpoint_sha256": file_sha256(args.checkpoint) if args.checkpoint else None,

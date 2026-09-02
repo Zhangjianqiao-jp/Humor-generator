@@ -315,6 +315,9 @@ class FrozenReceiverBridgeTask:
             )
             coefficient = torch.sigmoid(-matched0 + shuffled0 + margin).detach()
             margin_value = F.softplus(-matched0 + shuffled0 + margin).mean()
+            gap_value = (matched0 - shuffled0).mean()
+            fraction_gap_positive = (matched0 > shuffled0).float().mean()
+            fraction_gap_over_margin = ((matched0 - shuffled0) > margin).float().mean()
 
         matched_logits = self._latent_logits(
             embeddings, attention_mask, positions,
@@ -356,6 +359,11 @@ class FrozenReceiverBridgeTask:
             "caption_nll": float(metric_caption_nll.cpu()),
             "teacher_kl": float(metric_teacher_kl.cpu()),
             "shuffled_margin": float(margin_value.cpu()),
+            "matched_logp": float(matched0.mean().cpu()),
+            "shuffled_logp": float(shuffled0.mean().cpu()),
+            "matched_minus_shuffled_logp": float(gap_value.cpu()),
+            "fraction_gap_gt_0": float(fraction_gap_positive.cpu()),
+            "fraction_gap_gt_margin": float(fraction_gap_over_margin.cpu()),
         }
 
     @torch.no_grad()
@@ -395,6 +403,7 @@ class FrozenReceiverBridgeTask:
         margin_loss = F.softplus(
             -matched_logp + shuffled_logp + float(self.loss_config["margin"])
         ).mean()
+        gap = (matched_logp - shuffled_logp).mean()
         total = (
             float(self.loss_config["caption_nll"]) * nll
             + float(self.loss_config["text_teacher_forward_kl"]) * kl
@@ -405,6 +414,14 @@ class FrozenReceiverBridgeTask:
             "caption_nll": float(nll.cpu()),
             "teacher_kl": float(kl.cpu()),
             "shuffled_margin": float(margin_loss.cpu()),
+            "matched_logp": float(matched_logp.mean().cpu()),
+            "shuffled_logp": float(shuffled_logp.mean().cpu()),
+            "matched_minus_shuffled_logp": float(gap.cpu()),
+            "fraction_gap_gt_0": float((matched_logp > shuffled_logp).float().mean().cpu()),
+            "fraction_gap_gt_margin": float(
+                ((matched_logp - shuffled_logp) > float(self.loss_config["margin"]))
+                .float().mean().cpu()
+            ),
         }
 
 

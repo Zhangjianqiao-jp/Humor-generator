@@ -26,7 +26,7 @@ def model_device(model: Any) -> torch.device:
     return next(parameter.device for parameter in model.parameters() if parameter.device.type != "meta")
 
 
-def find_last_decoder_layer(model: Any) -> Any:
+def find_decoder_layers(model: Any) -> Any:
     queue, seen = [model], set()
     while queue:
         current = queue.pop(0)
@@ -35,12 +35,16 @@ def find_last_decoder_layer(model: Any) -> Any:
         seen.add(id(current))
         layers = getattr(current, "layers", None)
         if layers is not None and len(layers):
-            return layers[-1]
+            return layers
         for name in ("base_model", "model", "language_model"):
             child = getattr(current, name, None)
             if child is not None:
                 queue.append(child)
     raise RuntimeError(f"cannot locate decoder layers below {type(model).__name__}")
+
+
+def find_last_decoder_layer(model: Any) -> Any:
+    return find_decoder_layers(model)[-1]
 
 
 def find_final_decoder_norm(model: Any) -> Any:

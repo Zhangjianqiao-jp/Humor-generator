@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import read_jsonl
 from humor_generator_v35.latent.bridges import LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm
+from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
 from humor_generator_v35.training.formal_bridge import (
     FrozenReceiverBridgeTask,
@@ -27,6 +28,7 @@ from humor_generator_v35.training.formal_bridge import (
     mean_metrics,
     prepare_example,
 )
+from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
 
 
@@ -67,11 +69,19 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--resume", type=Path)
+    parser.add_argument(
+        "--init-bridge", type=Path,
+        help="Initialize bridge weights only (for semantic-reconstruction -> caption stage).",
+    )
     args = parser.parse_args()
     config_path = args.config.resolve()
     config = yaml.safe_load(config_path.read_text())
-    if config["experiment"]["baseline"] not in {"learned_latent", "typed_learned_latent"}:
-        raise ValueError("train_bridge only trains learned_latent or typed_learned_latent")
+    if args.resume and args.init_bridge:
+        raise ValueError("--resume and --init-bridge are mutually exclusive")
+    if config["experiment"]["baseline"] not in {
+        "learned_latent", "typed_learned_latent", "receiver_cross_attention"
+    }:
+        raise ValueError("unsupported trainable bridge baseline")
     if not config["model"].get("frozen", False):
         raise ValueError("formal bridge experiments require a frozen receiver")
 
@@ -99,24 +109,39 @@ def main() -> None:
         "heads": int(config["bridge"]["heads"]),
         "target_norm": target_norm,
     }
-    bridge = (
-        TypedLatentBridge(
+    baseline = config["experiment"]["baseline"]
+    if baseline == "receiver_cross_attention":
+        bridge = ReceiverDrivenCrossAttentionBridge(
             width, width,
-            slots=int(config["bridge"]["slots_per_channel"]),
-            **common_bridge_args,
-        )
-        if config["experiment"]["baseline"] == "typed_learned_latent"
-        else LearnedLatentBridge(
-            width, width,
-            slots=int(config["bridge"]["total_slots"]),
-            **common_bridge_args,
-        )
-    ).to(device)
+            layer_indices=[int(value) for value in config["bridge"]["layer_indices"]],
+            bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
+            heads=int(config["bridge"]["heads"]),
+            gate_init=float(config["bridge"].get("gate_init", 0.1)),
+        ).to(device)
+    else:
+        bridge = (
+            TypedLatentBridge(
+                width, width,
+                slots=int(config["bridge"]["slots_per_channel"]),
+                **common_bridge_args,
+            )
+            if baseline == "typed_learned_latent"
+            else LearnedLatentBridge(
+                width, width,
+                slots=int(config["bridge"]["total_slots"]),
+                **common_bridge_args,
+            )
+        ).to(device)
     freeze_report = configure_frozen_receiver(backend.model, bridge)
     resume_state = None
     if args.resume:
         resume_state = torch.load(args.resume, map_location="cpu", weights_only=True)
         bridge.load_state_dict(resume_state["bridge"])
+    elif args.init_bridge:
+        initial = torch.load(args.init_bridge, map_location="cpu", weights_only=True)
+        if "bridge" not in initial:
+            raise RuntimeError("initial checkpoint has no bridge state")
+        bridge.load_state_dict(initial["bridge"])
     policy_trainable = freeze_report.policy_trainable
     bridge_trainable = freeze_report.bridge_trainable
     if policy_trainable != 0 or bridge_trainable == 0:
@@ -144,14 +169,22 @@ def main() -> None:
     validation_shuffle, validation_negative_diagnostics = hard_negative_cluster_map(
         validation_rows, traces
     )
-    task = FrozenReceiverBridgeTask(
-        backend,
-        bridge,
-        root=ROOT,
-        trace_index=traces,
-        loss_config=config["loss"],
-        max_caption_tokens=int(config["training"]["max_caption_tokens"]),
-    )
+    if baseline == "receiver_cross_attention":
+        task = ReceiverCrossAttentionTask(
+            backend, bridge, root=ROOT, trace_index=traces,
+            loss_config=config["loss"],
+            max_target_tokens=int(config["training"]["max_target_tokens"]),
+            stage=str(config["training"]["stage"]),
+        )
+    else:
+        task = FrozenReceiverBridgeTask(
+            backend,
+            bridge,
+            root=ROOT,
+            trace_index=traces,
+            loss_config=config["loss"],
+            max_caption_tokens=int(config["training"]["max_caption_tokens"]),
+        )
     optimizer = torch.optim.AdamW(
         bridge.parameters(),
         lr=float(config["training"]["learning_rate"]),
@@ -185,6 +218,12 @@ def main() -> None:
         "train_cluster_ids": sorted({row["cluster_id"] for row in train_rows}),
         "validation_cluster_ids": sorted({row["cluster_id"] for row in validation_rows}),
         "subset_selection": "sha256(v35-pilot:seed:split:cluster_id)",
+        "training_stage": config["training"].get("stage", "caption"),
+        "communication_interface": (
+            "receiver_driven_full_state_cross_attention_no_soft_prefix"
+            if baseline == "receiver_cross_attention" else "input_soft_prefix"
+        ),
+        "initial_bridge_checkpoint": None if args.init_bridge is None else str(args.init_bridge.resolve()),
         "train_cluster_ids_sha256": hashlib.sha256(
             "\n".join(sorted({row["cluster_id"] for row in train_rows})).encode()
         ).hexdigest(),

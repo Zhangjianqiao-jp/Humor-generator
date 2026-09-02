@@ -52,6 +52,45 @@ def matched_shuffled_margin_loss(
     return F.softplus(-(matched - shuffled - margin)).mean()
 
 
+def symmetric_info_nce(
+    student: torch.Tensor,
+    teacher: torch.Tensor,
+    *,
+    temperature: float = 0.07,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Align samples without forcing coordinate equality.
+
+    Returns symmetric InfoNCE and retrieval@1.  A batch of one is rejected:
+    without negatives the objective cannot constrain semantic identity.
+    """
+    if student.ndim != 2 or teacher.ndim != 2 or student.shape != teacher.shape:
+        raise ValueError("student and teacher must be matching [B,D] tensors")
+    if student.shape[0] < 2:
+        raise ValueError("InfoNCE requires at least two matched pairs")
+    if temperature <= 0:
+        raise ValueError("temperature must be positive")
+    left = F.normalize(student.float(), dim=-1)
+    right = F.normalize(teacher.detach().float(), dim=-1)
+    logits = left @ right.T / temperature
+    labels = torch.arange(student.shape[0], device=student.device)
+    loss = 0.5 * (F.cross_entropy(logits, labels) + F.cross_entropy(logits.T, labels))
+    accuracy = 0.5 * (
+        logits.argmax(-1).eq(labels).float().mean()
+        + logits.argmax(0).eq(labels).float().mean()
+    )
+    return loss, accuracy
+
+
+def variance_floor_loss(representations: torch.Tensor, *, floor: float = 1.0) -> torch.Tensor:
+    """VICReg-style anti-collapse term over semantically distinct samples."""
+    if representations.ndim != 2 or representations.shape[0] < 2:
+        raise ValueError("variance loss requires at least two [B,D] representations")
+    if floor <= 0:
+        raise ValueError("floor must be positive")
+    standard_deviation = torch.sqrt(representations.float().var(dim=0) + 1e-4)
+    return torch.relu(floor - standard_deviation).mean()
+
+
 @dataclass(frozen=True)
 class BridgeLoss:
     total: torch.Tensor

@@ -14,12 +14,13 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from humor_generator_v35.data.traces import read_jsonl
+from humor_generator_v35.data.traces import load_trace, read_jsonl
 from humor_generator_v35.latent.bridges import (
     LearnedLatentBridge,
     TypedLatentBridge,
     mean_embedding_norm,
 )
+from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
 from humor_generator_v35.training.formal_bridge import (
     FrozenReceiverBridgeTask,
@@ -28,6 +29,7 @@ from humor_generator_v35.training.formal_bridge import (
     load_trace_index,
     prepare_example,
 )
+from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
 from train_bridge import fixed_hash_sample_clusters
 
@@ -54,17 +56,23 @@ def main() -> None:
     )
     if len({row["cluster_id"] for row in rows}) < 2:
         raise RuntimeError("real trace smoke requires two clusters")
-    # Cover both the exact first example and the raw-pixel maximum in the fixed
-    # pilot subset.  The old first-only smoke missed a 4750x4494 second row and
-    # therefore could not establish that the formal workload fit in memory.
+    # Cover both independent memory-risk axes in the fixed pilot subset while
+    # preserving the engineering-smoke contract of at most two examples: raw
+    # image size and full (untruncated) Planner memory.
     selected = cluster_balanced_rows(rows, epoch=0, seed=seed)
     def raw_pixels(row: dict) -> int:
         with Image.open(row["image"]) as image:
             return image.width * image.height
     stress = max(selected, key=lambda row: (raw_pixels(row), row["cluster_id"]))
-    smoke_rows = [selected[0]]
-    if stress["cluster_id"] != selected[0]["cluster_id"]:
-        smoke_rows.append(stress)
+    def latent_tokens(row: dict) -> int:
+        record = traces[row["cluster_id"]]
+        loaded = load_trace(ROOT / record["trace_path"], expected_sha256=record["trace_sha256"])
+        return sum(int(item.states.shape[1]) for item in loaded.values())
+    memory_stress = max(selected, key=lambda row: (latent_tokens(row), row["cluster_id"]))
+    smoke_rows = []
+    for row in (stress, memory_stress):
+        if row["cluster_id"] not in {item["cluster_id"] for item in smoke_rows}:
+            smoke_rows.append(row)
     negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
 
     adapter = config["model"].get("adapter")
@@ -79,38 +87,61 @@ def main() -> None:
     for parameter in backend.model.parameters():
         parameter.requires_grad_(False)
     width = int(backend.model.get_input_embeddings().weight.shape[1])
-    common_bridge_args = {
-        "bottleneck_dim": int(config["bridge"]["bottleneck_dim"]),
-        "heads": int(config["bridge"]["heads"]),
-        "target_norm": mean_embedding_norm(backend.model.get_input_embeddings().weight),
-    }
-    bridge = (
-        TypedLatentBridge(
+    baseline = config["experiment"]["baseline"]
+    if baseline == "receiver_cross_attention":
+        bridge = ReceiverDrivenCrossAttentionBridge(
             width,
             width,
-            slots=int(config["bridge"]["slots_per_channel"]),
-            **common_bridge_args,
-        )
-        if config["experiment"]["baseline"] == "typed_learned_latent"
-        else LearnedLatentBridge(
-            width,
-            width,
-            slots=int(config["bridge"]["total_slots"]),
-            **common_bridge_args,
-        )
-    ).to(device)
+            layer_indices=[int(item) for item in config["bridge"]["layer_indices"]],
+            bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
+            heads=int(config["bridge"]["heads"]),
+            gate_init=float(config["bridge"]["gate_init"]),
+        ).to(device)
+    else:
+        common_bridge_args = {
+            "bottleneck_dim": int(config["bridge"]["bottleneck_dim"]),
+            "heads": int(config["bridge"]["heads"]),
+            "target_norm": mean_embedding_norm(backend.model.get_input_embeddings().weight),
+        }
+        bridge = (
+            TypedLatentBridge(
+                width,
+                width,
+                slots=int(config["bridge"]["slots_per_channel"]),
+                **common_bridge_args,
+            )
+            if baseline == "typed_learned_latent"
+            else LearnedLatentBridge(
+                width,
+                width,
+                slots=int(config["bridge"]["total_slots"]),
+                **common_bridge_args,
+            )
+        ).to(device)
     freeze_report = configure_frozen_receiver(backend.model, bridge)
-    task = FrozenReceiverBridgeTask(
-        backend, bridge, root=ROOT, trace_index=traces,
-        loss_config=config["loss"],
-        max_caption_tokens=int(config["training"]["max_caption_tokens"]),
+    task = (
+        ReceiverCrossAttentionTask(
+            backend, bridge, root=ROOT, trace_index=traces,
+            loss_config=config["loss"],
+            max_target_tokens=int(config["training"]["max_target_tokens"]),
+            stage=str(config["training"]["stage"]),
+        )
+        if baseline == "receiver_cross_attention"
+        else FrozenReceiverBridgeTask(
+            backend, bridge, root=ROOT, trace_index=traces,
+            loss_config=config["loss"],
+            max_caption_tokens=int(config["training"]["max_caption_tokens"]),
+        )
     )
     optimizer = torch.optim.AdamW(
         bridge.parameters(),
         lr=float(config["training"]["learning_rate"]),
         weight_decay=float(config["training"]["weight_decay"]),
     )
-    before = next(bridge.parameters()).detach().float().clone()
+    before = {
+        name: parameter.detach().float().clone()
+        for name, parameter in bridge.named_parameters() if parameter.requires_grad
+    }
     sample_reports = []
     metrics = None
     for row in smoke_rows:
@@ -127,6 +158,7 @@ def main() -> None:
             "row_id": row["row_id"],
             "image_size": size,
             "raw_image_pixels": size[0] * size[1],
+            "full_latent_tokens": latent_tokens(row),
             "hard_negative_cluster": negative_cluster,
             "encode_diagnostics": backend.last_encode_diagnostics,
             "loss": sample_metrics,
@@ -136,7 +168,10 @@ def main() -> None:
         metrics = sample_metrics
     gradient_norm = float(torch.nn.utils.clip_grad_norm_(bridge.parameters(), 1.0))
     optimizer.step()
-    update_norm = float((next(bridge.parameters()).detach().float() - before).norm())
+    update_norm = float(sum(
+        (parameter.detach().float() - before[name]).square().sum()
+        for name, parameter in bridge.named_parameters() if parameter.requires_grad
+    ).sqrt())
     if not all(torch.isfinite(torch.tensor(value)) for value in [*metrics.values(), gradient_norm, update_norm]):
         raise RuntimeError("non-finite real-trace smoke diagnostics")
     if update_norm <= 0:
@@ -146,7 +181,11 @@ def main() -> None:
         "scientific_training": False,
         "real_planner_traces": True,
         "clusters": [row["cluster_id"] for row in smoke_rows],
-        "selection": "exact_formal_first_plus_max_raw_pixel_example",
+        "selection": "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples",
+        "communication_interface": (
+            "receiver_driven_full_state_cross_attention_no_soft_prefix"
+            if baseline == "receiver_cross_attention" else "input_soft_prefix"
+        ),
         "samples": sample_reports,
         "hard_negative_diagnostics": negative_diagnostics,
         "policy_trainable_parameters": freeze_report.policy_trainable,

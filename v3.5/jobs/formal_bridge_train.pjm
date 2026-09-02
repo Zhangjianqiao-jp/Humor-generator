@@ -29,5 +29,10 @@ python scripts/real_trace_bridge_smoke.py \
   --trace-index data/cache/planner_traces_homer_strict_v35/index.jsonl \
   --output "$BRIDGE_OUTPUT/resource_smoke.json"
 test -s "$BRIDGE_OUTPUT/resource_smoke.json"
-python scripts/train_bridge.py --config "$BRIDGE_CONFIG" --output "$BRIDGE_OUTPUT"
+if [ -n "${BRIDGE_INIT:-}" ]; then
+  python scripts/train_bridge.py --config "$BRIDGE_CONFIG" --output "$BRIDGE_OUTPUT" \
+    --init-bridge "$BRIDGE_INIT"
+else
+  python scripts/train_bridge.py --config "$BRIDGE_CONFIG" --output "$BRIDGE_OUTPUT"
+fi
 test -s "$BRIDGE_OUTPUT/complete.json"

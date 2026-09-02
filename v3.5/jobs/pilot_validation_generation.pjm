@@ -47,6 +47,7 @@ python scripts/generate_formal_baseline.py --condition typed_learned_latent --la
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_quantized \
   --config configs/pilot/typed_sft_kl.yaml \
   --checkpoint outputs/pilot/typed_sft_kl_visualcap_v2/best_bridge.pt --quantize-bridge-output \
+  --allow-invalid-posthoc-quantization-diagnostic \
   --output "$out/typed_quantized.jsonl" $common
 python scripts/generate_formal_baseline.py --condition typed_learned_latent --label typed_no_kl \
   --config configs/pilot/typed_sft_no_kl.yaml \
