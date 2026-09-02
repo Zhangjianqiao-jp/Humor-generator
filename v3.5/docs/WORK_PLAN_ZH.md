@@ -150,8 +150,11 @@ L_A3  = lambda_rec * L_rec + lambda_NCE * L_NCE
   使用 image-clustered bootstrap 95% CI；
 - 同时保留跨图 TF-IDF hard negative 作为次要 stress test，但主 gate 使用单通道
   counterfactual；阈值由 identity/shuffled/text-teacher controls 校准后冻结；
-- 三个 channel 均须达到高于 control 的正向 gap；只看总体平均不算通过。若 conflict
-  仍失败，停止 all-latent，进入预注册的 `C-text + A-latent` 混合消融。
+- 三个 channel 均须达到高于 control 的正向 gap；只看总体平均不算 `strong_go`。但
+  `64/24` 的任一通道点阈值未达，不能直接写作方法级 No-Go：由于 pilot 的 Type-II
+  风险，gate 输出 `pilot_inconclusive`，转入预注册的 sealed outer semantic validation。
+  只有真实技术失败，或后续已预注册的明显负向效应，才允许硬停止；若 outer validation
+  仍显示 conflict 不可恢复，再进入 `C-text + A-latent` 混合消融。
 
 Phase A3 通过后才允许训练 caption bridge，并按 `Text-HOMER / C-text+A-latent /
 C-latent+A-text / All-latent` 顺序做低成本比较。
@@ -176,6 +179,11 @@ cluster 在最坏比例 `p=0.5` 附近的近似 95% 半宽约为 `1.96*sqrt(.25/
 - 它不能支持“latent 优于 text”或“某方法失败”的论文结论，也不应用于微小架构排序；
 - point gate 通过但任一 channel 的 bootstrap 下界未超过 0 时，状态只能是
   `go_to_outer_semantic_validation`，不得进入 caption bridge；
+- point gate 未通过但运行和指标均有效时，状态为 `pilot_inconclusive`，同样不得进入
+  caption bridge，也不得写作 latent 方法失败；它必须转入更大的 sealed outer semantic
+  validation。仅技术异常可以在此阶段硬停；
+- `bounded_residual_update` 或 `fixed_equal_channel_mass` 等工程不变量失败时，状态为
+  `hard_no_go`，必须先修复实现；这不是 latent 语义效果结论。
 - 下一步先在剩余 40 个未用于 early stopping 的 validation cluster 上做 sealed semantic
   confirmation。仍不确定时，用 pilot 的逐图标准差执行预先功效分析，再扩大到 64/97/121
   clusters；不得事后反复查看同一批数据并改阈值；
@@ -330,3 +338,6 @@ evaluation 五类；禁止把排队、NVML、OOM、依赖或代码异常写成�
 12. van den Oord et al. Contrastive Predictive Coding. 2018. https://arxiv.org/abs/1807.03748
 13. Card et al. With Little Power Comes Great Responsibility. EMNLP 2020. https://aclanthology.org/2020.emnlp-main.745/
 14. Dror et al. The Hitchhiker's Guide to Testing Statistical Significance in NLP. ACL 2018. https://aclanthology.org/P18-1128/
+15. Graham et al. Statistical Power and Translationese in Machine Translation Evaluation. EMNLP 2020. https://aclanthology.org/2020.emnlp-main.6/
+16. Howcroft and Rieser. What happens if you treat ordinal ratings as interval data? EMNLP 2021. https://aclanthology.org/2021.emnlp-main.703/
+17. Koehn. Statistical Significance Tests for Machine Translation Evaluation. EMNLP 2004. https://aclanthology.org/W04-3250/

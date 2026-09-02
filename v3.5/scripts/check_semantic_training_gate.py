@@ -135,8 +135,27 @@ def main() -> None:
             )
             ci_checks[channel] = intervals[channel][0] > 0
     point_pass = all(checks.values())
-    if phase_a3 and point_pass:
-        status = "strong_go" if all(ci_checks.values()) else "go_to_outer_semantic_validation"
+    # These checks protect the experiment itself rather than testing the
+    # scientific hypothesis.  Violating them is an engineering hard stop;
+    # missing a semantic threshold on a 24-cluster pilot is not.
+    engineering_checks = {
+        name: checks[name]
+        for name in ("bounded_residual_update", "fixed_equal_channel_mass")
+        if name in checks
+    }
+    engineering_pass = all(engineering_checks.values())
+    if phase_a3:
+        if not engineering_pass:
+            status = "hard_no_go"
+        elif point_pass:
+            status = "strong_go" if all(ci_checks.values()) else "go_to_outer_semantic_validation"
+        else:
+            # A 24-cluster pilot is intentionally under-powered for modest
+            # semantic effects. A missed point threshold is therefore not a
+            # method-level rejection: it is an inconclusive progression result.
+            # Technical failures still raise above, and outer validation stays
+            # mandatory before any caption-stage claim.
+            status = "pilot_inconclusive"
     else:
         status = "go" if point_pass else "no_go"
     report = {
@@ -149,9 +168,14 @@ def main() -> None:
         "ci_lower_bound_above_zero": ci_checks,
         "interpretation": (
             "This 24-cluster gate is a low-cost mechanism screen, not evidence of "
-            "humorous-caption superiority. A point-estimate pass without three positive "
-            "cluster-bootstrap lower bounds proceeds only to a larger sealed semantic validation."
+            "humorous-caption superiority. For Phase A3, a missed point threshold is "
+            "pilot_inconclusive rather than a method-level rejection because the pilot "
+            "can have a high Type-II error rate. A failed engineering invariant is reported "
+            "as hard_no_go; every valid non-technical result proceeds to the pre-registered "
+            "sealed outer semantic validation before caption-stage claims."
         ),
+        "engineering_checks": engineering_checks,
+        "engineering_gate_pass": engineering_pass,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")

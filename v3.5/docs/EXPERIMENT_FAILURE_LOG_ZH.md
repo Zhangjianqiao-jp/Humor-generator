@@ -55,7 +55,9 @@
 10. 样本量解释已更正：`64/24` 是开发期机制 pilot，不是方法级 confirmatory experiment。
     24 clusters 对接近 50% 的比例估计，正态近似 95% 半宽约 0.20，无法可靠检测小效果。
     因此 Phase A3 的 24-cluster point pass 只能触发 sealed outer semantic validation；
-    v1/v2 也必须用同一 cluster-level evaluator 重算后才能公平比较。
+    point fail 也只能标记 `pilot_inconclusive`，不能据此排除一个可能有效的方法。只有
+    工程不变量失败（报告为 `hard_no_go`）或明确、预注册的强负向证据才是 pilot hard
+    stop。v1/v2 也必须用同一 cluster-level evaluator 重算后才能公平比较。
 
 ## 权威依据
 
@@ -66,3 +68,9 @@
 5. van den Oord et al., Contrastive Predictive Coding, 2018: https://arxiv.org/abs/1807.03748
 6. Card et al., Statistical Power in NLP, EMNLP 2020: https://aclanthology.org/2020.emnlp-main.745/
 7. Dror et al., Significance Testing in NLP, ACL 2018: https://aclanthology.org/P18-1128/
+8. Graham et al., Statistical Power and Translationese in Machine Translation Evaluation,
+   EMNLP 2020: https://aclanthology.org/2020.emnlp-main.6/
+9. Howcroft and Rieser, What happens if you treat ordinal ratings as interval data?,
+   EMNLP 2021: https://aclanthology.org/2021.emnlp-main.703/
+10. Koehn, Statistical Significance Tests for Machine Translation Evaluation, EMNLP 2004:
+    https://aclanthology.org/W04-3250/
