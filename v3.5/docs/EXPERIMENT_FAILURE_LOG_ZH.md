@@ -36,6 +36,10 @@
    `6688566` 均已通过：两个真实 trace 均完成 hierarchical attention、
    InfoNCE/variance backward 和 optimizer update；policy trainable params 为 0。
    此项只关闭工程风险，不改变 v1 的方法级 No-Go。
+6. Hierarchical Phase A v2 作业 `6688689` 已完成但仍为方法级 No-Go：causal
+   matched/shuffled gap 为 `0.002664 < 0.02`，conflict router mass 下降到
+   `0.0289`。validation retrieval 的原始 `0.190476` 受同 cluster 重复 caption
+   false-negative 污染，已单独登记为评测实现错误；不能用它支持或反对方法。
 
 ## 权威依据
 

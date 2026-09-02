@@ -193,7 +193,9 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - 审计确认 v1 的 InfoNCE 未进入训练调用路径，且三通道拼接后的统一 softmax 存在长度竞争。v2 已改为通道内独立 softmax、通道间门控，并强制真实 gradient-window InfoNCE；
 - v2 第一轮真实 GPU engineering smoke：作业 6688553 已通过。随后代码审计修复了 teacher projection 跨 step 漂移风险；
 - v2 post-fix GPU smoke：作业 6688566 已通过；冻结 policy trainable params=0，bridge params=2,820,804，InfoNCE=0.7612，smoke retrieval@1=0.5，gradient/update finite，峰值显存约 11.82 GB。该数值只证明训练路径执行，不能作为泛化结果；
-- 下一次正式训练：新的 64/24 Phase A v2 已满足工程门禁，待 clean commit 后提交；输出目录 `hierarchical_cross_attention_semantic_v2` 不覆盖 v1；
+- Hierarchical Phase A v2：作业 6688689 已完成并判定 No-Go。validation NLL 从 1.1196 降至 0.6326，但 matched-minus-shuffled gap 仅 0.002664（gate 0.02），margin>0 的比例为 0；conflict channel 权重从约 0.315 降至 0.0289，说明 token-weighted reconstruction/router 偏向更长的 association channels；
+- v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该评测问题不改变 v2 No-Go，因为独立的 causal matched/shuffled gap 明确失败；
+- caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来掩盖机制失败；下一项只允许低成本 channel-balanced semantic recovery，或按预注册混合方案将短而精确的 conflict 保留为 text、只对 association 使用 latent；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。
 

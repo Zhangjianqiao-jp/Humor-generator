@@ -361,11 +361,15 @@ def main() -> None:
         ]
         validation_alignment: dict[str, float] = {}
         if info_nce_weight > 0:
+            # InfoNCE's statistical unit is the image/plan cluster, not the
+            # caption row. Repeated gold captions share exactly the same trace
+            # and would otherwise become false negatives of one another.
+            alignment_rows = cluster_balanced_rows(validation_rows, epoch=0, seed=seed)
             pairs = [
                 task.semantic_alignment_pair(
                     prepare_example(row, traces[row["cluster_id"]], seed=seed)
                 )
-                for row in validation_rows
+                for row in alignment_rows
             ]
             validation_info_nce, validation_retrieval = symmetric_info_nce(
                 torch.cat([pair[0] for pair in pairs], dim=0),
