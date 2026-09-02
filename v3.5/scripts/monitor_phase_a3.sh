@@ -14,14 +14,26 @@ formal_id_file="$state_dir/formal_job_id.txt"
 mkdir -p "$state_dir"
 
 last_state=
+absent_observations=0
 while :; do
-  current=$(pjstat "$smoke_job_id" 2>/dev/null | awk 'NR==2 {print $4}')
+  listing_file="$state_dir/pjstat.latest"
+  if ! pjstat "$smoke_job_id" > "$listing_file" 2>/dev/null; then
+    sleep 60
+    continue
+  fi
+  current=$(awk 'NR==2 {print $4}' "$listing_file")
   if [ -n "$current" ]; then
+    absent_observations=0
     if [ "$current" != "$last_state" ]; then
       date -Is | awk -v state="$current" '{print $0, "smoke_state=" state}' >> "$log"
       last_state=$current
     fi
     sleep 300
+    continue
+  fi
+  absent_observations=$((absent_observations + 1))
+  if [ "$absent_observations" -lt 3 ]; then
+    sleep 60
     continue
   fi
   break
