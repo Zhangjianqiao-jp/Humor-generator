@@ -101,6 +101,7 @@ def main() -> None:
             bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
             heads=int(config["bridge"]["heads"]),
             gate_init=float(config["bridge"]["gate_init"]),
+            channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
         ).to(device)
     else:
         common_bridge_args = {
@@ -148,8 +149,12 @@ def main() -> None:
         for name, parameter in bridge.named_parameters() if parameter.requires_grad
     }
     sample_reports = []
-    alignment_students: list[torch.Tensor] = []
-    alignment_teachers: list[torch.Tensor] = []
+    alignment_students: dict[str, list[torch.Tensor]] = {
+        name: [] for name in ("conflict", "local", "global")
+    }
+    alignment_teachers: dict[str, list[torch.Tensor]] = {
+        name: [] for name in ("conflict", "local", "global")
+    }
     metrics = None
     for row in smoke_rows:
         torch.cuda.reset_peak_memory_stats(device)
@@ -162,9 +167,10 @@ def main() -> None:
             isinstance(task, ReceiverCrossAttentionTask)
             and float(config["loss"].get("info_nce", 0.0)) > 0
         ):
-            student, teacher = task.semantic_alignment_pair(example)
-            alignment_students.append(student)
-            alignment_teachers.append(teacher)
+            pairs = task.semantic_alignment_pairs(example)
+            for channel, (student, teacher) in pairs.items():
+                alignment_students[channel].append(student)
+                alignment_teachers[channel].append(teacher)
         with Image.open(row["image"]) as image:
             size = [image.width, image.height]
         sample_reports.append({
@@ -181,13 +187,21 @@ def main() -> None:
         })
         metrics = sample_metrics
     contrastive_metrics: dict[str, float] = {}
-    if alignment_students:
-        info_nce, retrieval_at_1 = symmetric_info_nce(
-            torch.cat(alignment_students, dim=0),
-            torch.cat(alignment_teachers, dim=0),
-            temperature=float(config["loss"].get("info_nce_temperature", 0.07)),
-        )
-        anti_collapse = variance_floor_loss(torch.cat(alignment_students, dim=0))
+    if any(alignment_students.values()):
+        nce_by_channel = {}
+        retrieval_by_channel = {}
+        variance_by_channel = {}
+        for channel in alignment_students:
+            students = torch.cat(alignment_students[channel], dim=0)
+            teachers = torch.cat(alignment_teachers[channel], dim=0)
+            nce_by_channel[channel], retrieval_by_channel[channel] = symmetric_info_nce(
+                students, teachers,
+                temperature=float(config["loss"].get("info_nce_temperature", 0.07)),
+            )
+            variance_by_channel[channel] = variance_floor_loss(students)
+        info_nce = torch.stack(list(nce_by_channel.values())).mean()
+        retrieval_at_1 = torch.stack(list(retrieval_by_channel.values())).mean()
+        anti_collapse = torch.stack(list(variance_by_channel.values())).mean()
         (
             float(config["loss"]["info_nce"]) * info_nce
             + float(config["loss"].get("variance_floor", 0.0)) * anti_collapse
@@ -197,6 +211,13 @@ def main() -> None:
             "info_nce_retrieval_at_1": float(retrieval_at_1.detach().cpu()),
             "variance_floor": float(anti_collapse.detach().cpu()),
         }
+        for channel in nce_by_channel:
+            contrastive_metrics[f"info_nce_{channel}"] = float(
+                nce_by_channel[channel].detach().cpu()
+            )
+            contrastive_metrics[f"retrieval_at_1_{channel}"] = float(
+                retrieval_by_channel[channel].detach().cpu()
+            )
     gradient_norm = float(torch.nn.utils.clip_grad_norm_(bridge.parameters(), 1.0))
     optimizer.step()
     update_norm = float(sum(

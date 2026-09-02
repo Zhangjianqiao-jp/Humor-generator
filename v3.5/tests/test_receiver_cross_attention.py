@@ -68,6 +68,28 @@ def test_attention_normalizes_each_channel_before_channel_fusion() -> None:
     assert all(0.0 < value < 1.0 for value in weights)
 
 
+def test_phase_a3_fixed_fusion_cannot_drop_a_channel() -> None:
+    torch.manual_seed(9)
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2,
+        channel_fusion="fixed_equal",
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    with bridge.inject(model, {
+        "conflict": torch.randn(2, 2, 16),
+        "local": torch.randn(2, 19, 16),
+        "global": torch.randn(2, 53, 16),
+    }):
+        model(torch.randn(2, 5, 16))
+    torch.testing.assert_close(
+        torch.tensor(bridge.last_diagnostics[0].channel_weights),
+        torch.full((3,), 1 / 3), atol=1e-6, rtol=1e-6,
+    )
+    assert not bridge.layers["0"].channel_score.weight.requires_grad
+
+
 def test_alignment_representations_preserve_channel_identity_and_gradients() -> None:
     bridge = ReceiverDrivenCrossAttentionBridge(
         16, 16, layer_indices=[0, 1], bottleneck_dim=8, heads=2
@@ -82,6 +104,9 @@ def test_alignment_representations_preserve_channel_identity_and_gradients() -> 
         parameter.grad is not None and parameter.grad.abs().sum() > 0
         for parameter in bridge.parameters()
     )
+    channel_pairs = bridge.alignment_representations_by_channel(states, receiver)
+    assert set(channel_pairs) == set(CHANNELS)
+    assert all(pair[0].shape == pair[1].shape == (4, 2 * 8) for pair in channel_pairs.values())
 
 
 def test_info_nce_teacher_projection_is_stationary() -> None:

@@ -1,0 +1,33 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=02:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export OMP_NUM_THREADS=1
+
+config=configs/pilot/cross_attention_semantic_phase_a3.yaml
+output=outputs/pilot/cross_attention_semantic_phase_a3
+
+python scripts/run_formal_preflight.py --output "$output/preflight.json"
+python scripts/check_cuda_resource.py
+python scripts/train_bridge.py --config "$config" --output "$output"
+test -s "$output/complete.json"
+python scripts/check_semantic_training_gate.py \
+  --config "$config" \
+  --metrics "$output/metrics.jsonl" \
+  --output "$output/semantic_gate.json" \
+  --report-only
+test -s "$output/semantic_gate.json"

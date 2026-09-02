@@ -118,6 +118,7 @@ def main() -> None:
             bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
             heads=int(config["bridge"]["heads"]),
             gate_init=float(config["bridge"].get("gate_init", 0.1)),
+            channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
         ).to(device)
     else:
         bridge = (
@@ -177,6 +178,15 @@ def main() -> None:
             max_target_tokens=int(config["training"]["max_target_tokens"]),
             stage=str(config["training"]["stage"]),
         )
+        if str(config["loss"].get("alignment_teacher", "legacy_embedding_projection")) == (
+            "receiver_contextual_final_hidden"
+        ):
+            print(json.dumps({
+                "status": "caching_contextual_teachers",
+                "clusters": len(required),
+                "channels_per_cluster": 3,
+            }), flush=True)
+            task.cache_contextual_teachers(required)
     else:
         task = FrozenReceiverBridgeTask(
             backend,
@@ -224,6 +234,9 @@ def main() -> None:
             "receiver_driven_full_state_cross_attention_no_soft_prefix"
             if baseline == "receiver_cross_attention" else "input_soft_prefix"
         ),
+        "channel_fusion": config["bridge"].get("channel_fusion"),
+        "semantic_objective": config["loss"].get("semantic_objective"),
+        "alignment_teacher": config["loss"].get("alignment_teacher"),
         "initial_bridge_checkpoint": None if args.init_bridge is None else str(args.init_bridge.resolve()),
         "train_cluster_ids_sha256": hashlib.sha256(
             "\n".join(sorted({row["cluster_id"] for row in train_rows})).encode()
@@ -262,8 +275,12 @@ def main() -> None:
         rows = cluster_balanced_rows(train_rows, epoch=epoch, seed=seed)
         train_metrics = []
         train_alignment_metrics: list[dict[str, float]] = []
-        alignment_students: list[torch.Tensor] = []
-        alignment_teachers: list[torch.Tensor] = []
+        alignment_students: dict[str, list[torch.Tensor]] = {
+            name: [] for name in ("conflict", "local", "global")
+        }
+        alignment_teachers: dict[str, list[torch.Tensor]] = {
+            name: [] for name in ("conflict", "local", "global")
+        }
         for index, row in enumerate(rows):
             window_start = (index // accumulation) * accumulation
             window_size = min(accumulation, len(rows) - window_start)
@@ -291,9 +308,10 @@ def main() -> None:
             if info_nce_weight > 0:
                 if not isinstance(task, ReceiverCrossAttentionTask):
                     raise RuntimeError("InfoNCE is currently defined for receiver cross-attention only")
-                student, teacher = task.semantic_alignment_pair(example)
-                alignment_students.append(student)
-                alignment_teachers.append(teacher)
+                pairs = task.semantic_alignment_pairs(example)
+                for channel, (student, teacher) in pairs.items():
+                    alignment_students[channel].append(student)
+                    alignment_teachers[channel].append(teacher)
             train_metrics.append(metrics)
             current.update({
                 "status": "example_complete",
@@ -320,25 +338,45 @@ def main() -> None:
                 print(json.dumps(progress), flush=True)
             if (index + 1) % accumulation == 0 or index + 1 == len(rows):
                 if info_nce_weight > 0:
-                    if len(alignment_students) < 2:
+                    if any(len(values) < 2 for values in alignment_students.values()):
                         raise RuntimeError("the final InfoNCE window contains fewer than two examples")
-                    student_batch = torch.cat(alignment_students, dim=0)
-                    teacher_batch = torch.cat(alignment_teachers, dim=0)
-                    info_nce, retrieval_at_1 = symmetric_info_nce(
-                        student_batch, teacher_batch, temperature=info_nce_temperature
-                    )
-                    anti_collapse = variance_floor_loss(student_batch)
+                    channel_nce: dict[str, torch.Tensor] = {}
+                    channel_retrieval: dict[str, torch.Tensor] = {}
+                    channel_variance: dict[str, torch.Tensor] = {}
+                    for channel in alignment_students:
+                        student_batch = torch.cat(alignment_students[channel], dim=0)
+                        teacher_batch = torch.cat(alignment_teachers[channel], dim=0)
+                        channel_nce[channel], channel_retrieval[channel] = symmetric_info_nce(
+                            student_batch, teacher_batch, temperature=info_nce_temperature
+                        )
+                        channel_variance[channel] = variance_floor_loss(student_batch)
+                    info_nce = torch.stack(list(channel_nce.values())).mean()
+                    retrieval_at_1 = torch.stack(list(channel_retrieval.values())).mean()
+                    anti_collapse = torch.stack(list(channel_variance.values())).mean()
                     (info_nce_weight * info_nce + variance_weight * anti_collapse).backward()
                     metrics["info_nce"] = float(info_nce.detach().cpu())
                     metrics["info_nce_retrieval_at_1"] = float(retrieval_at_1.detach().cpu())
                     metrics["variance_floor"] = float(anti_collapse.detach().cpu())
-                    train_alignment_metrics.append({
+                    for channel in channel_nce:
+                        metrics[f"info_nce_{channel}"] = float(channel_nce[channel].detach().cpu())
+                        metrics[f"info_nce_retrieval_at_1_{channel}"] = float(
+                            channel_retrieval[channel].detach().cpu()
+                        )
+                    alignment_record = {
                         "info_nce": metrics["info_nce"],
                         "info_nce_retrieval_at_1": metrics["info_nce_retrieval_at_1"],
                         "variance_floor": metrics["variance_floor"],
-                    })
-                    alignment_students.clear()
-                    alignment_teachers.clear()
+                    }
+                    for channel in channel_nce:
+                        alignment_record[f"info_nce_{channel}"] = metrics[f"info_nce_{channel}"]
+                        alignment_record[f"info_nce_retrieval_at_1_{channel}"] = metrics[
+                            f"info_nce_retrieval_at_1_{channel}"
+                        ]
+                    train_alignment_metrics.append(alignment_record)
+                    for values in alignment_students.values():
+                        values.clear()
+                    for values in alignment_teachers.values():
+                        values.clear()
                 gradient_norm = float(torch.nn.utils.clip_grad_norm_(
                     bridge.parameters(), float(config["training"]["max_grad_norm"])
                 ))
@@ -359,6 +397,10 @@ def main() -> None:
             mean_metrics(validation_by_cluster[cluster])
             for cluster in sorted(validation_by_cluster)
         ]
+        validation_detail_path = args.output / f"validation_epoch_{epoch + 1}.jsonl"
+        with validation_detail_path.open("w") as handle:
+            for cluster, metrics in zip(sorted(validation_by_cluster), validation_metrics):
+                handle.write(json.dumps({"cluster_id": cluster, **metrics}) + "\n")
         validation_alignment: dict[str, float] = {}
         if info_nce_weight > 0:
             # InfoNCE's statistical unit is the image/plan cluster, not the
@@ -366,24 +408,41 @@ def main() -> None:
             # and would otherwise become false negatives of one another.
             alignment_rows = cluster_balanced_rows(validation_rows, epoch=0, seed=seed)
             pairs = [
-                task.semantic_alignment_pair(
+                task.semantic_alignment_pairs(
                     prepare_example(row, traces[row["cluster_id"]], seed=seed)
                 )
                 for row in alignment_rows
             ]
-            validation_info_nce, validation_retrieval = symmetric_info_nce(
-                torch.cat([pair[0] for pair in pairs], dim=0),
-                torch.cat([pair[1] for pair in pairs], dim=0),
-                temperature=info_nce_temperature,
-            )
+            validation_nce_by_channel = {}
+            validation_retrieval_by_channel = {}
+            validation_variance_by_channel = {}
+            for channel in ("conflict", "local", "global"):
+                students = torch.cat([pair[channel][0] for pair in pairs], dim=0)
+                teachers = torch.cat([pair[channel][1] for pair in pairs], dim=0)
+                nce, retrieval = symmetric_info_nce(
+                    students, teachers, temperature=info_nce_temperature,
+                )
+                validation_nce_by_channel[channel] = nce
+                validation_retrieval_by_channel[channel] = retrieval
+                validation_variance_by_channel[channel] = variance_floor_loss(students)
+            validation_info_nce = torch.stack(list(validation_nce_by_channel.values())).mean()
+            validation_retrieval = torch.stack(
+                list(validation_retrieval_by_channel.values())
+            ).mean()
             validation_alignment = {
                 "info_nce": float(validation_info_nce.detach().cpu()),
                 "info_nce_retrieval_at_1": float(validation_retrieval.detach().cpu()),
                 "variance_floor": float(
-                    variance_floor_loss(torch.cat([pair[0] for pair in pairs], dim=0))
-                    .detach().cpu()
+                    torch.stack(list(validation_variance_by_channel.values())).mean().detach().cpu()
                 ),
             }
+            for channel in validation_nce_by_channel:
+                validation_alignment[f"info_nce_{channel}"] = float(
+                    validation_nce_by_channel[channel].detach().cpu()
+                )
+                validation_alignment[f"info_nce_retrieval_at_1_{channel}"] = float(
+                    validation_retrieval_by_channel[channel].detach().cpu()
+                )
         train_summary = mean_metrics(train_metrics)
         if train_alignment_metrics:
             train_alignment_summary = mean_metrics(train_alignment_metrics)

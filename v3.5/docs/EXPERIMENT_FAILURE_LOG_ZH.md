@@ -52,6 +52,10 @@
    单通道 matched/shuffled counterfactual、固定等权 gate、cluster bootstrap CI。只有
    三个 channel 都越过校准后的 control 才能进入 caption bridge；否则转入
    conflict-text + association-latent 混合方案。
+10. 样本量解释已更正：`64/24` 是开发期机制 pilot，不是方法级 confirmatory experiment。
+    24 clusters 对接近 50% 的比例估计，正态近似 95% 半宽约 0.20，无法可靠检测小效果。
+    因此 Phase A3 的 24-cluster point pass 只能触发 sealed outer semantic validation；
+    v1/v2 也必须用同一 cluster-level evaluator 重算后才能公平比较。
 
 ## 权威依据
 
@@ -60,3 +64,5 @@
 3. Yang et al., Hierarchical Attention Networks, NAACL 2016: https://aclanthology.org/N16-1174/
 4. Libovicky and Helcl, Multi-Source Attention, ACL 2017: https://aclanthology.org/P17-2031/
 5. van den Oord et al., Contrastive Predictive Coding, 2018: https://arxiv.org/abs/1807.03748
+6. Card et al., Statistical Power in NLP, EMNLP 2020: https://aclanthology.org/2020.emnlp-main.745/
+7. Dror et al., Significance Testing in NLP, ACL 2018: https://aclanthology.org/P18-1128/

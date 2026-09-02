@@ -156,6 +156,36 @@ L_A3  = lambda_rec * L_rec + lambda_NCE * L_NCE
 Phase A3 通过后才允许训练 caption bridge，并按 `Text-HOMER / C-text+A-latent /
 C-latent+A-text / All-latent` 顺序做低成本比较。
 
+### Phase A3 的验证协议与样本量定位
+
+验证 latent 是否被 Receiver 真正使用，采用三层证据，而不是单一 reconstruction loss：
+
+1. **表示层**：按 conflict/local/global 分别做 contextual-teacher retrieval/InfoNCE；
+2. **行为层**：保持图片、prompt、target 和另两路 memory 不变，每次只替换一路，测
+   `delta_conflict/delta_local/delta_global`；这对应 Interlat 的 task-mismatched latent
+   和 information-scrambling control 思路；
+3. **下游层**：机制门通过后，在未参与训练/early stopping 的图片上比较 Text-HOMER、
+   matched latent 与 counterfactual latent 的 Group-of-k caption 质量。
+
+统计单位始终是 image cluster。连续 gap 用 paired/image-clustered bootstrap 95% CI，
+比例用 binomial interval；报告 effect size，不以单个 p-value 代替效果量。24 个 validation
+cluster 在最坏比例 `p=0.5` 附近的近似 95% 半宽约为 `1.96*sqrt(.25/24)=0.20`，因此：
+
+- `64 train / 24 validation` **只用于工程与机制方向 pilot**：发现 loss 接线错误、
+  channel collapse、明显无依赖或明显强依赖；
+- 它不能支持“latent 优于 text”或“某方法失败”的论文结论，也不应用于微小架构排序；
+- point gate 通过但任一 channel 的 bootstrap 下界未超过 0 时，状态只能是
+  `go_to_outer_semantic_validation`，不得进入 caption bridge；
+- 下一步先在剩余 40 个未用于 early stopping 的 validation cluster 上做 sealed semantic
+  confirmation。仍不确定时，用 pilot 的逐图标准差执行预先功效分析，再扩大到 64/97/121
+  clusters；不得事后反复查看同一批数据并改阈值；
+- v1/v2 将用修复后的 cluster-level、逐通道 evaluator 重新评估。旧 checkpoint 没有
+  fixed-equal/channel-balanced 训练，因此重评只能比较其既有表示与因果敏感性，不能伪装
+  成 Phase A3 训练结果。
+
+这一协议依据 NLP 功效分析与配对显著性测试规范；Interlat 的错配/结构破坏实验用于证明
+latent 的任务特异性，而不是仅凭 latent 可解码就宣称 Receiver 使用了它。
+
 ## 7. Successive filtering，而不是一次性矩阵
 
 ### Gate E：v3.5 engineering smoke
@@ -296,3 +326,5 @@ evaluation 五类；禁止把排队、NVML、OOM、依赖或代码异常写成�
 10. Libovicky & Helcl. Attention Strategies for Multi-Source Sequence-to-Sequence Learning. ACL 2017. https://aclanthology.org/P17-2031/
 11. He et al. Momentum Contrast. CVPR 2020. https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
 12. van den Oord et al. Contrastive Predictive Coding. 2018. https://arxiv.org/abs/1807.03748
+13. Card et al. With Little Power Comes Great Responsibility. EMNLP 2020. https://aclanthology.org/2020.emnlp-main.745/
+14. Dror et al. The Hitchhiker's Guide to Testing Statistical Significance in NLP. ACL 2018. https://aclanthology.org/P18-1128/

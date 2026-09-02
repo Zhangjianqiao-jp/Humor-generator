@@ -31,12 +31,15 @@ class CrossAttentionDiagnostics:
 
 class _GatedLatentEnrichment(nn.Module):
     def __init__(self, receiver_dim: int, sender_dim: int, bottleneck_dim: int, heads: int,
-                 gate_init: float) -> None:
+                 gate_init: float, channel_fusion: str) -> None:
         super().__init__()
         if bottleneck_dim % heads:
             raise ValueError("bottleneck_dim must be divisible by heads")
         self.heads = heads
         self.head_dim = bottleneck_dim // heads
+        if channel_fusion not in {"learned", "fixed_equal"}:
+            raise ValueError("channel_fusion must be learned or fixed_equal")
+        self.channel_fusion = channel_fusion
         self.receiver_norm = nn.LayerNorm(receiver_dim)
         self.sender_norm = nn.LayerNorm(sender_dim)
         self.query = nn.Linear(receiver_dim, bottleneck_dim, bias=False)
@@ -56,6 +59,8 @@ class _GatedLatentEnrichment(nn.Module):
         # This prevents a long association channel from receiving more mass
         # merely because it contains more tokens.
         self.channel_score = nn.Linear(bottleneck_dim, 1, bias=False)
+        if channel_fusion == "fixed_equal":
+            self.channel_score.requires_grad_(False)
         self.gate = nn.Parameter(torch.tensor(float(gate_init)))
 
     def _query(self, hidden: torch.Tensor) -> torch.Tensor:
@@ -106,8 +111,13 @@ class _GatedLatentEnrichment(nn.Module):
             )
         contexts = torch.stack(attended_by_channel, dim=2)  # [B,T,C,H,Dh]
         contexts = contexts.reshape(batch, target_len, len(CHANNELS), -1)
-        channel_logits = self.channel_score(contexts.float()).squeeze(-1)
-        channel_probabilities = torch.softmax(channel_logits, dim=-1)
+        if self.channel_fusion == "fixed_equal":
+            channel_probabilities = contexts.new_full(
+                (batch, target_len, len(CHANNELS)), 1.0 / len(CHANNELS)
+            )
+        else:
+            channel_logits = self.channel_score(contexts.float()).squeeze(-1)
+            channel_probabilities = torch.softmax(channel_logits, dim=-1)
         attended = (channel_probabilities.unsqueeze(-1) * contexts.float()).sum(2)
         delta = torch.tanh(self.gate) * self.output(attended)
         entropy = torch.stack(entropy_by_channel).mean()
@@ -122,44 +132,44 @@ class _GatedLatentEnrichment(nn.Module):
 
     def alignment_representations(
         self,
-        sender_states: Mapping[str, torch.Tensor],
-        receiver_token_embeddings: Mapping[str, torch.Tensor],
+        sender_state: torch.Tensor,
+        receiver_context: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return channel-preserving sender/receiver representations.
+        """Return one channel's sender and contextual-receiver representations.
 
         The sender side uses the same key map that the actual attention path
-        reads. The frozen receiver's native token embeddings use the query map.
-        Concatenating channels prevents a generic global mean from satisfying
-        the contrastive objective while discarding conflict identity.
+        reads.  The teacher is a contextual hidden representation produced by
+        the frozen receiver under its native text interface, projected through
+        a stationary copy of the receiver query map.
         """
-        students, teachers = [], []
-        for name in CHANNELS:
-            student = self.key(self.sender_norm(sender_states[name].float())).mean(dim=1)
-            teacher = torch.nn.functional.linear(
-                self.receiver_norm(receiver_token_embeddings[name].float()),
-                self.alignment_teacher_projection,
-            ).mean(dim=1)
-            students.append(student)
-            teachers.append(teacher.detach())
-        return torch.cat(students, dim=-1), torch.cat(teachers, dim=-1)
+        student = self.key(self.sender_norm(sender_state.float())).mean(dim=1)
+        if receiver_context.ndim == 2:
+            receiver_context = receiver_context.unsqueeze(1)
+        teacher = torch.nn.functional.linear(
+            self.receiver_norm(receiver_context.float()),
+            self.alignment_teacher_projection,
+        ).mean(dim=1)
+        return student, teacher.detach()
 
 
 class ReceiverDrivenCrossAttentionBridge(nn.Module):
     """Typed full-state memory queried by selected frozen receiver layers."""
 
     def __init__(self, receiver_dim: int, sender_dim: int, *, layer_indices: list[int],
-                 bottleneck_dim: int = 64, heads: int = 4, gate_init: float = 0.1) -> None:
+                 bottleneck_dim: int = 64, heads: int = 4, gate_init: float = 0.1,
+                 channel_fusion: str = "learned") -> None:
         super().__init__()
         if not layer_indices or len(set(layer_indices)) != len(layer_indices):
             raise ValueError("layer_indices must be non-empty and unique")
         if any(index < 0 for index in layer_indices):
             raise ValueError("layer indices must be non-negative")
         self.layer_indices = tuple(layer_indices)
+        self.channel_fusion = channel_fusion
         self.channel_types = nn.Parameter(torch.zeros(len(CHANNELS), 1, sender_dim))
         nn.init.normal_(self.channel_types, std=sender_dim**-0.5)
         self.layers = nn.ModuleDict({
             str(index): _GatedLatentEnrichment(
-                receiver_dim, sender_dim, bottleneck_dim, heads, gate_init
+                receiver_dim, sender_dim, bottleneck_dim, heads, gate_init, channel_fusion
             ) for index in self.layer_indices
         })
         self.last_diagnostics: list[CrossAttentionDiagnostics] = []
@@ -200,19 +210,36 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
             masks[name] = torch.ones(value.shape[:2], dtype=torch.bool, device=value.device)
         return memories, masks
 
+    def alignment_representations_by_channel(
+        self,
+        states: Mapping[str, torch.Tensor],
+        receiver_contexts: Mapping[str, torch.Tensor],
+    ) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+        memories, _ = self.typed_memories(states)
+        if set(receiver_contexts) != set(CHANNELS):
+            raise ValueError(f"contextual teachers require exactly {CHANNELS}")
+        result: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+        for name in CHANNELS:
+            layer_pairs = [
+                adapter.alignment_representations(memories[name], receiver_contexts[name])
+                for adapter in self.layers.values()
+            ]
+            result[name] = (
+                torch.cat([pair[0] for pair in layer_pairs], dim=-1),
+                torch.cat([pair[1] for pair in layer_pairs], dim=-1),
+            )
+        return result
+
     def alignment_representations(
         self,
         states: Mapping[str, torch.Tensor],
-        receiver_token_embeddings: Mapping[str, torch.Tensor],
+        receiver_contexts: Mapping[str, torch.Tensor],
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        memories, _ = self.typed_memories(states)
-        layer_pairs = [
-            adapter.alignment_representations(memories, receiver_token_embeddings)
-            for adapter in self.layers.values()
-        ]
+        """Backward-compatible concatenated view; training uses channel-wise pairs."""
+        pairs = self.alignment_representations_by_channel(states, receiver_contexts)
         return (
-            torch.cat([pair[0] for pair in layer_pairs], dim=-1),
-            torch.cat([pair[1] for pair in layer_pairs], dim=-1),
+            torch.cat([pairs[name][0] for name in CHANNELS], dim=-1),
+            torch.cat([pairs[name][1] for name in CHANNELS], dim=-1),
         )
 
     @staticmethod
