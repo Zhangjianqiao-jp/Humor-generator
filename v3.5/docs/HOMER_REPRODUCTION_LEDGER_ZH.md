@@ -23,6 +23,18 @@
 | Caption sampling | temperature=1 | 配置锁定 |
 | Evaluation | n=5, pass@1/3/5, five trials | metric 与配置已实现 |
 
+### HOMER 是否保证 Generator 使用三类信息
+
+否。官方 `generator.py` 的实际做法是：先选两条 conflict scripts，再选两个关键实体，
+从 imagination tree 为每个实体随机取一条 path，最后把 description、selected conflict
+和 free-association paths 作为三个有标题的文本块交给 Generator。system prompt 明确要求
+聚焦 central incongruity 并自然结合 chain keywords，因此这是**显式文本条件与指令约束**。
+
+HOMER 没有对每条 caption 计算 description/conflict/path 的单独因果依赖，也没有
+channel-wise reconstruction、matched/shuffled margin 或 attention usage loss。其组件消融
+证明移除组件会影响系统平均表现，但不能证明 Generator 在每个样本都必须使用三者。
+因此 v3.5 对三通道建立独立语义 gate 是本项目的 latent 扩展，不属于 HOMER 复现本体。
+
 ## 本轮找到并固定的公开数据源
 
 ### 1. Qwen-VL revision：原论文仍未公开，本项目采用固定替代模型

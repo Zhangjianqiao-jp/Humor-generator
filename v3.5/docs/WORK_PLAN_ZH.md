@@ -14,6 +14,15 @@
 
 Caption 阶段按 HOMER 公开 prompt 只接收 description/conflict/path。由于论文未公开精确 Qwen-VL revision，本项目只能声明为“固定 Qwen2.5-VL 替代模型的 method/data reproduction”。
 
+必须准确理解 HOMER 的条件使用机制：HOMER 先从候选 conflict 中选择两条，再从
+imagination tree 中为两个关键实体各选择一条 path，最后把 `description + selected
+conflicts + selected paths` 作为带显式字段名的文本放入 Generator prompt。其 prompt
+要求 caption 聚焦 central incongruity 并自然结合 chain keywords。这个流程提高了三个
+信息源被读取的可能性，但 HOMER **没有**额外的训练损失、注意力约束或因果门禁来保证
+每个样本都使用三者。论文消融支持各组件的系统级效用，不能等价为逐样本“必须使用”。
+因此本项目的 channel-wise causal gate 是 latent extension 的新增要求，不得写成 HOMER
+原方法的组成部分。
+
 ### B. 本项目 7B Generator 通信线
 
 `image + frozen Generator SFT prompt + communication -> caption`
@@ -76,7 +85,7 @@ L = caption NLL
 
 Hard negative 不是随机图片：优先同数据源、standard-description TF-IDF 最接近、但 conflict signature 不同的 image cluster。这样降低只凭题材差异完成 matched/shuffled 判别的风险。
 
-语义恢复 Phase A 从 v2 起还必须实际优化跨样本表示判别：
+语义恢复 Phase A v2 实际优化跨样本表示判别：
 
 ```text
 L_phaseA = reconstruction NLL
@@ -92,6 +101,60 @@ teacher 使用初始化时固化的 receiver-native projection；仅 `detach()` 
 `gradient_accumulation<2` 时直接拒绝启动；validation 必须记录 retrieval@1。
 
 Teacher 与 student 均使用原图和相同 caption；teacher 获得三个真实 Planner 输出。`lambda_KL=0` 时完全跳过 teacher forward，避免无意义算力。
+
+### Phase A2 指标审计结论
+
+`sequence_log_probability` 按有效 target token 取平均，matched 与 shuffled 使用相同
+图片、相同 teacher-forced target，只替换 Planner memory。两遍低显存反传使用
+`sigmoid(-matched+shuffled+margin)` 的固定一阶系数，其梯度与 softplus margin 的一阶
+梯度一致。因此没有发现 gap 公式或反传符号错误。
+
+但 v2 指标存在三项解释边界：
+
+1. hard negative 来自另一 image cluster，而不是同图内只改变某一 channel 的严格
+   counterfactual；因此它测的是跨图 plan identity sensitivity；
+2. `0.02` 是预注册的工程阈值，尚未由 control distribution 或置信区间校准；
+3. validation retrieval 曾将同 cluster 的重复 caption 当作 negatives，原始
+   `0.190476` 无效，修复后必须每个 cluster 只保留一个 representation。
+
+所以 v2 的严谨结论限定为：**当前 all-latent v2 未通过操作性语义门，caption stage
+保持 No-Go；它不是对 latent communication 这一方法类别的否定。** 支持 No-Go 的有效
+证据是 validation gap 仅 `0.002664`、没有样本超过 `0.2` margin、margin loss 接近
+无区分基线 `softplus(0.2)`，以及 conflict router mass 降至 `0.0289`。原 retrieval
+数值不参与该判断。
+
+### Phase A3：通道平衡语义恢复（下一项唯一允许的训练）
+
+下一轮仍为 `64 train / 24 validation`、只训练 bridge、冻结两个 7B。不得直接进入
+caption bridge。训练和选择规则改为：
+
+```text
+L_rec = (L_conflict + L_local + L_global) / 3
+L_NCE = (NCE_conflict + NCE_local + NCE_global) / 3
+L_cf  = (L_swap_conflict + L_swap_local + L_swap_global) / 3
+L_A3  = lambda_rec * L_rec + lambda_NCE * L_NCE
+      + lambda_cf * L_cf + lambda_var * L_var
+```
+
+- 每个 `L_channel` 先按本 channel 的有效 token 数归一化，再对三个 channel 等权平均，
+  防止较长 local/global association 在 token-weighted CE 中控制优化；
+- Phase A3 首个 control 固定三路 cross-channel mixing 为等权，禁止可学习 router 通过
+  把 conflict 权重压到零来绕过任务。只有固定门通过后，才比较带 minimum-usage/load-
+  balancing 正则的 learned gate；
+- 分别只替换 conflict、local、global，保存每张图的
+  `delta_conflict/delta_local/delta_global`，不再只交换整个 memory；
+- InfoNCE 必须真正进入 loss，并按 channel 计算。teacher 改为冻结 Generator 对同一
+  receiver-native 文本字段的 contextual hidden representation；v2 的固定随机投影只
+  能证明 trace identity/词汇区分，不能证明 Receiver 学到可用语义；
+- 所有 contrastive 统计以 image cluster 为单位，一 cluster 一个样本；保存逐图数值，
+  使用 image-clustered bootstrap 95% CI；
+- 同时保留跨图 TF-IDF hard negative 作为次要 stress test，但主 gate 使用单通道
+  counterfactual；阈值由 identity/shuffled/text-teacher controls 校准后冻结；
+- 三个 channel 均须达到高于 control 的正向 gap；只看总体平均不算通过。若 conflict
+  仍失败，停止 all-latent，进入预注册的 `C-text + A-latent` 混合消融。
+
+Phase A3 通过后才允许训练 caption bridge，并按 `Text-HOMER / C-text+A-latent /
+C-latent+A-text / All-latent` 顺序做低成本比较。
 
 ## 7. Successive filtering，而不是一次性矩阵
 
@@ -193,9 +256,9 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - 审计确认 v1 的 InfoNCE 未进入训练调用路径，且三通道拼接后的统一 softmax 存在长度竞争。v2 已改为通道内独立 softmax、通道间门控，并强制真实 gradient-window InfoNCE；
 - v2 第一轮真实 GPU engineering smoke：作业 6688553 已通过。随后代码审计修复了 teacher projection 跨 step 漂移风险；
 - v2 post-fix GPU smoke：作业 6688566 已通过；冻结 policy trainable params=0，bridge params=2,820,804，InfoNCE=0.7612，smoke retrieval@1=0.5，gradient/update finite，峰值显存约 11.82 GB。该数值只证明训练路径执行，不能作为泛化结果；
-- Hierarchical Phase A v2：作业 6688689 已完成并判定 No-Go。validation NLL 从 1.1196 降至 0.6326，但 matched-minus-shuffled gap 仅 0.002664（gate 0.02），margin>0 的比例为 0；conflict channel 权重从约 0.315 降至 0.0289，说明 token-weighted reconstruction/router 偏向更长的 association channels；
-- v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该评测问题不改变 v2 No-Go，因为独立的 causal matched/shuffled gap 明确失败；
-- caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来掩盖机制失败；下一项只允许低成本 channel-balanced semantic recovery，或按预注册混合方案将短而精确的 conflict 保留为 text、只对 association 使用 latent；
+- Hierarchical Phase A v2：作业 6688689 已完成并判定为**当前配置的操作性 No-Go**。validation NLL 从 1.1196 降至 0.6326，但 matched-minus-shuffled gap 仅 0.002664（工程 gate 0.02），`gap>0.2` 的比例为 0；conflict channel 权重从约 0.315 降至 0.0289。它说明当前 loss/router 没有形成足够的 plan 条件依赖，不得外推为“latent 方法失败”；
+- v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该数值既不能支持也不能反对 v2；
+- caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来绕过语义门。下一项只允许上述 Phase A3：通道平衡 reconstruction、channel-wise contextual InfoNCE、单通道 counterfactual、固定等权 gate；若 conflict 仍不过门，则进入预注册的 `C-text + A-latent`；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。
 
@@ -232,3 +295,4 @@ evaluation 五类；禁止把排队、NVML、OOM、依赖或代码异常写成�
 9. Yang et al. Hierarchical Attention Networks. NAACL 2016. https://aclanthology.org/N16-1174/
 10. Libovicky & Helcl. Attention Strategies for Multi-Source Sequence-to-Sequence Learning. ACL 2017. https://aclanthology.org/P17-2031/
 11. He et al. Momentum Contrast. CVPR 2020. https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
+12. van den Oord et al. Contrastive Predictive Coding. 2018. https://arxiv.org/abs/1807.03748

@@ -40,6 +40,18 @@
    matched/shuffled gap 为 `0.002664 < 0.02`，conflict router mass 下降到
    `0.0289`。validation retrieval 的原始 `0.190476` 受同 cluster 重复 caption
    false-negative 污染，已单独登记为评测实现错误；不能用它支持或反对方法。
+7. 对第 6 项的声明范围已审计收紧：log-probability 与两遍反传公式正确，但 negative
+   是跨 image cluster plan，不是同图单通道 counterfactual；`0.02` 也是工程阈值而非
+   统计校准阈值。因此结论只能是“all-latent v2 未通过当前操作性 gate”，不能写成
+   “latent communication 已被证伪”。
+8. v2 的 reconstruction 按全部 target token 平均，较长 local/global channel 获得更多
+   监督；unregularized router 随后将 conflict mass 压到 `0.0289`。v2 InfoNCE teacher
+   还是固定的 receiver-embedding 随机投影，只约束 trace identity，并不充分证明
+   frozen Receiver 能解释这些语义。两项均记录为设计不足。
+9. 计划已改为低成本 Phase A3：三通道等权 reconstruction、三路 contextual InfoNCE、
+   单通道 matched/shuffled counterfactual、固定等权 gate、cluster bootstrap CI。只有
+   三个 channel 都越过校准后的 control 才能进入 caption bridge；否则转入
+   conflict-text + association-latent 混合方案。
 
 ## 权威依据
 
@@ -47,3 +59,4 @@
 2. He et al., MoCo, CVPR 2020: https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
 3. Yang et al., Hierarchical Attention Networks, NAACL 2016: https://aclanthology.org/N16-1174/
 4. Libovicky and Helcl, Multi-Source Attention, ACL 2017: https://aclanthology.org/P17-2031/
+5. van den Oord et al., Contrastive Predictive Coding, 2018: https://arxiv.org/abs/1807.03748
