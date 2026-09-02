@@ -58,6 +58,18 @@
     point fail 也只能标记 `pilot_inconclusive`，不能据此排除一个可能有效的方法。只有
     工程不变量失败（报告为 `hard_no_go`）或明确、预注册的强负向证据才是 pilot hard
     stop。v1/v2 也必须用同一 cluster-level evaluator 重算后才能公平比较。
+11. 旧 v1/v2 重评 evaluator 又发现一个必须单独记录的 confound：v1 对拼接后的全部
+    memory 使用单一 softmax，原 donor 的 channel 长度差会改变 softmax 分母；此前
+    固定 24-cluster donor 的长度差最高约为 conflict 41、local 85、global 163 tokens。
+    因此原重评不能直接解释为语义 gap。已将 `scripts/re_evaluate_failed_semantic_bridges.py`
+    改为逐 channel 的 length-priority donor：从非 test train split 选择不同 conflict
+    signature 的 donor，优先最小长度差，再优先同源和 description 相似度；并排除该
+    checkpoint 已拟合的 train clusters。逐 cluster 长度差、gap correlation 和 donor
+    pool 均写入 provenance。详细协议见 `docs/SEMANTIC_REEVALUATION_PROTOCOL_ZH.md`。
+12. 该修正后的重评必须使用与旧 checkpoint 严格匹配的 bridge architecture，并检查
+    local model/adapter/prompt manifest；输出 summary/manifest 记录 evaluator hash、
+    seeds、checkpoint/config/data/trace/prompt/model/adapter hashes。直到新的 GPU
+    summary 完成前，不得把旧 `no_go` 重新解释为方法级无效。
 
 ## 权威依据
 

@@ -191,6 +191,26 @@ cluster 在最坏比例 `p=0.5` 附近的近似 95% 半宽约为 `1.96*sqrt(.25/
   fixed-equal/channel-balanced 训练，因此重评只能比较其既有表示与因果敏感性，不能伪装
   成 Phase A3 训练结果。
 
+### 旧 semantic bridge 修正重评的冻结协议
+
+详细审查记录见 [`docs/SEMANTIC_REEVALUATION_PROTOCOL_ZH.md`](SEMANTIC_REEVALUATION_PROTOCOL_ZH.md)。
+审查发现旧 donor 选择没有控制 channel 长度；对 v1 的单一 concatenated-memory
+softmax，这会改变归一化分母，不能把 gap 直接解释为语义依赖。修正后的
+`scripts/re_evaluate_failed_semantic_bridges.py` 使用：
+
+- 与 checkpoint 严格匹配的 v1/v2 bridge 类和 state dict；
+- 固定 hash 抽取的 24 个 validation image clusters，每 cluster 一个代表 row；
+- 来自 train split、且排除该 checkpoint 拟合过的 clusters 的 donor pool；
+- 不同 conflict signature，先按被替换 channel 的 token-length 差最小化，再在同长度
+  候选内优先同源并最大化 description TF-IDF 相似度；
+- image、semantic target、prompt 和另外两个 channel 全部固定的单 channel swap；
+- image-cluster bootstrap 95% CI、Wilson proportion interval、残余 length-gap
+  correlation 与完整 provenance。
+
+该重评只测 semantic receiver sensitivity，不产生 caption，也不使用 sealed test。
+`pilot_inconclusive` 仍表示 24-cluster 统计功效不足，不能写成方法级 No-Go；只有
+预注册 outer semantic validation 的稳定负向结果才可否定旧方法。
+
 这一协议依据 NLP 功效分析与配对显著性测试规范；Interlat 的错配/结构破坏实验用于证明
 latent 的任务特异性，而不是仅凭 latent 可解码就宣称 Receiver 使用了它。
 

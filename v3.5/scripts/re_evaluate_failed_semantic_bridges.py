@@ -22,11 +22,13 @@ from typing import Any
 
 import torch
 import yaml
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from humor_generator_v35.data.traces import read_jsonl
+from humor_generator_v35.data.traces import load_trace, plan_from_record, read_jsonl
 from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.latent.legacy_cross_attention import (
     LegacyV1ReceiverDrivenCrossAttentionBridge,
@@ -89,6 +91,190 @@ def bootstrap_interval(values: list[float], *, seed: int, draws: int = 10000) ->
     return [means[int(draws * 0.025)], means[int(draws * 0.975) - 1]]
 
 
+def pearson_correlation(left: list[float], right: list[float]) -> float | None:
+    if len(left) != len(right) or len(left) < 2:
+        raise ValueError("correlation inputs must have equal length >= 2")
+    left_mean = statistics.fmean(left)
+    right_mean = statistics.fmean(right)
+    numerator = sum((a - left_mean) * (b - right_mean) for a, b in zip(left, right))
+    left_scale = sum((a - left_mean) ** 2 for a in left)
+    right_scale = sum((b - right_mean) ** 2 for b in right)
+    if left_scale == 0 or right_scale == 0:
+        return None
+    return numerator / (left_scale * right_scale) ** 0.5
+
+
+def wilson_interval(successes: int, total: int, *, z: float = 1.959963984540054) -> list[float]:
+    """Two-sided Wilson interval for a descriptive cluster-level proportion."""
+    if total < 1 or successes < 0 or successes > total:
+        raise ValueError("invalid binomial counts")
+    proportion = successes / total
+    denominator = 1 + z**2 / total
+    centre = (proportion + z**2 / (2 * total)) / denominator
+    half_width = (
+        z
+        * ((proportion * (1 - proportion) / total) + z**2 / (4 * total**2)) ** 0.5
+        / denominator
+    )
+    return [max(0.0, centre - half_width), min(1.0, centre + half_width)]
+
+
+def _cluster_descriptions(
+    rows: list[dict[str, Any]], clusters: list[str],
+) -> dict[str, str]:
+    grouped: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        if row["cluster_id"] in clusters:
+            grouped[row["cluster_id"]].add(str(row["standard_description"]))
+    missing = sorted(set(clusters) - set(grouped))
+    if missing:
+        raise ValueError(f"missing descriptions for clusters: {missing[:5]}")
+    return {cluster: " ".join(sorted(grouped[cluster])) for cluster in clusters}
+
+
+def _trace_lengths(
+    root: Path,
+    trace_index: dict[str, dict[str, Any]],
+    clusters: list[str],
+) -> dict[str, dict[str, int]]:
+    """Read only shape metadata, validating each donor trace hash."""
+    result: dict[str, dict[str, int]] = {}
+    for cluster in clusters:
+        record = trace_index[cluster]
+        loaded = load_trace(
+            root / record["trace_path"], expected_sha256=record["trace_sha256"]
+        )
+        result[cluster] = {
+            channel: int(loaded[channel].states.shape[1]) for channel in CHANNELS
+        }
+    return result
+
+
+def _conflict_signatures(
+    trace_index: dict[str, dict[str, Any]], clusters: list[str],
+) -> dict[str, tuple[str, ...]]:
+    return {
+        cluster: tuple(
+            sorted(
+                item.render().casefold()
+                for item in plan_from_record(trace_index[cluster]["plan"]).conflicts
+            )
+        )
+        for cluster in clusters
+    }
+
+
+def length_matched_channel_donors(
+    target_rows: list[dict[str, Any]],
+    donor_rows: list[dict[str, Any]],
+    *,
+    root: Path,
+    trace_index: dict[str, dict[str, Any]],
+) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
+    """Choose per-channel hard negatives without changing channel length.
+
+    The legacy v1 bridge applies one softmax over the concatenated memory.  A
+    donor with a different number of tokens changes the denominator even when
+    its semantic content is unrelated.  The primary re-evaluation therefore
+    selects a donor from the non-test ``train`` split, first minimizing the
+    absolute token-length difference for the swapped channel, then preferring a
+    same-source donor and maximizing description TF-IDF similarity.  Most
+    target/channel pairs have exact-length matches; residual differences are
+    recorded rather than hidden.
+    """
+    target_clusters = sorted({row["cluster_id"] for row in target_rows})
+    donor_clusters = sorted({row["cluster_id"] for row in donor_rows})
+    if not target_clusters or not donor_clusters:
+        raise ValueError("channel donor selection requires non-empty target and donor clusters")
+    if set(target_clusters) & set(donor_clusters):
+        raise ValueError("target and donor clusters overlap")
+    for cluster in donor_clusters:
+        if trace_index[cluster].get("split") != "train":
+            raise ValueError(f"channel donor is not from train split: {cluster}")
+
+    all_clusters = target_clusters + donor_clusters
+    descriptions = _cluster_descriptions(target_rows + donor_rows, all_clusters)
+    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+    matrix = vectorizer.fit_transform([descriptions[cluster] for cluster in all_clusters])
+    target_matrix = matrix[: len(target_clusters)]
+    donor_matrix = matrix[len(target_clusters) :]
+    similarity = linear_kernel(target_matrix, donor_matrix)
+    signatures = _conflict_signatures(trace_index, all_clusters)
+    lengths = _trace_lengths(root, trace_index, all_clusters)
+    source_sets: dict[str, set[str]] = {}
+    for cluster in all_clusters:
+        source_sets[cluster] = {
+            str(row.get("dataset", ""))
+            for row in target_rows + donor_rows
+            if row["cluster_id"] == cluster
+        }
+
+    result: dict[str, dict[str, str]] = {}
+    per_channel: dict[str, dict[str, float]] = {
+        channel: {"exact_length": 0.0, "length_delta_sum": 0.0}
+        for channel in CHANNELS
+    }
+    for left, target in enumerate(target_clusters):
+        candidates = [
+            right for right, donor in enumerate(donor_clusters)
+            if signatures[donor] != signatures[target]
+        ]
+        if not candidates:
+            raise RuntimeError(f"no different-conflict train donor for {target}")
+        result[target] = {}
+        for channel in CHANNELS:
+            target_length = lengths[target][channel]
+            min_delta = min(
+                abs(lengths[donor_clusters[right]][channel] - target_length)
+                for right in candidates
+            )
+            length_pool = [
+                right for right in candidates
+                if abs(lengths[donor_clusters[right]][channel] - target_length) == min_delta
+            ]
+            # Length is the primary confounder for v1's single softmax.  Only
+            # after fixing the minimum delta do we prefer a same-source donor.
+            shared_length_pool = [
+                right for right in length_pool
+                if source_sets[target] & source_sets[donor_clusters[right]]
+            ]
+            ranking_pool = shared_length_pool or length_pool
+            right = max(
+                ranking_pool,
+                key=lambda value: (float(similarity[left, value]), donor_clusters[value]),
+            )
+            donor = donor_clusters[right]
+            result[target][channel] = donor
+            per_channel[channel]["exact_length"] += float(min_delta == 0)
+            per_channel[channel]["length_delta_sum"] += float(min_delta)
+    diagnostics = {
+        "policy": (
+            "train_split_conflict_mismatched_description_nearest_length_matched_per_channel_"
+            "excluding_checkpoint_fit_clusters"
+        ),
+        "target_clusters": float(len(target_clusters)),
+        "donor_pool_clusters": float(len(donor_clusters)),
+        "same_source_preference": True,
+        "channels": {
+            channel: {
+                "exact_length_fraction": values["exact_length"] / len(target_clusters),
+                "mean_absolute_length_delta": values["length_delta_sum"] / len(target_clusters),
+            }
+            for channel, values in per_channel.items()
+        },
+    }
+    return result, diagnostics
+
+
+def checkpoint_training_clusters(checkpoint_path: Path) -> set[str]:
+    """Return clusters used by the historical bridge, when its manifest exists."""
+    manifest_path = checkpoint_path.parent / "run_manifest.json"
+    if not manifest_path.is_file():
+        return set()
+    manifest = json.loads(manifest_path.read_text())
+    return {str(cluster) for cluster in manifest.get("train_cluster_ids", [])}
+
+
 def build_bridge(method: str, width: int, config: dict[str, Any], device: torch.device) -> torch.nn.Module:
     kwargs = {
         "layer_indices": [int(value) for value in config["bridge"]["layer_indices"]],
@@ -111,7 +297,8 @@ def build_bridge(method: str, width: int, config: dict[str, Any], device: torch.
 def evaluate_cluster(
     task: ReceiverCrossAttentionTask,
     row: dict[str, Any],
-    donor_cluster: str,
+    channel_donors: dict[str, str],
+    full_plan_donor: str,
 ) -> dict[str, Any]:
     """Measure full-target log-probability under one-channel swaps.
 
@@ -122,7 +309,10 @@ def evaluate_cluster(
     example = prepare_example(row, task.trace_index[row["cluster_id"]], seed=0)
     prepared = task.prepare(example)
     embeddings, mask, positions, targets, _teacher_cpu, matched_states = prepared
-    donor_states = task._states(donor_cluster)
+    donor_clusters = set(channel_donors.values()) | {full_plan_donor}
+    donor_states_by_cluster = {
+        cluster: task._states(cluster) for cluster in sorted(donor_clusters)
+    }
 
     def score(states: dict[str, Any]) -> tuple[float, dict[str, float]]:
         logits = task._logits(embeddings, mask, positions, targets, states)
@@ -140,21 +330,32 @@ def evaluate_cluster(
     row_out: dict[str, Any] = {
         "cluster_id": row["cluster_id"],
         "row_id": row["row_id"],
-        "donor_cluster_id": donor_cluster,
         "matched_logp": matched_logp,
         **matched_diag,
     }
     swapped_states = dict(matched_states)
-    all_swapped = dict(donor_states)
+    all_swapped = dict(donor_states_by_cluster[full_plan_donor])
     all_logp, _ = score(all_swapped)
     row_out["full_plan_swap_logp"] = all_logp
     row_out["full_plan_swap_gap"] = matched_logp - all_logp
     for channel in CHANNELS:
+        donor_cluster = channel_donors[channel]
+        donor_states = donor_states_by_cluster[donor_cluster]
         swapped_states[channel] = donor_states[channel]
         counterfactual_logp, _ = score(swapped_states)
         row_out[f"counterfactual_logp_{channel}"] = counterfactual_logp
         row_out[f"gap_{channel}"] = matched_logp - counterfactual_logp
+        row_out[f"donor_cluster_id_{channel}"] = donor_cluster
+        row_out[f"target_length_{channel}"] = int(matched_states[channel].states.shape[1])
+        row_out[f"donor_length_{channel}"] = int(donor_states[channel].states.shape[1])
+        row_out[f"length_delta_{channel}"] = (
+            row_out[f"donor_length_{channel}"] - row_out[f"target_length_{channel}"]
+        )
+        row_out[f"donor_semantics_sha256_{channel}"] = hashlib.sha256(
+            donor_states[channel].semantics.encode()
+        ).hexdigest()
         swapped_states[channel] = matched_states[channel]
+    row_out["full_plan_donor_cluster_id"] = full_plan_donor
     return row_out
 
 
@@ -168,8 +369,21 @@ def summarize(rows: list[dict[str, Any]], *, seed: int) -> dict[str, Any]:
             "mean_gap": statistics.fmean(values),
             "median_gap": statistics.median(values),
             "fraction_gap_gt_0": sum(value > 0 for value in values) / len(values),
+            "fraction_gap_gt_0_ci95": wilson_interval(
+                sum(value > 0 for value in values), len(values)
+            ),
             "fraction_gap_gt_0_02": sum(value > 0.02 for value in values) / len(values),
+            "fraction_gap_gt_0_02_ci95": wilson_interval(
+                sum(value > 0.02 for value in values), len(values)
+            ),
             "bootstrap_95ci": intervals[channel],
+            "max_abs_length_delta": max(
+                abs(int(row[f"length_delta_{channel}"])) for row in rows
+            ),
+            "gap_vs_abs_length_delta_pearson": pearson_correlation(
+                values,
+                [abs(int(row[f"length_delta_{channel}"])) for row in rows],
+            ),
         }
     point_pass = all(
         summary["mean_gap"] >= 0 and summary["fraction_gap_gt_0"] >= 0.60
@@ -212,6 +426,22 @@ def evaluate_method(
     config = yaml.safe_load(config_path.read_text())
     if config["training"].get("max_validation_clusters") != 24:
         raise ValueError("re-evaluation expects the preregistered 24-cluster validation subset")
+    model_manifest_path = ROOT / "manifests/local_qwen2_5_vl_7b.json"
+    adapter_manifest_path = ROOT / "manifests/frozen_7b_adapters.json"
+    model_manifest = json.loads(model_manifest_path.read_text())
+    adapter_manifest = json.loads(adapter_manifest_path.read_text())
+    if (
+        config["model"]["name"] != model_manifest["model_id"]
+        or config["model"]["revision"] != model_manifest["revision"]
+    ):
+        raise RuntimeError("config model identity does not match pinned local model manifest")
+    configured_adapter = config["model"].get("adapter")
+    expected_adapter = adapter_manifest["adapters"]["generator_sft"]["local_path"]
+    if configured_adapter != expected_adapter:
+        raise RuntimeError(
+            f"config adapter {configured_adapter!r} does not match frozen generator adapter "
+            f"{expected_adapter!r}"
+        )
     dataset = ROOT / config["data"]["dataset"]
     trace_path = ROOT / config["data"]["trace_index"]
     validation_rows = read_jsonl(dataset / "validation.jsonl")
@@ -224,12 +454,28 @@ def evaluate_method(
     representatives = cluster_balanced_rows(
         validation_rows, epoch=0, seed=int(config["training"]["seed"])
     )
+    donor_rows_all = read_jsonl(dataset / "train.jsonl")
+    fitted_clusters = checkpoint_training_clusters(checkpoint_path)
+    checkpoint_run_manifest = checkpoint_path.parent / "run_manifest.json"
+    donor_rows = [
+        row for row in donor_rows_all if row["cluster_id"] not in fitted_clusters
+    ]
+    if not donor_rows:
+        raise RuntimeError("checkpoint training-cluster exclusion removed every donor")
     traces = load_trace_index(trace_path)
     cluster_ids = {row["cluster_id"] for row in representatives}
     missing = sorted(cluster_ids - set(traces))
     if missing:
         raise RuntimeError(f"missing traces for clusters: {missing[:5]}")
-    donors, donor_diagnostics = hard_negative_cluster_map(validation_rows, traces)
+    full_plan_donors, full_plan_donor_diagnostics = hard_negative_cluster_map(
+        representatives, traces
+    )
+    channel_donors, channel_donor_diagnostics = length_matched_channel_donors(
+        representatives,
+        donor_rows,
+        root=ROOT,
+        trace_index=traces,
+    )
 
     adapter = config["model"].get("adapter")
     backend = QwenBackend.load(
@@ -265,7 +511,12 @@ def evaluate_method(
 
     details = []
     for index, row in enumerate(representatives, start=1):
-        result = evaluate_cluster(task, row, donors[row["cluster_id"]])
+        result = evaluate_cluster(
+            task,
+            row,
+            channel_donors[row["cluster_id"]],
+            full_plan_donors[row["cluster_id"]],
+        )
         result["evaluation_index"] = index
         details.append(result)
         print(json.dumps({"status": "evaluated", "method": method, **result}), flush=True)
@@ -290,18 +541,44 @@ def evaluate_method(
         "validation_cluster_ids_sha256": hashlib.sha256(
             "\n".join(sorted(cluster_ids)).encode()
         ).hexdigest(),
-        "donor_policy": "description_tfidf_nearest_same-source_different-conflict",
-        "donor_diagnostics": donor_diagnostics,
-        "evaluation_protocol": "full-target_same-image_single-channel_counterfactual",
+        "selection_seed": int(config["training"]["seed"]),
+        "bootstrap_seed": int(config["training"]["seed"]),
+        "donor_pool_excluded_checkpoint_train_clusters": sorted(fitted_clusters),
+        "donor_pool_excluded_count": len(fitted_clusters),
+        "checkpoint_run_manifest_sha256": (
+            sha256(checkpoint_run_manifest) if checkpoint_run_manifest.is_file() else None
+        ),
+        "trace_input_manifest_sha256": sha256(dataset / "trace_inputs.jsonl"),
+        "homer_prompt_source_sha256": sha256(ROOT / "src/humor_generator_v35/homer/prompts.py"),
+        "receiver_prompt_source_sha256": sha256(
+            ROOT / "src/humor_generator_v35/training/cross_attention_bridge.py"
+        ),
+        "frozen_adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),
+        "local_model_manifest_sha256": sha256(ROOT / "manifests/local_qwen2_5_vl_7b.json"),
+        "donor_policy": channel_donor_diagnostics["policy"],
+        "channel_donor_diagnostics": channel_donor_diagnostics,
+        "full_plan_donor_policy": "description_tfidf_nearest_same-source_different-conflict_within_pilot_clusters",
+        "full_plan_donor_diagnostics": full_plan_donor_diagnostics,
+        "evaluation_protocol": (
+            "full-target_same-image_single-channel_counterfactual; "
+            "primary_channel_swaps_length-matched_train_donors"
+        ),
         "excluded": ["sealed_test", "caption_generation", "retraining"],
     })
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     manifest = {
         "schema_version": 1,
         "method": method,
+        "evaluator_sha256": sha256(Path(__file__).resolve()),
         "checkpoint_sha256": summary["checkpoint_sha256"],
         "config_sha256": summary["config_sha256"],
         "dataset_manifest_sha256": summary["dataset_manifest_sha256"],
+        "trace_input_manifest_sha256": summary["trace_input_manifest_sha256"],
+        "frozen_adapter_manifest_sha256": summary["frozen_adapter_manifest_sha256"],
+        "local_model_manifest_sha256": summary["local_model_manifest_sha256"],
+        "checkpoint_run_manifest_sha256": summary["checkpoint_run_manifest_sha256"],
+        "homer_prompt_source_sha256": summary["homer_prompt_source_sha256"],
+        "receiver_prompt_source_sha256": summary["receiver_prompt_source_sha256"],
         "trace_index_sha256": summary["trace_index_sha256"],
         "git_commit": summary["git_commit"],
         "cluster_details_sha256": sha256(detail_path),

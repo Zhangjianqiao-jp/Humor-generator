@@ -25,6 +25,8 @@ python scripts/check_v35_isolation.py
 python scripts/verify_frozen_artifacts.py
 python scripts/verify_clustered_dataset.py
 python scripts/check_trace_completion.py
+.venv/bin/python -m py_compile scripts/re_evaluate_failed_semantic_bridges.py
+.venv/bin/pytest -q tests/test_receiver_cross_attention.py tests/test_semantic_gate_routing.py
 
 python scripts/re_evaluate_failed_semantic_bridges.py \
   --method v1 \
