@@ -28,3 +28,6 @@ python scripts/real_trace_bridge_smoke.py \
   --trace-index data/cache/planner_traces_homer_strict_v35/index.jsonl \
   --output results/engineering_smoke/cross_attention_semantic_phase_a3.json
 test -s results/engineering_smoke/cross_attention_semantic_phase_a3.json
+python scripts/validate_phase_a3_smoke.py \
+  --config configs/pilot/cross_attention_semantic_phase_a3.yaml \
+  --report results/engineering_smoke/cross_attention_semantic_phase_a3.json
