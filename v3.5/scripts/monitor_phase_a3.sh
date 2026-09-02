@@ -15,7 +15,7 @@ mkdir -p "$state_dir"
 
 last_state=
 while :; do
-  current=$(pjstat "$smoke_job_id" 2>/dev/null | awk 'NR==2 {print $3}')
+  current=$(pjstat "$smoke_job_id" 2>/dev/null | awk 'NR==2 {print $4}')
   if [ -n "$current" ]; then
     if [ "$current" != "$last_state" ]; then
       date -Is | awk -v state="$current" '{print $0, "smoke_state=" state}' >> "$log"
