@@ -91,6 +91,26 @@ class ReceiverCrossAttentionTask:
     def _tensor_states(states: dict[str, AlignedMessageStates]) -> dict[str, torch.Tensor]:
         return {name: states[name].states for name in TypedLatentBridge.channel_order}
 
+    def semantic_alignment_pair(
+        self, example: PreparedExample,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Represent one matched Planner trace in sender and receiver spaces.
+
+        This deliberately keeps the small alignment graph outside the frozen
+        receiver forward, so gradient-accumulation windows can form a genuine
+        multi-example InfoNCE batch without retaining VLM activations.
+        """
+        states = self._states(example.row["cluster_id"])
+        parameter = next(self.bridge.parameters())
+        embedding = self.backend.model.get_input_embeddings()
+        receiver_embeddings = {
+            name: embedding(states[name].token_ids.to(parameter.device)).to(parameter.dtype)
+            for name in TypedLatentBridge.channel_order
+        }
+        return self.bridge.alignment_representations(
+            self._tensor_states(states), receiver_embeddings
+        )
+
     def prepare(self, example: PreparedExample) -> tuple[Any, ...]:
         states = self._states(example.row["cluster_id"])
         semantics = {
@@ -209,6 +229,13 @@ class ReceiverCrossAttentionTask:
             "mean_relative_update_norm": float(
                 sum(item.relative_update_norm for item in diagnostics) / max(1, len(diagnostics))
             ),
+            **{
+                f"mean_channel_weight_{name}": float(
+                    sum(item.channel_weights[index] for item in diagnostics)
+                    / max(1, len(diagnostics))
+                )
+                for index, name in enumerate(TypedLatentBridge.channel_order)
+            },
         }
 
     def backward_example(self, example: PreparedExample, shuffled_cluster: str, *,

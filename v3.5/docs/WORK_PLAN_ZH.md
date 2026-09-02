@@ -76,6 +76,21 @@ L = caption NLL
 
 Hard negative 不是随机图片：优先同数据源、standard-description TF-IDF 最接近、但 conflict signature 不同的 image cluster。这样降低只凭题材差异完成 matched/shuffled 判别的风险。
 
+语义恢复 Phase A 从 v2 起还必须实际优化跨样本表示判别：
+
+```text
+L_phaseA = reconstruction NLL
+         + lambda_cf * matched/shuffled margin
+         + lambda_NCE * symmetric InfoNCE
+         + lambda_var * anti-collapse variance floor
+```
+
+InfoNCE 的 batch 来自 4 个梯度累积样本，只保留小型 bridge alignment graph。
+teacher 使用初始化时固化的 receiver-native projection；仅 `detach()` 可训练 query
+输出不足以构成静态 teacher，因为 optimizer step 后坐标系仍会漂移。
+不保留四份 VLM forward activation。正式 trainer 在 Phase A 的 `info_nce<=0` 或
+`gradient_accumulation<2` 时直接拒绝启动；validation 必须记录 retrieval@1。
+
 Teacher 与 student 均使用原图和相同 caption；teacher 获得三个真实 Planner 输出。`lambda_KL=0` 时完全跳过 teacher forward，避免无意义算力。
 
 ## 7. Successive filtering，而不是一次性矩阵
@@ -170,15 +185,39 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - v2.5/v3.0 executable isolation：通过；
 - frozen adapters SHA-256：通过；
 - image-clustered split/hash/leakage：通过；
-- CPU tests：59/59 通过（以后以最新 test 输出为准）；
+- CPU tests：完整 suite 75/75 通过；
 - 正式 v3.5 GPU trace/bridge smoke：作业 6649172 已通过；
 - 数据质量修复：Electronic Sheep 的标量 `UNKNOWN` 曾被错误迭代成 `U/N/K` caption；已删除 133 个无效训练行。各 split 数量保持 602/64/97/24/23，但具体 cluster 成员和部分 standard-description 来源发生变化，不能据“数量相同”复用全部 trace；
-- 正式 trace 生成：当前 664/666。只剩训练集 `nycc_325` 与 `nycc_775`；前者进入三个 pilot 的固定 64-cluster 子集，禁止绕过。下一作业仅恢复这两条，固定原 Qwen revision、Planner adapter 与 HOMER prompt，并启用有语义守恒检查的 validator-feedback repair；该短作业使用当时有空闲容量且 7B 4-bit 足以运行的单张 `b-batch` GPU，而不是等待已满的 `c-batch`。达到严格 666/666 后监控才串行触发 pilot；
-- 正式训练：未启动，后续由 trace gate 串行触发三个 pilot；每个 pilot 只申请 1 GPU、4 小时上限；
+- 正式 trace 生成：666/666，缺失、重复与 failure 均为 0；
+- Cross-attention Phase A v1 已完成但为方法级 No-Go：epoch 5 validation NLL=0.632975，matched-minus-shuffled gap=0.004843，低于 0.02 gate，caption stage 未启动；
+- 审计确认 v1 的 InfoNCE 未进入训练调用路径，且三通道拼接后的统一 softmax 存在长度竞争。v2 已改为通道内独立 softmax、通道间门控，并强制真实 gradient-window InfoNCE；
+- v2 第一轮真实 GPU engineering smoke：作业 6688553 已通过。随后代码审计修复了 teacher projection 跨 step 漂移风险；
+- v2 post-fix GPU smoke：作业 6688566 已通过；冻结 policy trainable params=0，bridge params=2,820,804，InfoNCE=0.7612，smoke retrieval@1=0.5，gradient/update finite，峰值显存约 11.82 GB。该数值只证明训练路径执行，不能作为泛化结果；
+- 下一次正式训练：新的 64/24 Phase A v2 已满足工程门禁，待 clean commit 后提交；输出目录 `hierarchical_cross_attention_semantic_v2` 不覆盖 v1；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning：禁用。
 
-## 12. 权威参考
+## 12. Text/latent 混合消融（语义 Gate 后）
+
+不默认三个 channel 都适合 latent。为控制实验数量，第一轮只比较：
+
+1. `Text-HOMER`：conflict/local/global 全文本；
+2. `C-text + A-latent`：conflict 保留文本，local/global 使用 latent；
+3. `C-latent + A-text`：conflict 使用 latent，local/global 保留文本；
+4. `All-latent`：三通道均使用 latent。
+
+四个条件必须共享图片、plan、caption prompt、generation seeds 和信息来源。只有某个
+association 组合显示收益后，才继续区分 local 与 global；避免直接展开全部 2^3 组合。
+主判断同时看 absolute good rate、grounding、matched/shuffled sensitivity 和参数/延迟。
+
+## 13. 失败记录纪律
+
+所有失败必须同步写入 `docs/EXPERIMENT_FAILURES.jsonl`，阅读版规则在
+`docs/EXPERIMENT_FAILURE_LOG_ZH.md`。必须区分 environment/data/engineering/method/
+evaluation 五类；禁止把排队、NVML、OOM、依赖或代码异常写成方法失败。每次修复必须
+使用新输出目录，保留旧日志、checkpoint、配置和 job ID，并及时更新本计划的“当前可复现状态”。
+
+## 14. 权威参考
 
 1. Shang et al. HOMER. ICLR 2026. https://openreview.net/pdf?id=SzaRhPom4o
 2. HOMER official implementation. https://github.com/Shang-hub/HOMER-Official-Implementation
@@ -188,3 +227,6 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 6. Hessel et al. Electronic Sheep. ACL 2023. https://aclanthology.org/2023.acl-long.41/
 7. Tevet & Berant. Evaluating the Evaluation of Diversity in NLG. EACL 2021. https://aclanthology.org/2021.eacl-main.25/
 8. Friedman & Dieng. The Vendi Score. TMLR 2023. https://arxiv.org/abs/2210.02410
+9. Yang et al. Hierarchical Attention Networks. NAACL 2016. https://aclanthology.org/N16-1174/
+10. Libovicky & Helcl. Attention Strategies for Multi-Source Sequence-to-Sequence Learning. ACL 2017. https://aclanthology.org/P17-2031/
+11. He et al. Momentum Contrast. CVPR 2020. https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html

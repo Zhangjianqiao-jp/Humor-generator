@@ -47,6 +47,82 @@ def test_full_typed_memory_is_not_tail_truncated() -> None:
     assert mask.all()
 
 
+def test_attention_normalizes_each_channel_before_channel_fusion() -> None:
+    torch.manual_seed(7)
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    uneven = {
+        "conflict": torch.randn(2, 3, 16),
+        "local": torch.randn(2, 17, 16),
+        "global": torch.randn(2, 41, 16),
+    }
+    with bridge.inject(model, uneven):
+        model(torch.randn(2, 5, 16))
+    weights = bridge.last_diagnostics[0].channel_weights
+    assert len(weights) == 3
+    assert abs(sum(weights) - 1.0) < 1e-5
+    assert all(0.0 < value < 1.0 for value in weights)
+
+
+def test_alignment_representations_preserve_channel_identity_and_gradients() -> None:
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0, 1], bottleneck_dim=8, heads=2
+    )
+    states = _states(batch=4)
+    receiver = _states(batch=4)
+    student, teacher = bridge.alignment_representations(states, receiver)
+    assert student.shape == teacher.shape == (4, 2 * 3 * 8)
+    loss, _ = symmetric_info_nce(student, teacher)
+    loss.backward()
+    assert any(
+        parameter.grad is not None and parameter.grad.abs().sum() > 0
+        for parameter in bridge.parameters()
+    )
+
+
+def test_info_nce_teacher_projection_is_stationary() -> None:
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2
+    )
+    states = _states(batch=4)
+    receiver = _states(batch=4)
+    _, teacher_before = bridge.alignment_representations(states, receiver)
+    with torch.no_grad():
+        bridge.layers["0"].query.weight.add_(1.0)
+    _, teacher_after = bridge.alignment_representations(states, receiver)
+    torch.testing.assert_close(teacher_before, teacher_after)
+
+
+def test_hierarchical_attention_is_invariant_to_duplicate_memory_length() -> None:
+    """Duplicating identical tokens must not create channel mass by length alone."""
+    torch.manual_seed(11)
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    token = torch.randn(2, 1, 16)
+    states = {
+        "conflict": token.expand(-1, 3, -1).clone(),
+        "local": token.expand(-1, 17, -1).clone(),
+        "global": token.expand(-1, 41, -1).clone(),
+    }
+    # Remove type offsets for this strict length-only control.
+    with torch.no_grad():
+        bridge.channel_types.zero_()
+    with bridge.inject(model, states):
+        model(torch.randn(2, 5, 16))
+    weights = bridge.last_diagnostics[0].channel_weights
+    torch.testing.assert_close(
+        torch.tensor(weights), torch.full((3,), 1 / 3), atol=1e-5, rtol=1e-5
+    )
+
+
 def test_hook_is_temporary_and_bridge_receives_gradients() -> None:
     torch.manual_seed(3)
     model = _Core(16, 3)

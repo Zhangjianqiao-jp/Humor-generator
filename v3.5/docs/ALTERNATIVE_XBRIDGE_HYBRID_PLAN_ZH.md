@@ -9,7 +9,7 @@
 3. 不把 latent slots 追加到 assistant generation marker 后。Generator 保留正常的 image + SFT task instruction；latent 完全通过 out-of-band cross-attention 提供，称为 `zero-prefix`，而不是字面删除任务指令。
 4. 采用 representation-first、generation-second 两阶段训练：先精确重建 Planner semantics，再训练 caption。
 5. matched/shuffled 权重由 0.1 提高到 0.5，并直接记录 raw gap 与成功比例；是否足够由数据 gate 决定，不靠权重大小宣称。
-6. 加入 exact plan reconstruction、后续 receiver-native InfoNCE、同图不同 plan counterfactual 和 channel typing。仅 NLL/KL 下降不再构成 Go 证据。
+6. 加入 exact plan reconstruction、receiver-native InfoNCE、同图不同 plan counterfactual 和 channel typing。InfoNCE 已进入正式 Phase A 的 gradient-window 优化路径与 GPU smoke；仅 NLL/KL 下降不再构成 Go 证据。
 7. 历史 `typed_quantized` 只作为失败诊断保留，不再进入候选主方法。若未来研究离散 channel，必须从头联合训练 VQ-VAE（straight-through + codebook/commitment）或 FSQ，不允许 post-hoc nearest-neighbor。
 
 注意：这里删除的是把 bridge 输出投影成词表概率的 **vocabulary softmax**。下文 cross-attention 中的 softmax 只是对完整 memory positions 计算可微检索权重；它既不选最近词，也不把语义压成离散 token，更不截断 memory。
@@ -61,7 +61,7 @@ W_O\operatorname{MHA}(Q_0,W_KH_P,W_VH_P)
 保留 conflict/local/global 的 Sender states 作为 memory：
 
 \[
-M_P=[H_P^{conflict};H_P^{local};H_P^{global}].
+M_P=\{H_P^{conflict},H_P^{local},H_P^{global}\}.
 \]
 
 在 Generator 的候选层 \(l\in\mathcal L\) 中：
@@ -76,11 +76,13 @@ V_l=W_{V,l}\operatorname{LN}_P(M_P),
 \]
 
 \[
-A_l=\operatorname{softmax}\left(\frac{Q_lK_l^\top}{\sqrt b}\right)V_l,
+A_l^k=\operatorname{softmax}_{t\in k}\left(\frac{Q_l(K_l^k)^\top}{\sqrt b}\right)V_l^k,
 \]
 
 \[
-h_R^{l\prime}=h_R^l+\tanh(\alpha_l)W_{O,l}A_l.
+\rho_l=\operatorname{softmax}_{k\in\{C,L,G\}} f_l(Q_l,A_l^k),
+\qquad
+h_R^{l\prime}=h_R^l+\tanh(\alpha_l)W_{O,l}\sum_k\rho_l^kA_l^k.
 \]
 
 这里的查询来自 Receiver 当前状态，因此不同图片、caption token 和 Transformer 层可以读取不同 Sender positions。它避免把 final-layer Sender states直接冒充 input embeddings。
@@ -193,7 +195,7 @@ M_i^+=(c_i,a_i),\qquad M_i^-=(c_j,a_j),
 
 从 Phase A 最佳 bridge 权重初始化，但重建 optimizer；Generator 使用正常 image + caption task instruction，输入序列中 latent token 数严格为零。配置为 `configs/pilot/cross_attention_caption.yaml`。
 
-正式 loss 包括 caption NLL、text-teacher KL 和 matched/shuffled counterfactual。后续加入跨样本 queue 后启用 receiver-native InfoNCE；batch=1 时禁止伪造没有 negatives 的 InfoNCE。
+正式 loss 包括 caption NLL、text-teacher KL 和 matched/shuffled counterfactual。Phase A 使用四个梯度累积样本组成真实 contrastive batch，只保留小型 alignment graph，并强制启用 receiver-native symmetric InfoNCE；batch=1 时禁止伪造没有 negatives 的 InfoNCE。若后续显存策略迫使 accumulation=1，才切换为带 cluster 过滤的 detached teacher queue。
 
 ### Phase C：训练强度 gate
 

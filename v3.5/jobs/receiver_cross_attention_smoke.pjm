@@ -25,5 +25,5 @@ python scripts/check_trace_completion.py
 python scripts/real_trace_bridge_smoke.py \
   --config configs/pilot/cross_attention_semantic_reconstruction.yaml \
   --trace-index data/cache/planner_traces_homer_strict_v35/index.jsonl \
-  --output results/engineering_smoke/receiver_cross_attention_semantic.json
-test -s results/engineering_smoke/receiver_cross_attention_semantic.json
+  --output results/engineering_smoke/hierarchical_cross_attention_semantic_v2_stationary_teacher.json
+test -s results/engineering_smoke/hierarchical_cross_attention_semantic_v2_stationary_teacher.json

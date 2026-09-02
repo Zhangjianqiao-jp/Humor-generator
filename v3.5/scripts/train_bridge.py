@@ -29,6 +29,7 @@ from humor_generator_v35.training.formal_bridge import (
     prepare_example,
 )
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
+from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
 
 
@@ -240,6 +241,17 @@ def main() -> None:
     accumulation = int(config["training"]["gradient_accumulation"])
     if accumulation < 1:
         raise ValueError("gradient_accumulation must be positive")
+    info_nce_weight = float(config["loss"].get("info_nce", 0.0))
+    variance_weight = float(config["loss"].get("variance_floor", 0.0))
+    info_nce_temperature = float(config["loss"].get("info_nce_temperature", 0.07))
+    if (
+        baseline == "receiver_cross_attention"
+        and str(config["training"].get("stage")) == "semantic_reconstruction"
+        and info_nce_weight <= 0
+    ):
+        raise ValueError("semantic-reconstruction Phase A requires loss.info_nce > 0")
+    if info_nce_weight > 0 and accumulation < 2:
+        raise ValueError("InfoNCE requires gradient_accumulation >= 2")
     log_path = args.output / "metrics.jsonl"
     optimizer.zero_grad(set_to_none=True)
     total_epochs = int(config["training"]["epochs"])
@@ -249,6 +261,9 @@ def main() -> None:
         bridge.train()
         rows = cluster_balanced_rows(train_rows, epoch=epoch, seed=seed)
         train_metrics = []
+        train_alignment_metrics: list[dict[str, float]] = []
+        alignment_students: list[torch.Tensor] = []
+        alignment_teachers: list[torch.Tensor] = []
         for index, row in enumerate(rows):
             window_start = (index // accumulation) * accumulation
             window_size = min(accumulation, len(rows) - window_start)
@@ -273,6 +288,12 @@ def main() -> None:
                 train_shuffle[row["cluster_id"]],
                 loss_scale=1.0 / window_size,
             )
+            if info_nce_weight > 0:
+                if not isinstance(task, ReceiverCrossAttentionTask):
+                    raise RuntimeError("InfoNCE is currently defined for receiver cross-attention only")
+                student, teacher = task.semantic_alignment_pair(example)
+                alignment_students.append(student)
+                alignment_teachers.append(teacher)
             train_metrics.append(metrics)
             current.update({
                 "status": "example_complete",
@@ -298,6 +319,26 @@ def main() -> None:
                 )
                 print(json.dumps(progress), flush=True)
             if (index + 1) % accumulation == 0 or index + 1 == len(rows):
+                if info_nce_weight > 0:
+                    if len(alignment_students) < 2:
+                        raise RuntimeError("the final InfoNCE window contains fewer than two examples")
+                    student_batch = torch.cat(alignment_students, dim=0)
+                    teacher_batch = torch.cat(alignment_teachers, dim=0)
+                    info_nce, retrieval_at_1 = symmetric_info_nce(
+                        student_batch, teacher_batch, temperature=info_nce_temperature
+                    )
+                    anti_collapse = variance_floor_loss(student_batch)
+                    (info_nce_weight * info_nce + variance_weight * anti_collapse).backward()
+                    metrics["info_nce"] = float(info_nce.detach().cpu())
+                    metrics["info_nce_retrieval_at_1"] = float(retrieval_at_1.detach().cpu())
+                    metrics["variance_floor"] = float(anti_collapse.detach().cpu())
+                    train_alignment_metrics.append({
+                        "info_nce": metrics["info_nce"],
+                        "info_nce_retrieval_at_1": metrics["info_nce_retrieval_at_1"],
+                        "variance_floor": metrics["variance_floor"],
+                    })
+                    alignment_students.clear()
+                    alignment_teachers.clear()
                 gradient_norm = float(torch.nn.utils.clip_grad_norm_(
                     bridge.parameters(), float(config["training"]["max_grad_norm"])
                 ))
@@ -318,11 +359,46 @@ def main() -> None:
             mean_metrics(validation_by_cluster[cluster])
             for cluster in sorted(validation_by_cluster)
         ]
+        validation_alignment: dict[str, float] = {}
+        if info_nce_weight > 0:
+            pairs = [
+                task.semantic_alignment_pair(
+                    prepare_example(row, traces[row["cluster_id"]], seed=seed)
+                )
+                for row in validation_rows
+            ]
+            validation_info_nce, validation_retrieval = symmetric_info_nce(
+                torch.cat([pair[0] for pair in pairs], dim=0),
+                torch.cat([pair[1] for pair in pairs], dim=0),
+                temperature=info_nce_temperature,
+            )
+            validation_alignment = {
+                "info_nce": float(validation_info_nce.detach().cpu()),
+                "info_nce_retrieval_at_1": float(validation_retrieval.detach().cpu()),
+                "variance_floor": float(
+                    variance_floor_loss(torch.cat([pair[0] for pair in pairs], dim=0))
+                    .detach().cpu()
+                ),
+            }
+        train_summary = mean_metrics(train_metrics)
+        if train_alignment_metrics:
+            train_alignment_summary = mean_metrics(train_alignment_metrics)
+            train_summary.update(train_alignment_summary)
+            train_summary["total"] += (
+                info_nce_weight * train_alignment_summary["info_nce"]
+                + variance_weight * train_alignment_summary["variance_floor"]
+            )
+        validation_summary = {**mean_metrics(validation_metrics), **validation_alignment}
+        if validation_alignment:
+            validation_summary["total"] += (
+                info_nce_weight * validation_alignment["info_nce"]
+                + variance_weight * validation_alignment["variance_floor"]
+            )
         record = {
             "epoch": epoch + 1,
             "global_step": global_step,
-            "train": mean_metrics(train_metrics),
-            "validation": mean_metrics(validation_metrics),
+            "train": train_summary,
+            "validation": validation_summary,
         }
         with log_path.open("a") as handle:
             handle.write(json.dumps(record) + "\n")

@@ -22,7 +22,8 @@ def main() -> None:
         raise RuntimeError("metrics contain no completed epoch")
     required = {
         "matched_minus_shuffled_logp", "fraction_gap_gt_0", "caption_nll",
-        "mean_gate", "mean_relative_update_norm",
+        "mean_gate", "mean_relative_update_norm", "info_nce",
+        "info_nce_retrieval_at_1",
     }
     for row in rows:
         missing = required - set(row["validation"])
@@ -40,6 +41,10 @@ def main() -> None:
             "nll_improved": first_nll - float(values["caption_nll"]) >= float(gate["min_nll_improvement"]),
             "bounded_residual_update": float(values["mean_relative_update_norm"]) <= float(gate["max_relative_update_norm"]),
             "nonzero_gate": abs(float(values["mean_gate"])) > 1e-4,
+            "retrieval_above_chance": (
+                float(values["info_nce_retrieval_at_1"])
+                >= float(gate["min_validation_info_nce_retrieval_at_1"])
+            ),
         }
 
     # Select a real jointly-valid epoch when one exists.  Picking the minimum

@@ -26,6 +26,7 @@ class CrossAttentionDiagnostics:
     gate: float
     attention_entropy: float
     relative_update_norm: float
+    channel_weights: tuple[float, float, float]
 
 
 class _GatedLatentEnrichment(nn.Module):
@@ -39,23 +40,35 @@ class _GatedLatentEnrichment(nn.Module):
         self.receiver_norm = nn.LayerNorm(receiver_dim)
         self.sender_norm = nn.LayerNorm(sender_dim)
         self.query = nn.Linear(receiver_dim, bottleneck_dim, bias=False)
+        # A fixed copy gives InfoNCE a stationary receiver-native target. Using
+        # the live query weights under detach() would still let the target drift
+        # between optimizer steps as caption/reconstruction gradients update Q.
+        self.register_buffer(
+            "alignment_teacher_projection",
+            self.query.weight.detach().clone(),
+            persistent=True,
+        )
         self.key = nn.Linear(sender_dim, bottleneck_dim, bias=False)
         self.value = nn.Linear(sender_dim, bottleneck_dim, bias=False)
         self.output = nn.Linear(bottleneck_dim, receiver_dim, bias=False)
+        # Hierarchical multi-source attention: normalize positions inside each
+        # semantic source first, then let the receiver choose among sources.
+        # This prevents a long association channel from receiving more mass
+        # merely because it contains more tokens.
+        self.channel_score = nn.Linear(bottleneck_dim, 1, bias=False)
         self.gate = nn.Parameter(torch.tensor(float(gate_init)))
 
-    def forward(self, hidden: torch.Tensor, memory: torch.Tensor,
-                memory_mask: torch.Tensor) -> tuple[torch.Tensor, float, float]:
+    def _query(self, hidden: torch.Tensor) -> torch.Tensor:
         batch, target_len, _ = hidden.shape
-        source_len = memory.shape[1]
-        # Keep the small trainable bridge in fp32 even when the frozen Qwen
-        # receiver runs in bf16.  Returning fp32 hidden states would leak the
-        # dtype change into the next frozen decoder block, so only the residual
-        # is converted back at the interface boundary.
-        q = self.query(self.receiver_norm(hidden.float())).view(
+        return self.query(self.receiver_norm(hidden.float())).view(
             batch, target_len, self.heads, self.head_dim
         ).transpose(1, 2)
-        normalized_memory = self.sender_norm(memory)
+
+    def _attend_channel(
+        self, q: torch.Tensor, memory: torch.Tensor, memory_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        batch, source_len, _ = memory.shape
+        normalized_memory = self.sender_norm(memory.float())
         k = self.key(normalized_memory).view(
             batch, source_len, self.heads, self.head_dim
         ).transpose(1, 2)
@@ -65,13 +78,70 @@ class _GatedLatentEnrichment(nn.Module):
         scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) / self.head_dim**0.5
         scores = scores.masked_fill(~memory_mask[:, None, None, :].bool(), -torch.inf)
         probabilities = torch.softmax(scores, dim=-1).to(v.dtype)
-        attended = torch.matmul(probabilities, v).transpose(1, 2).reshape(
-            batch, target_len, -1
-        )
+        attended = torch.matmul(probabilities, v).transpose(1, 2)
+        return attended, probabilities
+
+    def forward(
+        self,
+        hidden: torch.Tensor,
+        memories: Mapping[str, torch.Tensor],
+        memory_masks: Mapping[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, float, float, tuple[float, float, float]]:
+        batch, target_len, _ = hidden.shape
+        # Keep the small trainable bridge in fp32 even when the frozen Qwen
+        # receiver runs in bf16. Returning fp32 hidden states would leak the
+        # dtype change into the next frozen decoder block, so only the residual
+        # is converted back at the interface boundary.
+        q = self._query(hidden)
+        attended_by_channel = []
+        entropy_by_channel = []
+        for name in CHANNELS:
+            attended, probabilities = self._attend_channel(
+                q, memories[name], memory_masks[name]
+            )
+            attended_by_channel.append(attended)
+            entropy_by_channel.append(
+                -(probabilities.float().clamp_min(1e-12).log() * probabilities.float())
+                .sum(-1).mean()
+            )
+        contexts = torch.stack(attended_by_channel, dim=2)  # [B,T,C,H,Dh]
+        contexts = contexts.reshape(batch, target_len, len(CHANNELS), -1)
+        channel_logits = self.channel_score(contexts.float()).squeeze(-1)
+        channel_probabilities = torch.softmax(channel_logits, dim=-1)
+        attended = (channel_probabilities.unsqueeze(-1) * contexts.float()).sum(2)
         delta = torch.tanh(self.gate) * self.output(attended)
-        entropy = -(probabilities.float().clamp_min(1e-12).log() * probabilities.float()).sum(-1).mean()
+        entropy = torch.stack(entropy_by_channel).mean()
+        mean_channel_weights = channel_probabilities.mean(dim=(0, 1))
         relative = delta.float().norm() / hidden.float().norm().clamp_min(1e-6)
-        return hidden + delta.to(hidden.dtype), float(entropy.detach().cpu()), float(relative.detach().cpu())
+        return (
+            hidden + delta.to(hidden.dtype),
+            float(entropy.detach().cpu()),
+            float(relative.detach().cpu()),
+            tuple(float(value) for value in mean_channel_weights.detach().cpu()),
+        )
+
+    def alignment_representations(
+        self,
+        sender_states: Mapping[str, torch.Tensor],
+        receiver_token_embeddings: Mapping[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return channel-preserving sender/receiver representations.
+
+        The sender side uses the same key map that the actual attention path
+        reads. The frozen receiver's native token embeddings use the query map.
+        Concatenating channels prevents a generic global mean from satisfying
+        the contrastive objective while discarding conflict identity.
+        """
+        students, teachers = [], []
+        for name in CHANNELS:
+            student = self.key(self.sender_norm(sender_states[name].float())).mean(dim=1)
+            teacher = torch.nn.functional.linear(
+                self.receiver_norm(receiver_token_embeddings[name].float()),
+                self.alignment_teacher_projection,
+            ).mean(dim=1)
+            students.append(student)
+            teachers.append(teacher.detach())
+        return torch.cat(students, dim=-1), torch.cat(teachers, dim=-1)
 
 
 class ReceiverDrivenCrossAttentionBridge(nn.Module):
@@ -111,6 +181,40 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
         mask = torch.ones(memory.shape[:2], dtype=torch.bool, device=memory.device)
         return memory, mask
 
+    def typed_memories(
+        self, states: Mapping[str, torch.Tensor]
+    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        if set(states) != set(CHANNELS):
+            raise ValueError(f"full-state bridge requires exactly {CHANNELS}")
+        batch = None
+        memories: dict[str, torch.Tensor] = {}
+        masks: dict[str, torch.Tensor] = {}
+        for index, name in enumerate(CHANNELS):
+            value = states[name]
+            if value.ndim != 3 or value.shape[1] < 1:
+                raise ValueError(f"{name} states must be non-empty [B,T,D]")
+            batch = value.shape[0] if batch is None else batch
+            if value.shape[0] != batch:
+                raise ValueError("all memory channels must share a batch size")
+            memories[name] = value + self.channel_types[index].to(value.dtype)
+            masks[name] = torch.ones(value.shape[:2], dtype=torch.bool, device=value.device)
+        return memories, masks
+
+    def alignment_representations(
+        self,
+        states: Mapping[str, torch.Tensor],
+        receiver_token_embeddings: Mapping[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        memories, _ = self.typed_memories(states)
+        layer_pairs = [
+            adapter.alignment_representations(memories, receiver_token_embeddings)
+            for adapter in self.layers.values()
+        ]
+        return (
+            torch.cat([pair[0] for pair in layer_pairs], dim=-1),
+            torch.cat([pair[1] for pair in layer_pairs], dim=-1),
+        )
+
     @staticmethod
     def _replace_hidden(output: Any, hidden: torch.Tensor) -> Any:
         if torch.is_tensor(output):
@@ -128,7 +232,7 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
             raise ValueError(
                 f"requested layer {max(self.layer_indices)} from {len(decoder_layers)} decoder layers"
             )
-        memory, memory_mask = self.pack_memory(states)
+        memories, memory_masks = self.typed_memories(states)
         handles = []
         diagnostics: list[CrossAttentionDiagnostics] = []
         for index in self.layer_indices:
@@ -137,12 +241,15 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
             def hook(_module: nn.Module, _inputs: tuple[Any, ...], output: Any, *,
                      layer_index: int = index, enrichment: _GatedLatentEnrichment = adapter) -> Any:
                 hidden = output if torch.is_tensor(output) else output[0]
-                updated, entropy, relative = enrichment(hidden, memory, memory_mask)
+                updated, entropy, relative, channel_weights = enrichment(
+                    hidden, memories, memory_masks
+                )
                 diagnostics.append(CrossAttentionDiagnostics(
                     layer=layer_index,
                     gate=float(torch.tanh(enrichment.gate).detach().cpu()),
                     attention_entropy=entropy,
                     relative_update_norm=relative,
+                    channel_weights=channel_weights,
                 ))
                 return self._replace_hidden(output, updated)
 

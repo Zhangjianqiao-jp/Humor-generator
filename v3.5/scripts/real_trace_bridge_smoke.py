@@ -30,6 +30,7 @@ from humor_generator_v35.training.formal_bridge import (
     prepare_example,
 )
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
+from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
 from train_bridge import fixed_hash_sample_clusters
 
@@ -73,6 +74,10 @@ def main() -> None:
     for row in (stress, memory_stress):
         if row["cluster_id"] not in {item["cluster_id"] for item in smoke_rows}:
             smoke_rows.append(row)
+    if len(smoke_rows) < 2:
+        smoke_rows.append(next(
+            row for row in selected if row["cluster_id"] != smoke_rows[0]["cluster_id"]
+        ))
     negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
 
     adapter = config["model"].get("adapter")
@@ -143,6 +148,8 @@ def main() -> None:
         for name, parameter in bridge.named_parameters() if parameter.requires_grad
     }
     sample_reports = []
+    alignment_students: list[torch.Tensor] = []
+    alignment_teachers: list[torch.Tensor] = []
     metrics = None
     for row in smoke_rows:
         torch.cuda.reset_peak_memory_stats(device)
@@ -151,6 +158,13 @@ def main() -> None:
         sample_metrics = task.backward_example(
             example, negative_cluster, loss_scale=1.0 / len(smoke_rows)
         )
+        if (
+            isinstance(task, ReceiverCrossAttentionTask)
+            and float(config["loss"].get("info_nce", 0.0)) > 0
+        ):
+            student, teacher = task.semantic_alignment_pair(example)
+            alignment_students.append(student)
+            alignment_teachers.append(teacher)
         with Image.open(row["image"]) as image:
             size = [image.width, image.height]
         sample_reports.append({
@@ -166,6 +180,23 @@ def main() -> None:
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
         })
         metrics = sample_metrics
+    contrastive_metrics: dict[str, float] = {}
+    if alignment_students:
+        info_nce, retrieval_at_1 = symmetric_info_nce(
+            torch.cat(alignment_students, dim=0),
+            torch.cat(alignment_teachers, dim=0),
+            temperature=float(config["loss"].get("info_nce_temperature", 0.07)),
+        )
+        anti_collapse = variance_floor_loss(torch.cat(alignment_students, dim=0))
+        (
+            float(config["loss"]["info_nce"]) * info_nce
+            + float(config["loss"].get("variance_floor", 0.0)) * anti_collapse
+        ).backward()
+        contrastive_metrics = {
+            "info_nce": float(info_nce.detach().cpu()),
+            "info_nce_retrieval_at_1": float(retrieval_at_1.detach().cpu()),
+            "variance_floor": float(anti_collapse.detach().cpu()),
+        }
     gradient_norm = float(torch.nn.utils.clip_grad_norm_(bridge.parameters(), 1.0))
     optimizer.step()
     update_norm = float(sum(
@@ -197,6 +228,7 @@ def main() -> None:
         "gradient_norm": gradient_norm,
         "update_norm": update_norm,
         "last_loss": metrics,
+        "contrastive_loss": contrastive_metrics,
         "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
     }

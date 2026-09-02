@@ -19,7 +19,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export OMP_NUM_THREADS=1
 
 config=configs/pilot/cross_attention_semantic_reconstruction.yaml
-output=outputs/pilot/cross_attention_semantic_v1
+output=outputs/pilot/hierarchical_cross_attention_semantic_v2
 
 python scripts/run_formal_preflight.py --output "$output/preflight.json"
 python scripts/check_cuda_resource.py
@@ -34,4 +34,4 @@ python scripts/check_semantic_training_gate.py \
   --config "$config" \
   --metrics "$output/metrics.jsonl" \
   --output "$output/semantic_gate.json"
-test "$(python -c 'import json; print(json.load(open("outputs/pilot/cross_attention_semantic_v1/semantic_gate.json"))["status"])')" = go
+test "$(python -c 'import json; print(json.load(open("outputs/pilot/hierarchical_cross_attention_semantic_v2/semantic_gate.json"))["status"])')" = go
