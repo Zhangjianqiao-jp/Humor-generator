@@ -3,7 +3,7 @@ memory_id: humor_generator_v35_working
 volatile: true
 observed_at: "2026-09-03T17:36:00+09:00"
 must_revalidate: true
-source_commit: 7f485c9599ab81933779237985271004046ca227
+source_commit: f3a17ab176e3f26cec3c17c2bc2e1a3ddb91ba65
 branch: latent
 
 current_phase: A3_formal_semantic_recovery_ready
