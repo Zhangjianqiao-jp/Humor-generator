@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-03T17:18:00+09:00"
+observed_at: "2026-09-03T17:29:00+09:00"
 must_revalidate: true
 source_commit: 7f485c9599ab81933779237985271004046ca227
 branch: latent
 
-current_phase: A3_replacement_engineering_smoke_pending
+current_phase: A3_replacement_engineering_smoke_running
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -62,7 +62,10 @@ latest_formal_attempt:
 
 current_gate:
   name: phase_a3_replacement_real_trace_smoke
-  status: pending
+  status: running
+  job_id: "6706516"
+  submitted_at: "2026-09-03T17:27:06+09:00"
+  started_at: "2026-09-03T17:28:07+09:00"
   config: configs/pilot/cross_attention_semantic_phase_a3.yaml
   job_script: jobs/receiver_cross_attention_phase_a3_smoke.pjm
   required_checks:
@@ -81,7 +84,7 @@ resource_diagnosis:
     Both multi-slice and single-slice MIG formal paths previously triggered the same
     PyTorch/NVML allocator failure; passing a small MIG smoke did not predict formal stability.
   current_policy: one_full_gpu_native_allocator_cuda0
-  active_jobs: []
+  active_jobs: ["6706516"]
   stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
   stale_session_policy: do_not_resume_or_submit
 
@@ -122,10 +125,10 @@ program_risk_audit:
   highest_open_risk: A3_replacement_smoke_not_yet_executed_after_token_bound_fix
 
 immediate_gate:
-  action: rerun_phase_a3_replacement_smoke
-  job_id: null
+  action: monitor_phase_a3_replacement_smoke
+  job_id: "6706516"
   resource_group: c-batch
-  predicted_start: unknown
+  predicted_start: "2026-09-03T17:28:07+09:00"
   required_resource: one_full_gpu_native_allocator_cuda0
   success_requires:
     - A3 real-trace smoke runs with max_target_tokens=768.
