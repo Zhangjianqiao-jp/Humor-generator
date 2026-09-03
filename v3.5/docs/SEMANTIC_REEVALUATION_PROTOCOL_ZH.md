@@ -7,9 +7,12 @@
 
 - 审查日期：2026-09-03（JST）
 - 修正 evaluator：`scripts/re_evaluate_failed_semantic_bridges.py`
-- A3 smoke：`6689653`，因 target-token 上限配置错误而分类为 engineering failure
+- A3 smoke：首次作业 `6689653` 因 target-token 上限配置错误而分类为 engineering
+  failure；修正后的真实 trace smoke `6706516` 已通过
 - 旧 bridge 重评：`6695787`，已完成
-- 当前修正代码已通过 Python 编译、帮助命令和相关 CPU 单元测试；GPU 重评结果已生成。
+- 当前修正代码已通过 Python 编译、帮助命令和相关 CPU 单元测试；GPU 重评结果已生成，
+  且 A3 replacement engineering smoke 已通过 validator。该 smoke 仅是执行门禁，不能
+  替代正式 64/24 semantic-recovery 训练或 caption 盲评。
 
 实际数值分析见 [`docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md`](SEMANTIC_REEVALUATION_RESULTS_ZH.md)。
 重评最终对 v1/v2 均给出 `pilot_inconclusive`：没有工程错误，但没有通过三通道稳定
@@ -173,7 +176,25 @@ hard_no_go                        only real engineering/invariant failure
 `pilot_inconclusive` 不得改写为“方法无效”。只有在更大的、预注册的 outer semantic
 validation 上仍出现稳定负向 effect，才可作方法级否定。
 
-## 6. Provenance 与可复现性
+## 6. 机制 gap 与最终 caption 评测的边界
+
+`channel mean gap`、`fraction(gap > 0)` 和 image-cluster bootstrap CI 是 **Receiver
+是否对正确通信条件产生因果敏感性** 的机制指标，不是“caption 是否好笑”的评分。
+其中 gap 是同一张图、同一 semantic target 下，matched channel 与单通道
+counterfactual channel 的 token-average log-probability 差；fraction 是逐 cluster 的
+方向一致性；bootstrap CI 只量化跨 image cluster 的不确定性。它们能阻止我们在 bridge
+只学会重建或利用长度 shortcut 时误称“latent 被使用”，但不能替代人/大模型对幽默的
+判断。
+
+当前 A3 replacement smoke 只运行这些工程/机制路径，明确没有生成 caption，也没有
+调用 LLM judge。正式 caption 阶段必须在 gate 解锁后，重新生成固定 seeds 的候选，并
+使用 [`docs/GROUP3_JUDGE_PROMPT_ZH.md`](GROUP3_JUDGE_PROMPT_ZH.md) 规定的看图盲评：
+Group-of-10 为主终点、Group-of-3 仅筛选，A/B 镜像、多独立评审、逐候选
+`good/weak/bad`，以及以 image cluster 为单位的分层 bootstrap。最终结论同时报告
+humor、grounding、originality、specificity、hallucination 和 diversity；不得用
+semantic gap 直接代替 humorous-caption quality。
+
+## 7. Provenance 与可复现性
 
 每个 method 输出：
 
@@ -201,7 +222,7 @@ manifest.json
 输出目录拒绝覆盖已有目录；作业中途失败后必须使用新 output 目录，不能混合旧的
 partial artifact。
 
-## 7. 当前结论的写法
+## 8. 当前结论的写法
 
 本次 GPU 作业完成后，当前只能写：
 
@@ -218,7 +239,7 @@ partial artifact。
 4. 若为 `strong_go`，仍需在未参与选择的 outer 图片上验证 downstream caption utility；
 5. 只有 downstream quality 和 grounding 都不退化，才讨论 latent bridge 的 preference learning。
 
-## 8. 与文献的一致性和限制
+## 9. 与文献的一致性和限制
 
 - 配对/cluster bootstrap 适合把 image cluster 作为自然统计单位，而不是把同图的多个
   token 或 caption 当成独立样本；参见 Koehn 的 paired bootstrap 方法。

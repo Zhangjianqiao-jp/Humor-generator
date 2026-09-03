@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-03T17:29:00+09:00"
+observed_at: "2026-09-03T17:36:00+09:00"
 must_revalidate: true
 source_commit: 7f485c9599ab81933779237985271004046ca227
 branch: latent
 
-current_phase: A3_replacement_engineering_smoke_running
+current_phase: A3_formal_semantic_recovery_ready
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -58,11 +58,36 @@ latest_formal_attempt:
   interpretation: engineering_configuration_failure_not_latent_result
   replacement_config: configs/pilot/cross_attention_semantic_phase_a3.yaml
   replacement_max_target_tokens: 768
-  replacement_status: not_yet_run
+  replacement_status: passed
+
+latest_gate_result:
+  job_id: "6706516"
+  name: v35_a3_smoke
+  scheduler_state: completed
+  resource_group: c-batch
+  host: genkai0001
+  full_gpu: NVIDIA_H100_80GB_HBM3
+  started_at: "2026-09-03T17:28:07+09:00"
+  ended_at: "2026-09-03T17:32:26+09:00"
+  exit_code: 0
+  status: pass
+  report: results/engineering_smoke/cross_attention_semantic_phase_a3.json
+  validator_contract: phase_a3_real_trace_forward_backward_contextual_nce_single_channel_cf
+  clusters: [nycc_888, nycc_325]
+  bridge_trainable_parameters: 2820612
+  policy_trainable_parameters: 0
+  gradient_norm: 2.179955244064331
+  update_norm: 0.16643716394901276
+  peak_allocated_gib: 9.57
+  peak_reserved_gib: 13.16
+  scientific_training: false
+  interpretation: >-
+    Engineering gate passed. It does not establish semantic-use or caption-quality
+    gains; formal A3 64/24 bridge-only training remains a separate job.
 
 current_gate:
   name: phase_a3_replacement_real_trace_smoke
-  status: running
+  status: passed
   job_id: "6706516"
   submitted_at: "2026-09-03T17:27:06+09:00"
   started_at: "2026-09-03T17:28:07+09:00"
@@ -75,7 +100,7 @@ current_gate:
     - channel-wise counterfactual and contextual InfoNCE path
     - finite loss/gradient/update and policy trainable params equal zero
     - results/engineering_smoke/cross_attention_semantic_phase_a3.json passes validator
-  on_pass: submit_one_bridge_only_64_train_24_validation_job
+  on_pass: formal_a3_bridge_only_64_train_24_validation_is_unlocked
   on_failure: preserve_log_and_update_docs_before_any_retry
 
 resource_diagnosis:
@@ -84,7 +109,7 @@ resource_diagnosis:
     Both multi-slice and single-slice MIG formal paths previously triggered the same
     PyTorch/NVML allocator failure; passing a small MIG smoke did not predict formal stability.
   current_policy: one_full_gpu_native_allocator_cuda0
-  active_jobs: ["6706516"]
+  active_jobs: []
   stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
   stale_session_policy: do_not_resume_or_submit
 
@@ -122,10 +147,10 @@ program_risk_audit:
     - monitor validates checkpoint, manifest, metrics, and finite completion fields
     - blind packet IDs must match the private mapping exactly
     - exact resource smoke and formal training now share the same torch seed
-  highest_open_risk: A3_replacement_smoke_not_yet_executed_after_token_bound_fix
+  highest_open_risk: formal_A3_semantic_recovery_and_outer_confirmation_not_yet_run
 
 immediate_gate:
-  action: monitor_phase_a3_replacement_smoke
+  action: submit_or_confirm_formal_phase_a3_bridge_only
   job_id: "6706516"
   resource_group: c-batch
   predicted_start: "2026-09-03T17:28:07+09:00"
@@ -134,6 +159,7 @@ immediate_gate:
     - A3 real-trace smoke runs with max_target_tokens=768.
     - Two representative traces complete forward/backward and validation.
     - validate_phase_a3_smoke.py writes a passing report.
+  status: passed
 
 remaining_sequence_after_resource_gate:
   - phase_a3_semantic_recovery_64_train_24_validation_bridge_only
@@ -144,17 +170,19 @@ remaining_sequence_after_resource_gate:
   - stop_before_any_preference_learning
 
 eta:
-  scheduler_wait: unknown_until_A3_smoke_submission
-  a3_smoke: approximately_30_minutes
+  scheduler_wait: resolved_for_smoke
+  a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: approximately_1_hour
   excluded: caption_generation_and_independent_blind_rating
 
 next_agent_actions:
   - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
-  - Re-run the corrected Phase A3 real-trace smoke with max_target_tokens=768.
-  - Require validator output before submitting formal 64/24 semantic recovery.
+  - A3 replacement smoke 6706516 passed; do not rerun it unless code/config changes.
+  - Before formal 64/24 semantic recovery, retain the smoke report/stats and run the
+    standard preflight; then submit exactly one bridge-only job on one full GPU.
   - Keep v1/v2 re-evaluation as evidence only; do not call it a new A3 training result.
-  - If A3 passes, run the 64/24 bridge-only pilot, then the pre-registered 40-cluster outer confirmation.
+  - With the smoke gate passed, submit the 64/24 bridge-only pilot only as a separate
+    scientific job; after it, run the pre-registered 40-cluster outer confirmation.
   - Do not start caption-level preference learning unless latent bridge has stable held-out benefit.
 
 automation:

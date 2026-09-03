@@ -2,7 +2,7 @@
 
 ## 结论
 
-v3.5 当前是一个可检验的 bridge-only latent 实验，而不是“latent 必然更好”的展示工程。基础真实 GPU engineering smoke 已通过，但 A3 replacement smoke `6689653` 因 target-token 配置错误在 forward/backward 前退出，当前仍没有新的 A3 training artifact 或 held-out 模型收益；不能启动 preference learning。
+v3.5 当前是一个可检验的 bridge-only latent 实验，而不是“latent 必然更好”的展示工程。基础真实 GPU engineering smoke 已通过；A3 replacement smoke 首次作业 `6689653` 因 target-token 配置错误在 forward/backward 前退出，修正上限后 replacement `6706516` 已通过真实双样本 validator。该结果只关闭工程门禁，仍没有 A3 training artifact 或 held-out 模型收益；不能启动 preference learning。
 
 当前唯一可执行的顺序是：修正后的 A3 real-trace smoke → 64/24 channel-balanced semantic
 recovery（冻结两个 7B、只训练 bridge）→ 40-cluster outer semantic confirmation →

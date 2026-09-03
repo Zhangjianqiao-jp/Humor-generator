@@ -121,15 +121,24 @@ experiment_plan:
       design: {methods: [v1, v2], clusters: 24, protocol: length_matched_single_channel_swap}
     - id: A3S
       name: phase_a3_replacement_engineering_smoke
-      status: pending
+      status: complete
       config: configs/pilot/cross_attention_semantic_phase_a3.yaml
       failed_attempt: "6689653"
       failure_record: docs/EXPERIMENT_FAILURES.jsonl
       expected_output: results/engineering_smoke/cross_attention_semantic_phase_a3.json
       gate: real_trace_two_sample_forward_backward_and_validator
+      completed_job: "6706516"
+      evidence:
+        - v35_a3_smoke.6706516.out
+        - v35_a3_smoke.6706516.stats
+        - results/engineering_smoke/cross_attention_semantic_phase_a3.json
+      result: >-
+        Passed on one full H100 with max_target_tokens=768; policy remained frozen,
+        bridge gradients/update were finite and non-zero, and contextual InfoNCE plus
+        channel-wise counterfactual paths executed. This is an engineering gate only.
     - id: A3
       name: channel_balanced_semantic_recovery_pilot
-      status: locked_until_A3S_pass
+      status: ready_after_A3S_pass
       config: configs/pilot/cross_attention_semantic_phase_a3.yaml
       budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
       trainable: bridge_only

@@ -26,7 +26,8 @@ topics:
       - configs/pilot/typed_sft_kl.yaml
       - configs/pilot/typed_sft_no_kl.yaml
     note: >-
-      A3 semantic recovery is the current latent stage; the three 256-dim caption pilots
+      A3 replacement engineering smoke job 6706516 passed. The next latent stage is the
+      separate bridge-only 64/24 semantic-recovery pilot; the three 256-dim caption pilots
       remain locked until A3 and outer semantic gates pass.
   evaluation_and_blinding:
     files:

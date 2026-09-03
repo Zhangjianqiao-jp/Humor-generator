@@ -1,6 +1,6 @@
 # v3.5 程序错误与实验执行风险评估
 
-更新时间：2026-09-01 19:10 JST。本文只评估 v3.5；v2.5/v3.0 不属于可执行依赖。
+更新时间：2026-09-03 17:36 JST。本文只评估 v3.5；v2.5/v3.0 不属于可执行依赖。
 
 ## 结论
 
@@ -10,7 +10,7 @@
 启用冻结 receiver gradient checkpointing，并要求首样本与 pilot 子集最大原始图像都
 完成 backward 后才允许训练。
 
-风险总等级：**中等，可重新提交，但必须先通过新的双样本 stress gate**。
+风险总等级：**中等，双样本工程 gate 已通过；正式 A3 仍须独立运行并接受语义/统计 gate**。
 
 ## 已核验事实
 
@@ -36,7 +36,7 @@
 | ID | 风险 | 概率 | 影响 | 当前控制 | 状态 |
 |---|---|---:|---:|---|---|
 | R1 | PyTorch/NVML/MIG allocator 再次崩溃 | 低（完整 GPU） | 高 | 禁止正式 MIG；native allocator；固定 `cuda:0`；>=40 GiB gate | 完整 H100 已验证 |
-| R2 | 动态分辨率导致视觉 token/activation OOM | 中低 | 高 | 全条件共同 256--1280 token cap；gradient checkpointing；首样本+最大图 smoke | 待新 stress smoke |
+| R2 | 动态分辨率导致视觉 token/activation OOM | 中低 | 高 | 全条件共同 256--1280 token cap；gradient checkpointing；首样本+最大图 smoke | A3 smoke 已通过；正式训练持续监控 |
 | R3 | `device_map=auto` 隐式跨设备切分 | 低 | 高 | 全部 Qwen backend 固定 `{"": 0}` | 已控制 |
 | R4 | P1 新路径与评测旧 checkpoint 路径不一致 | 低 | 高 | 评测和人工 fallback 已统一为 `learned_sft_kl_native_full`；有回归测试 | 已修复 |
 | R5 | 仅凭残缺 `complete.json` 自动提交下一阶段 | 低 | 高 | monitor 验证四件套与数值/冻结 contract | 已修复 |
@@ -58,6 +58,9 @@
 5. monitor 只检查文件存在：升级为结构化 artifact contract。
 6. 首样本 smoke 未覆盖第二张 4750x4494 图像：新增共享视觉-token上限、逐样本 provenance/
    显存记录，以及 pilot 子集最大图像 backward gate；旧失败输出保留，新输出使用 `visualcap_v2`。
+   修正后的 A3 replacement smoke `6706516` 已实际覆盖最大原始图像与最长完整 Planner
+   memory，`max_target_tokens=768` 无截断，两个真实样本的 forward/backward、InfoNCE
+   和 channel-wise counterfactual 均通过 validator。
 
 ## 启动后的强制检查顺序
 
@@ -71,7 +74,7 @@
 
 ## 剩余建议
 
-- 如果新 stress gate 在 1280 visual tokens 下仍失败，优先缓存冻结视觉特征和 teacher
+- 如果正式 A3 在 1280 visual tokens 下仍失败，优先缓存冻结视觉特征和 teacher
   logits；不改变 bridge objective，也不减小 24-slot 通信通道。
 - 如果 walltime 中断但至少存在一个完整 epoch checkpoint，从 checkpoint 恢复；禁止把
   walltime termination 当作方法失败。

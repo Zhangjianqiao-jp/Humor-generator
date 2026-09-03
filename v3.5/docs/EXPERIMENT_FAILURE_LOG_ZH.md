@@ -74,7 +74,12 @@
     `max_target_tokens=384`，而该 global semantic target 为 492 tokens。validator 随后
     因预期 JSON 不存在而退出。分类为 `engineering`，不是 CUDA/OOM、数据缺损或方法
     失败；没有产生 A3 语义结论，也没有提交正式训练。配置已提高到 768，保持完整
-    HOMER chain，重新 smoke 通过前禁止 formal A3。
+    HOMER chain。
+14. 修正后的 A3 replacement smoke `6706516` 在单张完整 H100 上以 exit code 0 完成：
+    两个压力样本均完成真实 forward/backward，policy trainable parameters=0，bridge
+    update 非零，三路 contextual InfoNCE 和单通道 counterfactual 路径均实际执行，
+    validator 返回 `status=pass`。因此第 13 项工程配置错误已关闭；它仍不提供 latent
+    语义收益或 caption 质量证据，正式 A3 仍须单独运行 `64 train / 24 validation`。
 
 ## 权威依据
 

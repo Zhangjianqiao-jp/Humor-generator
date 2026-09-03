@@ -251,8 +251,9 @@ trace = electronic_sheep:325:0
 
 `real_trace_bridge_smoke.py` 在 forward/backward 前拒绝该样本，随后 validator 找不到
 预期 JSON。这个事件已按 `engineering` 失败记录；没有产生 A3 语义结果，也没有提交正式
-A3 训练。配置已改为 `max_target_tokens=768`，以保持完整 HOMER chain，不允许截断；需
-重新 smoke 通过后才可考虑 formal A3。
+A3 训练。配置已改为 `max_target_tokens=768`，以保持完整 HOMER chain，不允许截断；
+replacement smoke `6706516` 已在两个真实压力样本上完成 forward/backward 并通过
+validator。该结果只关闭工程门禁，不是 A3 语义收益。
 
 ## 10. 受控下一步
 
@@ -260,8 +261,8 @@ A3 训练。配置已改为 `max_target_tokens=768`，以保持完整 HOMER chai
 
 1. 用修正后的 `768` 配置重新做真实 trace smoke；
 2. 不重用失败 smoke 的 JSON，不覆盖旧输出；
-3. 若 A3 工程 smoke 通过，在剩余未用于 early stopping 的 outer semantic clusters 上
-   做一次预注册 confirmation；
+3. A3 工程 smoke `6706516` 已通过；提交一次独立的 formal A3 bridge-only 训练，然后在
+   剩余未用于 early stopping 的 outer semantic clusters 上做一次预注册 confirmation；
 4. 对 v1/v2 在 outer 集上继续使用同一 length-matched channel protocol；
 5. 只有至少一个方法在三路 channel 和 outer semantic gate 上稳定通过，才进入 caption
    bridge；

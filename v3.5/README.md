@@ -65,10 +65,11 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.5
 .venv/bin/python scripts/verify_clustered_dataset.py
 ```
 
-The original real-trace GPU engineering smoke passed, but the first Phase A3
+The original real-trace GPU engineering smoke passed. The first Phase A3
 replacement smoke (`6689653`) stopped before forward/backward because a valid
-492-token HOMER target exceeded the old 384-token bound. The bound is now 768;
-the replacement smoke must pass before any formal training. The first executable
+492-token HOMER target exceeded the old 384-token bound; after raising the bound
+to 768, replacement smoke `6706516` passed on a full H100. This closes the
+engineering gate but is not a scientific semantic result. The first executable
 training stage is therefore the channel-balanced Phase A3 semantic-recovery
 pilot: 64 train clusters, 24 validation clusters, bridge-only updates, and both
 7B policies frozen. Only after that pilot and the 40-cluster outer semantic
