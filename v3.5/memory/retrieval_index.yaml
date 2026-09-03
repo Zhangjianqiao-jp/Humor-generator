@@ -28,6 +28,7 @@ topics:
       - scripts/run_outer_semantic_confirmation.py
       - scripts/validate_outer_semantic_confirmation.py
       - jobs/outer_semantic_confirmation.pjm
+      - jobs/outer_semantic_confirmation_smoke.pjm
     note: >-
       A3 replacement engineering smoke job 6706516 and formal bridge-only job 6707953 passed
       engineering checks. A3 semantic gate is pilot_inconclusive; the next latent stage is the
