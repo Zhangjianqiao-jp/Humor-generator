@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-旧 v3.0 的 GPU job、结果 JSON、显存数字和 checkpoint 均不属于 v3.5 证据，已经从本目录删除。v3.5 的独立真实 GPU engineering smoke 已于 2026-08-31 通过；尚未启动正式 bridge training。
+旧 v3.0 的 GPU job、结果 JSON、显存数字和 checkpoint 均不属于 v3.5 证据，已经从本目录删除。v3.5 的基础真实 GPU engineering smoke 已于 2026-08-31 通过；但 Phase A3 replacement smoke `6689653` 于 2026-09-03 在 forward/backward 前因 `492 > 384` 的 token 上限配置错误退出。配置已改为 `768`，replacement smoke 通过前尚未启动正式 Phase A3 bridge training。
 
 已通过：
 
@@ -31,7 +31,7 @@
 - `results/engineering_smoke/formal_generation_paths.json`
 - `data/cache/planner_trace_smoke/index.jsonl`
 
-该 gate 已通过。下一步可生成正式 train/validation traces；trace gate 完整通过后，只串行提交三个低成本 pilot，同一时刻最多一个正式 GPU 作业，不提交完整矩阵。
+基础 Gate E 已通过，trace gate 也已完成 `666/666`。当前下一步不是三个 caption-level pilot，而是用 `configs/pilot/cross_attention_semantic_phase_a3.yaml` 重新执行真实双样本 replacement smoke；通过后才提交 `64 train / 24 validation` 的 channel-balanced semantic-recovery bridge-only pilot。两个 7B policy 在该阶段冻结。只有 Phase A3 和剩余 40-cluster outer semantic confirmation 均通过，才解锁 Learned/Typed caption-level pilots；DPO/preference learning 属于旧 v2.5 方案，在 v3.5 中禁用。
 
 ## 权威依据
 

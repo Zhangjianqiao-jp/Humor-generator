@@ -17,6 +17,10 @@ project:
     - Do not jointly train the Planner and Generator in the first study.
     - Do not run preference learning before stable bridge benefit is established.
     - Do not claim latent superiority from reconstruction loss or diversity alone.
+    - DPO/preference learning is a legacy v2.5 proposal and is disabled in the current v3.5 latent study.
+  current_scope: >-
+    Latent-only semantic communication: validate and train the Planner-to-Generator bridge first;
+    caption-level preference learning is outside the current executable scope.
 
 architecture:
   planner:
@@ -37,7 +41,8 @@ architecture:
     communication_state: teacher_forced_post_token
     total_slots: 24
     typed_slots: {conflict: 8, local_association: 8, global_association: 8}
-    bottleneck_dim: 256
+    phase_a3_bottleneck_dim: 48
+    deferred_caption_pilot_bottleneck_dim: 256
 
 data_contract:
   split_unit: NYCC_image_cluster
@@ -108,40 +113,44 @@ experiment_plan:
       status: complete
       exit_gate: exactly_666_validated_traces
       evidence: data/cache/planner_traces_homer_strict_v35/index.jsonl
-    - id: P1
-      name: learned_sft_kl_pilot
-      status: visualcap_v2_pending_gpu_stress
-      config: configs/pilot/learned_sft_kl.yaml
-      output: outputs/pilot/learned_sft_kl_visualcap_v2
-      budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
-    - id: P2
-      name: typed_sft_kl_pilot
+    - id: R
+      name: corrected_legacy_bridge_counterfactual_review
+      status: complete_inconclusive
+      evidence: docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md
+      output: outputs/re_evaluation/semantic_v1_corrected/summary.json
+      design: {methods: [v1, v2], clusters: 24, protocol: length_matched_single_channel_swap}
+    - id: A3S
+      name: phase_a3_replacement_engineering_smoke
       status: pending
-      config: configs/pilot/typed_sft_kl.yaml
+      config: configs/pilot/cross_attention_semantic_phase_a3.yaml
+      failed_attempt: "6689653"
+      failure_record: docs/EXPERIMENT_FAILURES.jsonl
+      expected_output: results/engineering_smoke/cross_attention_semantic_phase_a3.json
+      gate: real_trace_two_sample_forward_backward_and_validator
+    - id: A3
+      name: channel_balanced_semantic_recovery_pilot
+      status: locked_until_A3S_pass
+      config: configs/pilot/cross_attention_semantic_phase_a3.yaml
       budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
-    - id: P3
-      name: typed_sft_no_kl_pilot
-      status: pending
-      config: configs/pilot/typed_sft_no_kl.yaml
-      budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
-    - id: P4
-      name: outer_validation_generation
-      status: pending
-      design: {images: 40, shared_seeds: 3, screening_group_size: 3}
-      stop_after: independent_blind_rating_required
-    - id: C
-      name: confirmatory_training_and_test
+      trainable: bridge_only
+      frozen: [planner_7b, generator_7b]
+    - id: O
+      name: outer_semantic_confirmation
+      status: locked_until_A3_gate
+      design: {clusters: 40, shared_seeds: 3, statistical_unit: image_cluster}
+    - id: L
+      name: latent_text_caption_ablation
       status: evidence_gated
-      design:
-        full_train_clusters: 602
-        validation_clusters: 64
-        seeds: 3
-        primary_test_images: 121
-        candidates_per_image: 10
-        group_size: 10
+      conditions: [text_homer, c_text_a_latent, c_latent_a_text, all_latent]
+      design: {primary_images: 121, candidates_per_image: 10, group_size: 10}
+    - id: C
+      name: confirmatory_latent_training_and_test
+      status: locked_until_L_go
+      design: {full_train_clusters: 602, validation_clusters: 64, seeds: 3, primary_test_images: 121}
     - id: PL
-      name: preference_learning
-      status: disabled_until_bridge_go
+      name: legacy_preference_learning
+      status: disabled_in_v3_5
+      note: DPO/SimPO/IPO belong to the superseded preference plan and must not be auto-submitted.
 
 evaluation:
   pilot:
@@ -202,5 +211,8 @@ canonical_docs:
   - docs/WORK_PLAN_ZH.md
   - docs/METHOD_AUDIT_V35_ZH.md
   - docs/HOMER_REPRODUCTION_LEDGER_ZH.md
+  - docs/SEMANTIC_REEVALUATION_PROTOCOL_ZH.md
+  - docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md
+  - docs/EXPERIMENT_FAILURE_LOG_ZH.md
   - docs/GROUP3_JUDGE_PROMPT_ZH.md
   - docs/ENGINEERING_SMOKE_REPORT_ZH.md

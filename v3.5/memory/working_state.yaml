@@ -1,12 +1,18 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-01T19:28:00+09:00"
+observed_at: "2026-09-03T17:18:00+09:00"
 must_revalidate: true
-source_commit: abc295268c031dc5cb04dd7aecb5f8708df82402
+source_commit: 7f485c9599ab81933779237985271004046ca227
 branch: latent
 
-current_phase: P1_visualcap_v2_queued_for_gpu_stress_and_training
+current_phase: A3_replacement_engineering_smoke_pending
+scope: v3.5_latent_only
+preference_learning:
+  status: disabled
+  boundary: >-
+    DPO/SimPO/IPO and preference-pair work belong to the superseded v2.5 plan;
+    do not import, execute or submit those jobs in v3.5.
 trace_gate:
   status: passed
   available: 666
@@ -16,38 +22,71 @@ trace_gate:
     nycc_325 and nycc_775 succeeded on new raw generations; validator repair
     was enabled but was not invoked in either final accepted trace.
 
+latest_completed_review:
+  job_id: "6695787"
+  name: v35_old_reval
+  scheduler_state: completed
+  output_dirs:
+    - outputs/re_evaluation/semantic_v1_corrected
+    - outputs/re_evaluation/semantic_v2_corrected
+  methods: [legacy_v1, legacy_v2]
+  clusters_per_method: 24
+  protocol: length_matched_single_channel_counterfactual
+  status: pilot_inconclusive
+  key_result: >-
+    v1 has only a tiny global positive gap; conflict/local are unstable. v2 has
+    positive conflict/global point estimates but CIs cross zero and local is negative.
+    Neither method establishes stable use of all three channels.
+  evidence: docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md
+
 latest_formal_attempt:
-  job_id: "6666633"
-  name: p1_native_c
+  job_id: "6689653"
+  name: v35_a3_smoke
   scheduler_state: failed
   resource_group: c-batch
   gpu_slices: 0
   full_gpu: NVIDIA_H100_80GB_HBM3
-  started_at: "2026-09-01T16:55:00+09:00"
-  failed_before_first_example_completed: false
+  started_at: "2026-09-03T01:29:48+09:00"
+  ended_at: "2026-09-03T01:32:40+09:00"
+  failed_before_forward_backward: true
   error: >-
-    Real CUDA OOM after the first-example smoke passed: 78.47 GiB in use,
-    720 MiB free, and a further 1.15 GiB allocation requested.
-  evidence: p1_native_c.6666633.out
-  preserved_output: outputs/pilot/learned_sft_kl_native_full
-  interpretation: dynamic_resolution_input_scale_failure_not_scientific_result
+    RuntimeError: global target exceeds max_target_tokens=384 for
+    electronic_sheep:325:0; actual target length was 492.
+  evidence: v35_a3_smoke.6689653.out
+  expected_output: results/engineering_smoke/cross_attention_semantic_phase_a3.json
+  output_created: false
+  interpretation: engineering_configuration_failure_not_latent_result
+  replacement_config: configs/pilot/cross_attention_semantic_phase_a3.yaml
+  replacement_max_target_tokens: 768
+  replacement_status: not_yet_run
+
+current_gate:
+  name: phase_a3_replacement_real_trace_smoke
+  status: pending
+  config: configs/pilot/cross_attention_semantic_phase_a3.yaml
+  job_script: jobs/receiver_cross_attention_phase_a3_smoke.pjm
+  required_checks:
+    - exact Qwen revision and frozen 7B adapter
+    - 2 representative real traces including longest target
+    - hidden/token/post-token alignment without truncation
+    - channel-wise counterfactual and contextual InfoNCE path
+    - finite loss/gradient/update and policy trainable params equal zero
+    - results/engineering_smoke/cross_attention_semantic_phase_a3.json passes validator
+  on_pass: submit_one_bridge_only_64_train_24_validation_job
+  on_failure: preserve_log_and_update_docs_before_any_retry
 
 resource_diagnosis:
-  two_mig_formal_job: "6665808 failed with the same allocator family"
-  one_mig_smoke_job: "6665915 passed on nycc_101/nycc_102"
-  one_mig_smoke_peak_allocated_bytes: 6990769664
-  conclusion: >-
-    MIG remains disallowed. The full-H100 allocator path works, but the old
-    first-only smoke was also a false-negative because epoch row 2 nycc_888 is
-    4750x4494 versus row 1 nycc_415 at 797x661.
-  compatible_idle_full_gpu_at_submission: true_for_job_6666633
-  retained_job: null
-  retained_resource_group: c-batch
-  predicted_start: null
-  cancelled_slower_duplicate: "6666632 on b-batch; predicted 2026-09-04T03:00:00+09:00"
-  second_b_batch_probe: "6667285 cancelled; node FREE did not mean allocatable GPU and scheduler predicted 2026-09-04T09:00:00+09:00"
+  mig_formal_training: forbidden
+  reason: >-
+    Both multi-slice and single-slice MIG formal paths previously triggered the same
+    PyTorch/NVML allocator failure; passing a small MIG smoke did not predict formal stability.
+  current_policy: one_full_gpu_native_allocator_cuda0
+  active_jobs: []
+  stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
+  stale_session_policy: do_not_resume_or_submit
 
 native_full_gpu_fix:
+  scope: historical_p1_not_current
   allocator: native
   expandable_segments: false
   device_map: {"": 0}
@@ -63,7 +102,9 @@ native_full_gpu_fix:
 program_risk_audit:
   overall: medium_continue_with_evidence_gates
   report: docs/PROGRAM_RISK_ASSESSMENT_ZH.md
-  tests_passed: 67
+  tests_passed: 13
+  tests_scope: targeted_memory_isolation_and_method_contracts_after_plan_update
+  full_suite_status: prior_full_suite_passed; not rerun for documentation-only changes
   formal_preflight: results/preflight/formal_preflight.json
   exhaustive_dataset_audit:
     rows: 2846/2846
@@ -74,54 +115,53 @@ program_risk_audit:
   deterministic_fixes:
     - formal preflight now runs compile/tests/CLI smoke before exhaustive data and trace checks
     - every dataset row, image byte hash/decode, source input hash, and Planner trace tensor is audited
-    - pilot evaluation uses native allocator and the current P1 checkpoint path
+    - pilot evaluation is blocked until the current latent semantic gate passes
     - monitor validates checkpoint, manifest, metrics, and finite completion fields
     - blind packet IDs must match the private mapping exactly
     - exact resource smoke and formal training now share the same torch seed
-  highest_open_risk: visualcap_v2_max_image_backward_not_yet_executed_on_gpu
+  highest_open_risk: A3_replacement_smoke_not_yet_executed_after_token_bound_fix
 
 immediate_gate:
-  action: monitor_visualcap_v2_job_6669043
-  job_id: "6669043"
+  action: rerun_phase_a3_replacement_smoke
+  job_id: null
   resource_group: c-batch
-  predicted_start: "2026-09-02T02:00:00+09:00"
-  required_resource: one_full_c_batch_gpu
+  predicted_start: unknown
+  required_resource: one_full_gpu_native_allocator_cuda0
   success_requires:
-    - check_cuda_resource reports one device, native allocator, and at least 40 GiB.
-    - First and max-image P1 smoke writes resource_smoke.json with <=1280 visual tokens.
-    - Formal training writes complete.json after validation and early stopping.
+    - A3 real-trace smoke runs with max_target_tokens=768.
+    - Two representative traces complete forward/backward and validation.
+    - validate_phase_a3_smoke.py writes a passing report.
 
 remaining_sequence_after_resource_gate:
-  - learned_sft_kl_pilot
-  - typed_sft_kl_pilot
-  - typed_sft_no_kl_pilot
-  - outer_validation_40_images_x_3_seeds
-  - mirrored_group_of_3_packet
-  - stop_for_independent_raters
+  - phase_a3_semantic_recovery_64_train_24_validation_bridge_only
+  - outer_semantic_confirmation_40_clusters_x_3_seeds
+  - latent_text_caption_ablation_after_semantic_gate
+  - mirrored_group_of_3_screening_only
+  - mirrored_group_of_10_confirmatory_evaluation
+  - stop_before_any_preference_learning
 
 eta:
-  scheduler_wait: "unknown until visualcap_v2 P1 submission"
-  current_pilot_after_start: "approximately 1-3 hours; hard cap 4 hours"
-  three_pilots_and_generation_after_start: "provisional 6-10 GPU-hours"
-  excluded: "independent blind-rating time and confirmatory Group-of-10 experiments"
+  scheduler_wait: unknown_until_A3_smoke_submission
+  a3_smoke: approximately_30_minutes
+  a3_semantic_pilot_after_smoke: approximately_1_hour
+  excluded: caption_generation_and_independent_blind_rating
 
 next_agent_actions:
-  - Monitor visualcap_v2 job 6669043; do not interpret metrics until the two-sample smoke passes.
-  - The b-batch duplicate 6669045 was cancelled because its predicted start was 2026-09-04 12:00 JST.
-  - Do not retry b-batch-mig or b-inter-mig.
-  - Inspect resource_smoke.json before interpreting any training metrics.
-  - The monitor may submit P2 only after P1 complete.json exists.
-  - Never infer success from job disappearance; require `complete.json`.
+  - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
+  - Re-run the corrected Phase A3 real-trace smoke with max_target_tokens=768.
+  - Require validator output before submitting formal 64/24 semantic recovery.
+  - Keep v1/v2 re-evaluation as evidence only; do not call it a new A3 training result.
+  - If A3 passes, run the 64/24 bridge-only pilot, then the pre-registered 40-cluster outer confirmation.
+  - Do not start caption-level preference learning unless latent bridge has stable held-out benefit.
 
 automation:
-  tmux_session: v35-visualcap-monitor
-  state: data/cache/formal_pipeline_monitor_state_v11.json
-  poll_seconds: 1200
-  behavior: advance only through complete.json evidence gates
+  tmux_session: null
+  state: null
+  poll_seconds: null
+  behavior: manual_until_A3_replacement_smoke_is_submitted
 
 verification_commands:
   - pjstat
-  - cat outputs/pilot/learned_sft_kl_visualcap_v2/resource_smoke.json
-  - cat outputs/pilot/learned_sft_kl_visualcap_v2/current_example.json
   - .venv/bin/python scripts/check_trace_completion.py
+  - .venv/bin/python scripts/validate_phase_a3_smoke.py --config configs/pilot/cross_attention_semantic_phase_a3.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a3.json
   - .venv/bin/python scripts/validate_project_memory.py

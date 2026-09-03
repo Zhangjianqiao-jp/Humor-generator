@@ -1,5 +1,32 @@
 # v3.5 修正版实验计划
 
+## 0. 当前执行基线（2026-09-03）
+
+本文件当前只管理 **v3.5 latent communication 主线**。旧 v2.5/v3.0 的 DPO、偏好对、
+联合训练和 reranker 方案保留为历史证据，但不属于当前可执行计划；任何旧 DPO 脚本、
+checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
+
+当前顺序冻结为：
+
+```text
+严格 HOMER Planner traces（666/666 已完成）
+→ 修正后的旧 v1/v2 latent 反事实重评（已完成，pilot_inconclusive）
+→ Phase A3 replacement engineering smoke（当前唯一待执行门禁）
+→ Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B
+→ 剩余 40 个 outer semantic clusters 确认
+→ latent/text 混合 caption 消融与盲评
+→ 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
+```
+
+这里的“latent 工作”目前是语义通信 bridge 的训练和验证，不是 DPO。A3 smoke 的旧作业
+`6689653` 在 forward/backward 前因 `492 > max_target_tokens=384` 的配置错误退出；
+配置已改为 `768`，但 replacement smoke 尚未通过。因此当前不得把任何 A3 训练或 caption
+质量写成已完成。
+
+`docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md` 是旧 bridge 重评的数值结果；它只能说明
+v1/v2 在 24-cluster pilot 上证据不足，不能替代新的 A3 训练。以下各节若与本节的当前
+状态冲突，以本节和对应作业的 `complete.json`/gate 文件为准。
+
 ## 1. 研究问题与边界
 
 核心问题不是“latent 能否替代文字”，而是：在 Planner 和 Generator 都冻结时，连续通信能否比等信息量文本/离散 token 更准确地传递 `Conflict + Local Association + Global Association`，并提高图片相关幽默 caption 的质量和角度覆盖。
@@ -238,9 +265,10 @@ latent 的任务特异性，而不是仅凭 latent 可解码就宣称 Receiver �
 
 Gate E 通过前禁止正式训练。
 
-### Pilot P：只做 3 个 SFT-receiver pilot
+### Pilot P（A3 semantic gate 通过后才解锁）
 
-每个仅 64 train clusters、24 validation clusters、1 seed：
+这三个 caption-level latent pilot 不是当前阶段；它们必须等待 Phase A3 和 outer semantic
+confirmation 通过后才可提交。每个仅 64 train clusters、24 validation clusters、1 seed：
 
 1. Learned + KL；
 2. Typed + KL；
@@ -327,10 +355,11 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - Hierarchical Phase A v2：作业 6688689 已完成并判定为**当前配置的操作性 No-Go**。validation NLL 从 1.1196 降至 0.6326，但 matched-minus-shuffled gap 仅 0.002664（工程 gate 0.02），`gap>0.2` 的比例为 0；conflict channel 权重从约 0.315 降至 0.0289。它说明当前 loss/router 没有形成足够的 plan 条件依赖，不得外推为“latent 方法失败”；
 - v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该数值既不能支持也不能反对 v2；
 - caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来绕过语义门。下一项只允许上述 Phase A3：通道平衡 reconstruction、channel-wise contextual InfoNCE、单通道 counterfactual、固定等权 gate；若 conflict 仍不过门，则进入预注册的 `C-text + A-latent`；
-- Phase A3 已实现并通过 CPU suite `76/76`：配置为 `configs/pilot/cross_attention_semantic_phase_a3.yaml`。真实双样本 GPU smoke 作业 `6689653` 已提交到预计更早的 `c-batch`，申请 1 GPU/30 分钟；调度器当前预计 `2026-09-03 10:00 JST`。同配置在 `b-batch` 的预测启动为 `2026-09-04 06:00`，故已取消后者；
-- 登录节点的 `tmux:v35_phase_a3_monitor` 只做静默、幂等的调度监控。它要求连续三次 job absent，并通过 `validate_phase_a3_smoke.py` 的冻结参数、真实两 cluster、逐通道 counterfactual、contextual InfoNCE、有限梯度与实际 update 门禁，才提交 1 GPU/1 小时的 `64/24` 作业；不调用 Codex、不消耗模型额度，也不会自动进入 caption training；
+- Phase A3 已实现并通过 CPU suite；配置为 `configs/pilot/cross_attention_semantic_phase_a3.yaml`。真实双样本 GPU smoke 作业 `6689653` 已于 `2026-09-03` 因 `electronic_sheep:325:0` 的 `492 > 384` token 上限配置错误退出，未执行 forward/backward，也未产生可复用的 A3 report。配置已提高到 `768`；replacement smoke 必须重新提交并通过后，才允许 `64/24` formal A3；
+- 当前没有运行中的 A3 作业。下一次提交前必须重新执行环境、隔离、冻结 artifact、clustered dataset、trace completion 和 real-trace smoke 门禁；不得复用旧失败 JSON，也不得以 job 消失代替 `complete.json`；
+- A3 replacement smoke 必须通过冻结参数、真实两 cluster、逐通道 counterfactual、contextual InfoNCE、有限梯度与实际 update 门禁后，才可提交 1 GPU/1 小时的 `64/24` bridge-only 作业；不调用 Codex、不消耗模型额度，也不会自动进入 caption training；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
-- preference learning：禁用。
+- preference learning/DPO：属于旧方案，在 v3.5 latent gate 通过前禁用。
 
 ## 12. Text/latent 混合消融（语义 Gate 后）
 

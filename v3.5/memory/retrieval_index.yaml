@@ -1,7 +1,7 @@
 schema_version: 1
 topics:
   current_status:
-    files: [memory/working_state.yaml]
+    files: [memory/working_state.yaml, docs/WORK_PLAN_ZH.md]
     freshness: always_revalidate
   research_goal_and_gates:
     files: [memory/project_memory.yaml, docs/WORK_PLAN_ZH.md]
@@ -19,9 +19,15 @@ topics:
   bridge_training:
     files:
       - scripts/train_bridge.py
+      - configs/pilot/cross_attention_semantic_phase_a3.yaml
+      - jobs/receiver_cross_attention_phase_a3_smoke.pjm
+      - jobs/cross_attention_phase_a3.pjm
       - configs/pilot/learned_sft_kl.yaml
       - configs/pilot/typed_sft_kl.yaml
       - configs/pilot/typed_sft_no_kl.yaml
+    note: >-
+      A3 semantic recovery is the current latent stage; the three 256-dim caption pilots
+      remain locked until A3 and outer semantic gates pass.
   evaluation_and_blinding:
     files:
       - docs/GROUP3_JUDGE_PROMPT_ZH.md

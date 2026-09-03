@@ -65,14 +65,18 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.5
 .venv/bin/python scripts/verify_clustered_dataset.py
 ```
 
-The real-trace GPU engineering smoke has passed. The first training stage is
-only three serial 64-train/24-validation SFT-receiver pilots: Learned+KL,
-Typed+KL, Typed without KL. Subsets use seeded hash sampling. After optimization,
-one GPU job creates fixed 3-seed Text-HOMER, StateBridge, and learned-bridge
-validation generations plus an anonymous mirrored Group-of-3 pilot packet;
-automation stops for independent rating. Group-of-10 remains the confirmatory
-paper endpoint. Full-data and Base-receiver
-experiments are evidence-gated follow-ups, not an automatic matrix.
+The original real-trace GPU engineering smoke passed, but the first Phase A3
+replacement smoke (`6689653`) stopped before forward/backward because a valid
+492-token HOMER target exceeded the old 384-token bound. The bound is now 768;
+the replacement smoke must pass before any formal training. The first executable
+training stage is therefore the channel-balanced Phase A3 semantic-recovery
+pilot: 64 train clusters, 24 validation clusters, bridge-only updates, and both
+7B policies frozen. Only after that pilot and the 40-cluster outer semantic
+confirmation pass may the three caption-level pilots (Learned+KL, Typed+KL,
+Typed without KL) be unlocked. Group-of-3 remains screening-only and Group-of-10
+is the confirmatory endpoint. Preference learning/DPO belongs to the superseded
+v2.5 plan and is disabled in v3.5; it cannot be used to rescue an unproven
+communication mechanism.
 
 ## Evaluation
 
