@@ -200,6 +200,22 @@ residual intervention 更保守。
 可以作出的有限判断是：**两种旧方法都没有提供足够证据支持“三个 channel 已被
 Receiver 稳定读取”；v2 没有在本次小规模重评中解决 local channel 的问题。**
 
+### 配对差异（探索性，不是预注册 architecture ranking）
+
+两种方法使用同一组 24 个 cluster、同一组 channel donor 和同一 evaluator，因此可以
+按 cluster 计算 `v2 - v1` 的探索性配对差异。该分析没有改变 gate，也没有把旧 checkpoint
+变成公平的新训练比较：
+
+| channel | mean(v2−v1) gap | positive differences | cluster-bootstrap 95% CI |
+|---|---:|---:|---|
+| conflict | +0.000286 | 14/24 | [-0.000766, 0.001266] |
+| local | -0.000026 | 11/24 | [-0.001006, 0.001003] |
+| global | -0.000826 | 10/24 | [-0.002492, 0.000870] |
+
+三条区间均跨 0；因此不能说 v2 整体优于 v1，也不能说 v2 整体更差。v2 的 conflict
+方向略高、global 方向反而略低，local 几乎没有差异，说明当前数据不足以支持
+“hierarchical v2 修复了旧 v1”的结论。
+
 ## 8. 为什么状态是 pilot_inconclusive，而不是 No-Go
 
 预注册规则要求所有三个 channel 同时满足：
