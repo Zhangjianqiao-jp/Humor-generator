@@ -1,0 +1,37 @@
+#!/bin/sh
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=00:30:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export OMP_NUM_THREADS=1
+
+config=configs/pilot/cross_attention_semantic_phase_a3.yaml
+checkpoint=outputs/pilot/cross_attention_semantic_phase_a3/best_bridge.pt
+output=outputs/engineering_smoke/outer_semantic_confirmation
+
+python scripts/check_cuda_resource.py
+python scripts/run_outer_semantic_confirmation.py \
+  --config "$config" \
+  --checkpoint "$checkpoint" \
+  --output "$output" \
+  --seeds 20260830 \
+  --max-clusters 2
+python scripts/validate_outer_semantic_confirmation.py \
+  --output "$output" \
+  --expected-clusters 2 \
+  --expected-seeds 1 \
+  > "$output/validation_contract.json"
+test -s "$output/validation_contract.json"

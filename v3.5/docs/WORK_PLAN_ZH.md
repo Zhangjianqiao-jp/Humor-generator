@@ -12,8 +12,9 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 严格 HOMER Planner traces（666/666 已完成）
 → 修正后的旧 v1/v2 latent 反事实重评（已完成，pilot_inconclusive）
 → Phase A3 replacement engineering smoke（已通过，job 6706516）
-→ Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（下一步）
-→ 剩余 40 个 outer semantic clusters 确认
+→ Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
+→ Phase A3 gate：engineering pass，semantic pilot_inconclusive
+→ 剩余 40 个 outer semantic clusters 确认（当前下一步）
 → latent/text 混合 caption 消融与盲评
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```
@@ -21,8 +22,10 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 这里的“latent 工作”目前是语义通信 bridge 的训练和验证，不是 DPO。A3 smoke 的旧作业
 `6689653` 在 forward/backward 前因 `492 > max_target_tokens=384` 的配置错误退出；
 配置改为 `768` 后，replacement job `6706516` 已在完整 H100 上以 exit code 0 通过。
-这只关闭了执行门禁，不代表 A3 的语义收益或 caption 质量已经得到证明；正式的
-`64 train / 24 validation` bridge-only 训练尚未开始。
+这只关闭了执行门禁，不代表 A3 的语义收益或 caption 质量已经得到证明。正式的
+`64 train / 24 validation` bridge-only 训练已由 job `6707953` 完成；其工程 gate
+通过，但 24-cluster semantic gate 为 `pilot_inconclusive`，因此不能直接进入 caption
+bridge 或 preference learning。
 
 `docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md` 是旧 bridge 重评的数值结果；它只能说明
 v1/v2 在 24-cluster pilot 上证据不足，不能替代新的 A3 训练。以下各节若与本节的当前
@@ -151,10 +154,10 @@ Teacher 与 student 均使用原图和相同 caption；teacher 获得三个真�
 无区分基线 `softplus(0.2)`，以及 conflict router mass 降至 `0.0289`。原 retrieval
 数值不参与该判断。
 
-### Phase A3：通道平衡语义恢复（下一项唯一允许的训练）
+### Phase A3：通道平衡语义恢复（已完成，下一步为 outer confirmation）
 
-下一轮仍为 `64 train / 24 validation`、只训练 bridge、冻结两个 7B。不得直接进入
-caption bridge。训练和选择规则改为：
+本轮使用 `64 train / 24 validation`、只训练 bridge、冻结两个 7B。不得直接进入
+caption bridge。训练和选择规则为：
 
 ```text
 L_rec = (L_conflict + L_local + L_global) / 3
@@ -184,8 +187,41 @@ L_A3  = lambda_rec * L_rec + lambda_NCE * L_NCE
   只有真实技术失败，或后续已预注册的明显负向效应，才允许硬停止；若 outer validation
   仍显示 conflict 不可恢复，再进入 `C-text + A-latent` 混合消融。
 
-Phase A3 通过后才允许训练 caption bridge，并按 `Text-HOMER / C-text+A-latent /
-C-latent+A-text / All-latent` 顺序做低成本比较。
+本轮完成后，只有通过剩余 40 个未参与 early stopping 的 outer semantic confirmation，
+才允许训练 caption bridge，并按 `Text-HOMER / C-text+A-latent / C-latent+A-text /
+All-latent` 顺序做低成本比较。
+
+### Phase A3 正式结果（job 6707953）
+
+作业在 b-batch 单张完整 H100 上正常退出，exit code 为 0，耗时 25 分 06 秒；正式
+preflight、CUDA allocator 检查和训练后 validator 均通过。运行 provenance 固定在
+`outputs/pilot/cross_attention_semantic_phase_a3/run_manifest.json`，代码 commit 为
+`28d530769d3af8051696b21d55bf257cdcaa35dc`，配置、数据 manifest、666 条 trace index
+的 SHA-256 均被记录。
+
+| 项目 | 结果 |
+|---|---:|
+| 训练/验证 cluster | 64 / 24 |
+| epoch / optimizer steps | 5 / 80 |
+| bridge trainable parameters | 2,820,612 |
+| policy trainable parameters | 0 |
+| validation total（epoch 1 → 5） | 4.12281 → 3.00137 |
+| validation caption NLL（epoch 1 → 5） | 1.80835 → 1.12946 |
+| validation InfoNCE retrieval@1（epoch 1 → 5） | 0.125 → 0.535 |
+| 最终整体 matched−shuffled gap | 0.000216 |
+| 最终 conflict/local/global gap | −0.000040 / −0.000317 / 0.001006 |
+| 最终 conflict/local/global retrieval@1 | 0.396 / 0.563 / 0.646 |
+| 最大 relative update norm | 0.0430 |
+| fixed channel mass | 1/3, 1/3, 1/3 |
+
+`complete.json` 为 `status=complete`、`epochs_completed=5`。`semantic_gate.json` 为
+`status=pilot_inconclusive`，但 `engineering_gate_pass=true`：NLL 和表示层 retrieval
+均改善，更新有限且无 NaN/OOM；然而 24-cluster 的 channel-wise matched/shuffled
+bootstrap CI 仍跨 0（conflict `[-0.002806, 0.002740]`、local `[-0.001935,
+0.001354]`、global `[-0.000262, 0.002396]`）。这不是技术失败，也不是 latent 方法的
+最终 No-Go；它只说明低功效 pilot 尚未证明稳定的逐通道 Receiver 使用。下一步必须运行
+sealed 的 40-cluster outer semantic confirmation（共同 3 seeds），并继续禁止 caption
+quality 结论、DPO 和 preference learning。
 
 ### Phase A3 的验证协议与样本量定位
 
@@ -247,8 +283,9 @@ softmax，这会改变归一化分母，不能把 gap 直接解释为语义依�
 
 A3 smoke 作业 `6689653` 独立因 global target `492 > max_target_tokens=384` 的配置错误
 退出，已按 engineering failure 记录。配置改为 `768` 后，replacement smoke `6706516`
-通过 validator；因此现在允许提交 formal A3，但在提交前仍须保留本次 report、job stats
-和 manifest 作为 provenance。
+通过 validator；formal A3 `6707953` 随后完成。formal 的 engineering gate 通过，但
+24-cluster semantic gate 为 `pilot_inconclusive`，因此必须先做 outer confirmation，
+不能把该结果当作 caption 质量证据。
 
 这一协议依据 NLP 功效分析与配对显著性测试规范；Interlat 的错配/结构破坏实验用于证明
 latent 的任务特异性，而不是仅凭 latent 可解码就宣称 Receiver 使用了它。
@@ -266,11 +303,11 @@ latent 的任务特异性，而不是仅凭 latent 可解码就宣称 Receiver �
 - 记录峰值显存。
 
 Gate E 通过前禁止正式训练。replacement smoke `6706516` 已通过 Gate E；formal A3
-仍是下一项独立的科学训练，不得把 smoke 的两张图结果当作语义效果。
+`6707953` 已完成并正常退出。两类结果都不能被改写成 caption 质量证据。
 
 ### Pilot P（A3 semantic gate 通过后才解锁）
 
-这三个 caption-level latent pilot 不是当前阶段；它们必须等待 Phase A3 和 outer semantic
+这三个 caption-level latent pilot 仍不是当前阶段；它们必须等待 Phase A3 和 outer semantic
 confirmation 通过后才可提交。每个仅 64 train clusters、24 validation clusters、1 seed：
 
 1. Learned + KL；
@@ -359,8 +396,8 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该数值既不能支持也不能反对 v2；
 - caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来绕过语义门。下一项只允许上述 Phase A3：通道平衡 reconstruction、channel-wise contextual InfoNCE、单通道 counterfactual、固定等权 gate；若 conflict 仍不过门，则进入预注册的 `C-text + A-latent`；
 - Phase A3 已实现并通过 CPU suite；配置为 `configs/pilot/cross_attention_semantic_phase_a3.yaml`。真实双样本 GPU smoke 首次作业 `6689653` 因 `electronic_sheep:325:0` 的 `492 > 384` token 上限配置错误退出；配置提高到 `768` 后，replacement smoke `6706516` 已在完整 H100 上通过 validator，未截断完整 HOMER chain；
-- 当前没有运行中的 A3 作业。replacement smoke 的工程门禁已关闭；正式 `64/24` 训练前仍须执行一次标准 preflight、保留 job stats/report，并且不得把 smoke report 当作语义收益；
-- A3 replacement smoke 已通过冻结参数、真实两 cluster、逐通道 counterfactual、contextual InfoNCE、有限梯度与实际 update 门禁，因此现在允许提交 1 GPU/1 小时的 `64/24` bridge-only 作业；不调用 Codex、不消耗模型额度，也不会自动进入 caption training；
+- A3 replacement smoke 已通过冻结参数、真实两 cluster、逐通道 counterfactual、contextual InfoNCE、有限梯度与实际 update 门禁；随后 formal A3 job `6707953` 已在 b-batch 单张完整 H100 上以 exit code 0 完成 5 epoch/80 steps。其工程 gate 通过但 semantic gate 为 `pilot_inconclusive`，不得把 validation NLL/retrieval 的改善写成 caption 质量收益；
+- Formal A3 的逐轮 checkpoint、validation JSONL、`complete.json`、`semantic_gate.json`、preflight 和 job stats 均已保留。下一步只允许对剩余 40 个 outer semantic clusters 做 sealed confirmation（共同 3 seeds）；在该 gate 之前不得启动 caption bridge、DPO 或任何 preference job；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning/DPO：属于旧方案，在 v3.5 latent gate 通过前禁用。
 

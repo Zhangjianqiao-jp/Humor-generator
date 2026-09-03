@@ -51,6 +51,8 @@ def main() -> None:
         [python, "scripts/train_bridge.py", "--help"],
         [python, "scripts/real_trace_bridge_smoke.py", "--help"],
         [python, "scripts/generate_formal_baseline.py", "--help"],
+        [python, "scripts/run_outer_semantic_confirmation.py", "--help"],
+        [python, "scripts/validate_outer_semantic_confirmation.py", "--help"],
         [python, "scripts/formal_pipeline_monitor.py", "--help"],
         [python, "scripts/verify_clustered_dataset.py"],
         [python, "scripts/check_trace_completion.py"],

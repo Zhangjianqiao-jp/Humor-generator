@@ -138,15 +138,33 @@ experiment_plan:
         channel-wise counterfactual paths executed. This is an engineering gate only.
     - id: A3
       name: channel_balanced_semantic_recovery_pilot
-      status: ready_after_A3S_pass
+      status: complete_pilot_inconclusive
       config: configs/pilot/cross_attention_semantic_phase_a3.yaml
       budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
       trainable: bridge_only
       frozen: [planner_7b, generator_7b]
+      job_id: "6707953"
+      output: outputs/pilot/cross_attention_semantic_phase_a3
+      engineering_gate: pass
+      semantic_gate: pilot_inconclusive
+      final_validation:
+        total: 3.001369272338019
+        caption_nll: 1.129462348090278
+        matched_minus_shuffled_logp: 0.00021642053292857276
+        info_nce_retrieval_at_1: 0.5347222685813904
+      channel_gaps:
+        conflict: -0.00003976126511891683
+        local: -0.0003169911603132884
+        global: 0.0010060140242179234
+      interpretation: >-
+        Engineering-valid mechanism pilot; 24-cluster channel-wise bootstrap intervals
+        cross zero, so it neither proves nor rejects latent communication.
     - id: O
       name: outer_semantic_confirmation
-      status: locked_until_A3_gate
+      status: next_after_A3_pilot_inconclusive
       design: {clusters: 40, shared_seeds: 3, statistical_unit: image_cluster}
+      script: scripts/run_outer_semantic_confirmation.py
+      output: outputs/outer_semantic_confirmation/a3_outer40
     - id: L
       name: latent_text_caption_ablation
       status: evidence_gated

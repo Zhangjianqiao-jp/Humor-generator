@@ -31,7 +31,12 @@
 - `results/engineering_smoke/formal_generation_paths.json`
 - `data/cache/planner_trace_smoke/index.jsonl`
 
-基础 Gate E 与 trace gate（`666/666`）均已通过。当前下一步不是三个 caption-level pilot，而是提交独立的 `64 train / 24 validation` channel-balanced semantic-recovery bridge-only pilot。两个 7B policy 在该阶段冻结。只有 Phase A3 和剩余 40-cluster outer semantic confirmation 均通过，才解锁 Learned/Typed caption-level pilots；DPO/preference learning 属于旧 v2.5 方案，在 v3.5 中禁用。
+基础 Gate E 与 trace gate（`666/666`）均已通过。正式的 `64 train / 24 validation`
+channel-balanced semantic-recovery bridge-only pilot（job `6707953`）也已完成并正常退出：
+engineering gate 通过，但 24-cluster semantic gate 为 `pilot_inconclusive`。两个 7B policy
+在该阶段保持冻结。当前下一步是剩余 40-cluster outer semantic confirmation；只有它和
+Phase A3 的工程/统计门禁共同满足，才解锁 Learned/Typed caption-level pilots；
+DPO/preference learning 属于旧 v2.5 方案，在 v3.5 中禁用。
 
 ## Phase A3 replacement smoke（job 6706516）
 
@@ -55,8 +60,22 @@
 `results/engineering_smoke/cross_attention_semantic_phase_a3.json`。其中 report 的
 `scientific_training=false` 是有意的：smoke 只证明真实 forward/backward、冻结策略、
 完整 token 对齐、channel-wise counterfactual/InfoNCE 路径和资源可执行；其中出现的
-matched/shuffled gap 不能用于宣称 latent 已被 Receiver 语义使用。下一步才是独立的
-`64 train / 24 validation` formal A3 bridge-only 训练。
+ matched/shuffled gap 不能用于宣称 latent 已被 Receiver 语义使用。该 smoke 之后的
+formal A3 已由 job `6707953` 完成；其完整结果、逐轮 validation 和语义 gate 位于
+`outputs/pilot/cross_attention_semantic_phase_a3/`，详见 `docs/WORK_PLAN_ZH.md` 的
+“Phase A3 正式结果”小节。下一步是 outer semantic confirmation，不是 caption 或 DPO。
+
+## Formal Phase A3 完成状态（job 6707953）
+
+正式训练使用 64 个 train clusters、24 个 validation clusters，只更新 2,820,612 个
+bridge 参数，冻结两个 7B policy，5 个 epoch 共 80 optimizer steps；在 b-batch 单张完整
+H100 上运行 25 分 06 秒并以 exit code 0 结束。validation total 从 4.12281 降到 3.00137，
+caption NLL 从 1.80835 降到 1.12946，contextual InfoNCE retrieval@1 从 0.125 升到
+0.535；但最终 channel-wise matched/shuffled gap 为 conflict −0.000040、local
+−0.000317、global 0.001006，24-cluster bootstrap 区间均跨 0。因此 gate 是
+`pilot_inconclusive` 而不是 technical `hard_no_go`：训练路径和表示对齐在工作，但低功效
+pilot 尚未证明三路被 Receiver 稳定使用。不得据此启动 caption bridge 或 preference
+learning；应先运行预注册的 40-cluster outer semantic confirmation。
 
 ## 权威依据
 

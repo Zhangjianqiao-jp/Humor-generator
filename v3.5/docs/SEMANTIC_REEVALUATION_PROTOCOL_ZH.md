@@ -9,10 +9,13 @@
 - 修正 evaluator：`scripts/re_evaluate_failed_semantic_bridges.py`
 - A3 smoke：首次作业 `6689653` 因 target-token 上限配置错误而分类为 engineering
   failure；修正后的真实 trace smoke `6706516` 已通过
+- A3 formal：job `6707953` 已完成 5 epoch/80 steps，engineering gate 通过，24-cluster
+  semantic gate 为 `pilot_inconclusive`；下一步为预注册的 40-cluster outer confirmation
 - 旧 bridge 重评：`6695787`，已完成
 - 当前修正代码已通过 Python 编译、帮助命令和相关 CPU 单元测试；GPU 重评结果已生成，
-  且 A3 replacement engineering smoke 已通过 validator。该 smoke 仅是执行门禁，不能
-  替代正式 64/24 semantic-recovery 训练或 caption 盲评。
+  且 A3 replacement engineering smoke 已通过 validator。A3 formal 的完整输出位于
+  `outputs/pilot/cross_attention_semantic_phase_a3/`；其 semantic gate 仍只表示机制
+  pilot 状态，不能替代 caption 盲评。
 
 实际数值分析见 [`docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md`](SEMANTIC_REEVALUATION_RESULTS_ZH.md)。
 重评最终对 v1/v2 均给出 `pilot_inconclusive`：没有工程错误，但没有通过三通道稳定

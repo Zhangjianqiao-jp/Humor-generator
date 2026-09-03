@@ -6,7 +6,7 @@ must_revalidate: true
 source_commit: f3a17ab176e3f26cec3c17c2bc2e1a3ddb91ba65
 branch: latent
 
-current_phase: A3_formal_semantic_recovery_ready
+current_phase: outer_semantic_confirmation_preflight
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -85,6 +85,46 @@ latest_gate_result:
     Engineering gate passed. It does not establish semantic-use or caption-quality
     gains; formal A3 64/24 bridge-only training remains a separate job.
 
+latest_formal_a3:
+  job_id: "6707953"
+  name: v35_a3_formal
+  scheduler_state: completed
+  resource_group: b-batch
+  host: genkai0001
+  full_gpu: NVIDIA_H100_80GB_HBM3
+  started_at: "2026-09-03T22:35:42+09:00"
+  ended_at: "2026-09-03T23:00:48+09:00"
+  exit_code: 0
+  elapsed_seconds: 1506
+  output: outputs/pilot/cross_attention_semantic_phase_a3
+  config: configs/pilot/cross_attention_semantic_phase_a3.yaml
+  code_commit: 28d530769d3af8051696b21d55bf257cdcaa35dc
+  train_clusters: 64
+  validation_clusters: 24
+  epochs_completed: 5
+  global_steps: 80
+  bridge_trainable_parameters: 2820612
+  policy_trainable_parameters: 0
+  complete_status: complete
+  semantic_gate_status: pilot_inconclusive
+  engineering_gate_pass: true
+  validation_final:
+    total: 3.001369272338019
+    caption_nll: 1.129462348090278
+    matched_minus_shuffled_logp: 0.00021642053292857276
+    retrieval_at_1: 0.5347222685813904
+  channel_final:
+    conflict: {gap: -0.00003976126511891683, fraction_gap_gt_0: 0.4583333333333333, retrieval_at_1: 0.3958333432674408}
+    local: {gap: -0.0003169911603132884, fraction_gap_gt_0: 0.375, retrieval_at_1: 0.5625}
+    global: {gap: 0.0010060140242179234, fraction_gap_gt_0: 0.6458333333333334, retrieval_at_1: 0.6458333730697632}
+  bootstrap_95ci:
+    conflict: [-0.002805630366007487, 0.002740258971850077]
+    local: [-0.001934938132762909, 0.0013542647163073223]
+    global: [-0.0002622089038292567, 0.002395613739887873]
+  interpretation: >-
+    Formal A3 is an engineering-valid but statistically inconclusive mechanism
+    pilot. It must not be called a latent semantic failure or a caption gain.
+
 current_gate:
   name: phase_a3_replacement_real_trace_smoke
   status: passed
@@ -147,22 +187,30 @@ program_risk_audit:
     - monitor validates checkpoint, manifest, metrics, and finite completion fields
     - blind packet IDs must match the private mapping exactly
     - exact resource smoke and formal training now share the same torch seed
-  highest_open_risk: formal_A3_semantic_recovery_and_outer_confirmation_not_yet_run
+  highest_open_risk: outer_semantic_confirmation_not_yet_run
 
 immediate_gate:
-  action: submit_or_confirm_formal_phase_a3_bridge_only
-  job_id: "6706516"
-  resource_group: c-batch
-  predicted_start: "2026-09-03T17:28:07+09:00"
+  action: run_outer_semantic_confirmation_before_caption_stage
+  prerequisite_job_id: "6707953"
+  prerequisite_status: pilot_inconclusive_with_engineering_pass
+  resource_group: b-batch
   required_resource: one_full_gpu_native_allocator_cuda0
+  output: outputs/outer_semantic_confirmation/a3_outer40
+  script: scripts/run_outer_semantic_confirmation.py
+  design:
+    clusters: 40
+    seeds: [20260830, 20260831, 20260832]
+    statistical_unit: image_cluster
+    donor_policy: length_matched_train_split_excluding_A3_fit_clusters_per_channel
+    caption_generation: false
   success_requires:
-    - A3 real-trace smoke runs with max_target_tokens=768.
-    - Two representative traces complete forward/backward and validation.
-    - validate_phase_a3_smoke.py writes a passing report.
-  status: passed
+    - Exclude exactly the 24 A3 early-stopping clusters.
+    - Evaluate exactly the remaining 40 validation clusters, one row per cluster.
+    - Keep checkpoint, Planner, Generator, prompt and trace hashes fixed.
+    - Preserve channel-wise counterfactual gaps and clustered bootstrap intervals.
+  status: preflight_script_smoke_passed_not_submitted
 
 remaining_sequence_after_resource_gate:
-  - phase_a3_semantic_recovery_64_train_24_validation_bridge_only
   - outer_semantic_confirmation_40_clusters_x_3_seeds
   - latent_text_caption_ablation_after_semantic_gate
   - mirrored_group_of_3_screening_only
@@ -172,18 +220,17 @@ remaining_sequence_after_resource_gate:
 eta:
   scheduler_wait: resolved_for_smoke
   a3_smoke: completed_in_4m20s
-  a3_semantic_pilot_after_smoke: approximately_1_hour
+  a3_semantic_pilot_after_smoke: completed_in_25m06s
+  outer_semantic_confirmation: approximately_30_to_50_minutes_after_gpu_start
   excluded: caption_generation_and_independent_blind_rating
 
 next_agent_actions:
   - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
-  - A3 replacement smoke 6706516 passed; do not rerun it unless code/config changes.
-  - Before formal 64/24 semantic recovery, retain the smoke report/stats and run the
-    standard preflight; then submit exactly one bridge-only job on one full GPU.
-  - Keep v1/v2 re-evaluation as evidence only; do not call it a new A3 training result.
-  - With the smoke gate passed, submit the 64/24 bridge-only pilot only as a separate
-    scientific job; after it, run the pre-registered 40-cluster outer confirmation.
-  - Do not start caption-level preference learning unless latent bridge has stable held-out benefit.
+  - A3 replacement smoke 6706516 and formal A3 6707953 passed engineering checks; do not rerun them unless code/config changes.
+  - Run the new outer semantic confirmation script smoke/contract checks before submission; do not use caption outputs or DPO.
+  - Submit exactly one 40-cluster outer semantic confirmation job on one full GPU after the script smoke passes.
+  - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
+  - Do not start caption-level preference learning unless outer semantic confirmation and later caption quality gates both pass.
 
 automation:
   tmux_session: null

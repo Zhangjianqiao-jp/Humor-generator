@@ -25,10 +25,14 @@ topics:
       - configs/pilot/learned_sft_kl.yaml
       - configs/pilot/typed_sft_kl.yaml
       - configs/pilot/typed_sft_no_kl.yaml
+      - scripts/run_outer_semantic_confirmation.py
+      - scripts/validate_outer_semantic_confirmation.py
+      - jobs/outer_semantic_confirmation.pjm
     note: >-
-      A3 replacement engineering smoke job 6706516 passed. The next latent stage is the
-      separate bridge-only 64/24 semantic-recovery pilot; the three 256-dim caption pilots
-      remain locked until A3 and outer semantic gates pass.
+      A3 replacement engineering smoke job 6706516 and formal bridge-only job 6707953 passed
+      engineering checks. A3 semantic gate is pilot_inconclusive; the next latent stage is the
+      40-cluster outer semantic confirmation. The three caption pilots remain locked until
+      the outer semantic gate passes.
   evaluation_and_blinding:
     files:
       - docs/GROUP3_JUDGE_PROMPT_ZH.md
