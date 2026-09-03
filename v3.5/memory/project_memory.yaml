@@ -165,9 +165,9 @@ experiment_plan:
       design: {clusters: 40, shared_seeds: 3, statistical_unit: image_cluster}
       script: scripts/run_outer_semantic_confirmation.py
       output: outputs/outer_semantic_confirmation/a3_outer40
-      smoke_job_id: "6708041"
+      smoke_job_id: "6708044"
       smoke_resource_group: c-batch
-      smoke_elapse_seconds: 600
+      smoke_elapse_seconds: 300
       smoke_estimated_start: "2026-09-04T11:00:00+09:00"
       preflight: results/preflight/outer_confirmation_preflight.json
     - id: L

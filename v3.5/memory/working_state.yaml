@@ -193,10 +193,10 @@ immediate_gate:
   action: run_outer_semantic_confirmation_before_caption_stage
   prerequisite_job_id: "6707953"
   prerequisite_status: pilot_inconclusive_with_engineering_pass
-  smoke_job_id: "6708041"
+  smoke_job_id: "6708044"
   resource_group: c-batch
   required_resource: one_full_gpu_native_allocator_cuda0
-  smoke_requested_elapse_seconds: 600
+  smoke_requested_elapse_seconds: 300
   scheduler_estimated_start: "2026-09-04T11:00:00+09:00"
   preflight: results/preflight/outer_confirmation_preflight.json
   output: outputs/outer_semantic_confirmation/a3_outer40
@@ -214,10 +214,13 @@ immediate_gate:
     - Preserve channel-wise counterfactual gaps and clustered bootstrap intervals.
   status: real_trace_smoke_queued_after_preflight
   queue_note: >-
-    b-batch reported a later 2026-09-10 reservation for the same 10-minute request;
-    c-batch reported the earliest compatible full-GPU start and is the only retained
-    smoke job. b-batch duplicate 6708042 was canceled; interactive groups were not
-    used because they reject batch execution or had later reservations.
+    b-batch reported a later 2026-09-10 reservation even for a 10-minute request;
+    c-batch reported the earliest compatible full-GPU start (2026-09-04 11:00) and is
+    the only retained smoke job. The earlier c-batch 10-minute request 6708041 and
+    b-batch duplicate 6708042 were canceled before execution; the 5-minute c-batch
+    request 6708044 is the active probe. MIG and interactive alternatives were not
+    used because MIG has the recorded allocator incident and interactive groups were
+    rejected or later.
 
 remaining_sequence_after_resource_gate:
   - outer_semantic_confirmation_40_clusters_x_3_seeds
