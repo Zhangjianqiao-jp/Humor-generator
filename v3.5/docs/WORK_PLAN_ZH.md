@@ -14,7 +14,7 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 → Phase A3 replacement engineering smoke（已通过，job 6706516）
 → Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
 → Phase A3 gate：engineering pass，semantic pilot_inconclusive
-→ 剩余 40 个 outer semantic clusters 确认（当前下一步）
+→ 剩余 40 个 outer semantic clusters 确认（2-cluster real-trace smoke 已提交，job 6708044）
 → latent/text 混合 caption 消融与盲评
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```
@@ -26,6 +26,14 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 `64 train / 24 validation` bridge-only 训练已由 job `6707953` 完成；其工程 gate
 通过，但 24-cluster semantic gate 为 `pilot_inconclusive`，因此不能直接进入 caption
 bridge 或 preference learning。
+
+截至 2026-09-03 23:29 JST，outer evaluator 的完整 preflight 已通过（锁定环境内 75
+tests、数据和 trace gate 均通过）。为避免在未验证真实前向前占用正式时段，已提交仅
+2 个 outer cluster、共同 seed `20260830`、5 分钟 walltime 的真实 GPU smoke
+`6708044` 到 `c-batch`；调度器给出的最早启动时间为 2026-09-04 11:00。它是唯一保留
+的 outer smoke，未提交 40×3 正式作业。smoke 必须先通过
+`scripts/validate_outer_semantic_confirmation.py`；通过后才提交一份 40 cluster ×
+3 seed 的 sealed confirmation。MIG 和 DPO 均保持禁用。
 
 `docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md` 是旧 bridge 重评的数值结果；它只能说明
 v1/v2 在 24-cluster pilot 上证据不足，不能替代新的 A3 训练。以下各节若与本节的当前
