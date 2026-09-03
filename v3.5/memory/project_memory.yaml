@@ -161,10 +161,15 @@ experiment_plan:
         cross zero, so it neither proves nor rejects latent communication.
     - id: O
       name: outer_semantic_confirmation
-      status: next_after_A3_pilot_inconclusive
+      status: real_trace_smoke_queued
       design: {clusters: 40, shared_seeds: 3, statistical_unit: image_cluster}
       script: scripts/run_outer_semantic_confirmation.py
       output: outputs/outer_semantic_confirmation/a3_outer40
+      smoke_job_id: "6708041"
+      smoke_resource_group: c-batch
+      smoke_elapse_seconds: 600
+      smoke_estimated_start: "2026-09-04T11:00:00+09:00"
+      preflight: results/preflight/outer_confirmation_preflight.json
     - id: L
       name: latent_text_caption_ablation
       status: evidence_gated

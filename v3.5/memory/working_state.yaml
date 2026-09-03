@@ -1,7 +1,7 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-03T17:36:00+09:00"
+observed_at: "2026-09-03T23:26:53+09:00"
 must_revalidate: true
 source_commit: cfa694e5a5224eafc42dad12fe894171c3c76baf
 branch: latent
@@ -193,8 +193,12 @@ immediate_gate:
   action: run_outer_semantic_confirmation_before_caption_stage
   prerequisite_job_id: "6707953"
   prerequisite_status: pilot_inconclusive_with_engineering_pass
-  resource_group: b-batch
+  smoke_job_id: "6708041"
+  resource_group: c-batch
   required_resource: one_full_gpu_native_allocator_cuda0
+  smoke_requested_elapse_seconds: 600
+  scheduler_estimated_start: "2026-09-04T11:00:00+09:00"
+  preflight: results/preflight/outer_confirmation_preflight.json
   output: outputs/outer_semantic_confirmation/a3_outer40
   script: scripts/run_outer_semantic_confirmation.py
   design:
@@ -208,7 +212,12 @@ immediate_gate:
     - Evaluate exactly the remaining 40 validation clusters, one row per cluster.
     - Keep checkpoint, Planner, Generator, prompt and trace hashes fixed.
     - Preserve channel-wise counterfactual gaps and clustered bootstrap intervals.
-  status: preflight_script_smoke_passed_not_submitted
+  status: real_trace_smoke_queued_after_preflight
+  queue_note: >-
+    b-batch reported a later 2026-09-10 reservation for the same 10-minute request;
+    c-batch reported the earliest compatible full-GPU start and is the only retained
+    smoke job. b-batch duplicate 6708042 was canceled; interactive groups were not
+    used because they reject batch execution or had later reservations.
 
 remaining_sequence_after_resource_gate:
   - outer_semantic_confirmation_40_clusters_x_3_seeds
@@ -227,8 +236,9 @@ eta:
 next_agent_actions:
   - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
   - A3 replacement smoke 6706516 and formal A3 6707953 passed engineering checks; do not rerun them unless code/config changes.
-  - Run the new outer semantic confirmation script smoke/contract checks before submission; do not use caption outputs or DPO.
-  - Submit exactly one 40-cluster outer semantic confirmation job on one full GPU after the script smoke passes.
+  - Monitor smoke job 6708041; inspect its output and run the outer validator before any full job.
+  - If smoke passes, submit exactly one 40-cluster outer semantic confirmation job on one full GPU;
+    if it fails, preserve logs and update the failure ledger before retrying.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption-level preference learning unless outer semantic confirmation and later caption quality gates both pass.
 
