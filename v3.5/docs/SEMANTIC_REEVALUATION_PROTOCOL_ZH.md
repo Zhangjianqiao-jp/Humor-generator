@@ -7,9 +7,13 @@
 
 - 审查日期：2026-09-03（JST）
 - 修正 evaluator：`scripts/re_evaluate_failed_semantic_bridges.py`
-- A3 smoke：`6689653`，当时状态为 `QUE`
-- 旧 bridge 重评：`6695787`，当时状态为 `QUE`
-- 当前修正代码已通过 Python 编译、帮助命令和相关 CPU 单元测试；GPU 结果待作业完成。
+- A3 smoke：`6689653`，因 target-token 上限配置错误而分类为 engineering failure
+- 旧 bridge 重评：`6695787`，已完成
+- 当前修正代码已通过 Python 编译、帮助命令和相关 CPU 单元测试；GPU 重评结果已生成。
+
+实际数值分析见 [`docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md`](SEMANTIC_REEVALUATION_RESULTS_ZH.md)。
+重评最终对 v1/v2 均给出 `pilot_inconclusive`：没有工程错误，但没有通过三通道稳定
+semantic-use gate。
 
 ## 1. 重评的科学问题和边界
 
@@ -199,11 +203,12 @@ partial artifact。
 
 ## 7. 当前结论的写法
 
-在 GPU 作业结束前，只能写：
+本次 GPU 作业完成后，当前只能写：
 
-> v1/v2 已进入冻结 checkpoint 的修正反事实重评；旧 `no_go` 暂不能升级为方法级
-> 无效结论。新的 evaluator 已消除主要的 v1 channel-length/softmax-denominator 混淆，
-> 结果需等待 24-cluster summary 和 bootstrap CI。
+> v1/v2 的冻结 checkpoint 修正反事实重评已经完成。两者均为 `pilot_inconclusive`：
+> 新 evaluator 已消除主要的 v1 channel-length/softmax-denominator 混淆，但 24 个
+> image clusters 没有显示三个 channel 一致且具有实际幅度的 semantic sensitivity；
+> 这不是对 latent communication 的方法级否定。
 
 作业结束后：
 

@@ -38,7 +38,10 @@ training:
   weight_decay: 0.01
   gradient_accumulation: 4
   max_grad_norm: 1.0
-  max_target_tokens: 384
+  # The longest checked global semantic target is 492 tokens.  Keep the
+  # historical 768-token bound so smoke/training never silently truncates a
+  # valid HOMER association chain.
+  max_target_tokens: 768
   early_stopping_patience: 2
   early_stopping_min_delta: 0.002
   log_every_examples: 8

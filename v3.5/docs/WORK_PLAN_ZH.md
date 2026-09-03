@@ -211,6 +211,16 @@ softmax，这会改变归一化分母，不能把 gap 直接解释为语义依�
 `pilot_inconclusive` 仍表示 24-cluster 统计功效不足，不能写成方法级 No-Go；只有
 预注册 outer semantic validation 的稳定负向结果才可否定旧方法。
 
+重评作业 `6695787` 已完成：v1/v2 均为 `pilot_inconclusive`。v1 只有 global channel
+出现极小正向 gap（均值 `0.001170`，95% CI `[0.000056, 0.002230]`），conflict/local
+不稳定；v2 的 conflict/global CI 均跨 0，local 均值为负。两者三个 channel 的
+`fraction(gap > 0.02)` 都是 `0/24`，所以不能进入 caption bridge。完整数值见
+`docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md`。
+
+A3 smoke 作业 `6689653` 独立因 global target `492 > max_target_tokens=384` 的配置错误
+退出，已按 engineering failure 记录；配置改为 768，必须重新 smoke 通过后才能提交
+formal A3。
+
 这一协议依据 NLP 功效分析与配对显著性测试规范；Interlat 的错配/结构破坏实验用于证明
 latent 的任务特异性，而不是仅凭 latent 可解码就宣称 Receiver 使用了它。
 

@@ -70,6 +70,11 @@
     local model/adapter/prompt manifest；输出 summary/manifest 记录 evaluator hash、
     seeds、checkpoint/config/data/trace/prompt/model/adapter hashes。直到新的 GPU
     summary 完成前，不得把旧 `no_go` 重新解释为方法级无效。
+13. A3 smoke 作业 `6689653` 在真实 trace `electronic_sheep:325:0` 处提前退出：配置
+    `max_target_tokens=384`，而该 global semantic target 为 492 tokens。validator 随后
+    因预期 JSON 不存在而退出。分类为 `engineering`，不是 CUDA/OOM、数据缺损或方法
+    失败；没有产生 A3 语义结论，也没有提交正式训练。配置已提高到 768，保持完整
+    HOMER chain，重新 smoke 通过前禁止 formal A3。
 
 ## 权威依据
 
