@@ -2,10 +2,10 @@
 # Phase A5 repair candidate: role-specific K/V/O maps plus receiver-native
 # target-span alignment.  Both Qwen policies are frozen; only the bridge is
 # trained.  This job is separate from the immutable A4 baseline.
-# b-batch + node=1 is the validated simplex/full-GPU contract on GENKAI;
-# do not combine node=1 with gpu=1 or exec-policy=simplex.
-#PJM -L rscgrp=b-batch
-#PJM -L node=1
+# c-batch + gpu=1 is the validated native full-GPU contract on GENKAI;
+# do not combine gpu=1 with node=1 or an explicit simplex flag.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
 #PJM -L elapse=08:00:00
 #PJM -j
 #PJM -S

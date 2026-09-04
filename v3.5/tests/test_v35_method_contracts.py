@@ -257,9 +257,7 @@ def test_a5_repair_and_caption_jobs_are_sequentially_fail_closed() -> None:
     assert "--expected-clusters 121" in outer
     assert "outer_semantic_go" in caption
     assert "--group-size 10" in caption
-    assert "#PJM -L rscgrp=b-batch" in train
-    assert "#PJM -L node=1" in train
-    for job in (traces, outer, caption):
+    for job in (train, traces, outer, caption):
         assert "PYTORCH_ALLOC_CONF=backend:native" in job
         assert "#PJM -L rscgrp=c-batch" in job
         assert "#PJM -L gpu=1" in job
