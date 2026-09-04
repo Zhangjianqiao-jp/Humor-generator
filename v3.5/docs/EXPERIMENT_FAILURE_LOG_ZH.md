@@ -224,6 +224,17 @@ manifest、model revision、HOMER base prompt 和 repair policy，最多 32 次�
 没有删除历史证据。正式重跑必须确认 canonical 输出路径不存在，再使用同一已通过
 preflight 的 A5 脚本；这次拒绝已写入 `docs/EXPERIMENT_FAILURES.jsonl`。
 
+## V35-ENG-012（2026-09-05）：A5 真实 smoke 暴露未初始化 baseline
+
+A5 作业 `6712300` 已成功获得原生 H100 并通过 clean preflight，但在真实 trace
+forward 之前，`real_trace_bridge_smoke.py` 在 donor-policy 分支读取了尚未赋值的
+`baseline`，触发 `UnboundLocalError`（exit code 1）。因此没有 checkpoint、metrics 或
+科学训练结果，不能解释为 GPU、数据或 latent 方法失败。
+
+修复是把 `baseline = config["experiment"]["baseline"]` 提前到所有 donor-policy 分支之前，
+并加入静态回归测试；`V35-ENG-012` 已记录在 `EXPERIMENT_FAILURES.jsonl`。修复后必须
+重新通过 `.venv` compile/pytest、真实两 cluster smoke，再提交新的 A5 canonical 输出。
+
 
 1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o
 2. He et al., MoCo, CVPR 2020: https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html

@@ -43,6 +43,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text())
+    # Resolve the protocol before selecting donor policy.  The semantic smoke
+    # branch needs to know whether it is exercising the receiver cross-
+    # attention path; keeping this assignment next to config parsing prevents
+    # an uninitialised-baseline failure before any model forward.
+    baseline = config["experiment"]["baseline"]
     traces = load_trace_index(args.trace_index)
     rows = [
         row for row in read_jsonl(ROOT / config["data"]["dataset"] / "train.jsonl")
@@ -105,7 +110,6 @@ def main() -> None:
     for parameter in backend.model.parameters():
         parameter.requires_grad_(False)
     width = int(backend.model.get_input_embeddings().weight.shape[1])
-    baseline = config["experiment"]["baseline"]
     if baseline == "receiver_cross_attention":
         bridge = ReceiverDrivenCrossAttentionBridge(
             width,

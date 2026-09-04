@@ -180,6 +180,11 @@ def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
     assert 'config["bridge"]["layer_indices"]' in smoke
     assert 'config["bridge"]["receiver_layers"]' not in smoke
     assert "configure_frozen_receiver" in smoke
+    # Donor selection branches on the experiment baseline and must not read
+    # it before the assignment (a prior GPU submission failed at this point).
+    assert smoke.index('baseline = config["experiment"]["baseline"]') < smoke.index(
+        "semantic_channel_training = ("
+    )
 
 
 def test_formal_job_is_fail_closed_in_smoke_data_gpu_train_order() -> None:
