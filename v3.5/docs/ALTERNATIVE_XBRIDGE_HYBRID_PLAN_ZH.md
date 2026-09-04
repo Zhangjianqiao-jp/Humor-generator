@@ -1,6 +1,6 @@
 # 备选方案：Grounding Anchor + Latent Enrichment + Gated Cross-Attention
 
-状态：**备选 pipeline 已进入工程实现，尚未提交正式训练**。本文件不改变已完成的 v3.5 pilot，也不将 XBridge 的跨任务结果视为本项目结果。新实现必须先通过 CPU tests、真实模型单步 GPU smoke 和下述语义 Go/No-Go，才能提交 pilot。
+状态：**备选 pipeline 已进入工程实现，尚未提交正式训练**。本文件不改变已完成的 v3.5 pilot，也不将 XBridge 的跨任务结果视为本项目结果。XBridge 在这里仅作为 2026 年 arXiv 预印本的设计启发；除其公开论文明确写出的模块外，不把任何性能、参数量或因果结论移植到本项目。新实现必须先通过 CPU tests、真实模型单步 GPU smoke 和下述语义 Go/No-Go，才能提交 pilot。当前主线应以 [`docs/METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md) 的 E0/E1/E2/E3 标记为准。
 
 ## 0. 本轮修正决定
 
@@ -240,7 +240,7 @@ tokens/sec
 
 1. matched-minus-shuffled gap 明显高于当前 prefix，并且多数样本 \(\Delta>0\)；
 2. anchor + latent 明显优于 anchor-only；
-3. shuffled memory 导致预期退化，证明 latent 被因果使用；
+3. shuffled memory 在预注册统计规则下导致稳定退化，作为 latent 因果使用的支持证据；
 4. outer-validation 的绝对 good rate 不低于 Text-HOMER；
 5. 相同预算下优于当前 Learned/Typed prefix；
 6. 无 grounding、hallucination、diversity 或延迟不可接受的退化。
@@ -255,7 +255,7 @@ pilot 使用未参与 early stopping 的 40 张 outer-validation 图片、共同
 
 ## 7. 权威参考
 
-1. Yang et al. *XBridge: Entity-Grounded Latent Bridge for Heterogeneous LLM Communication*. 2026. https://arxiv.org/abs/2608.11676
+1. Yang et al. *XBridge: Entity-Grounded Latent Bridge for Heterogeneous LLM Communication*. 2026 arXiv preprint (design inspiration only; not evidence for this project). https://arxiv.org/abs/2608.11676
 2. Du et al. *Enabling Agents to Communicate Entirely in Latent Space*. ACL 2026. https://aclanthology.org/2026.acl-long.1248/
 3. Alayrac et al. *Flamingo: a Visual Language Model for Few-Shot Learning*. NeurIPS 2022. https://proceedings.neurips.cc/paper_files/paper/2022/hash/960a172bc7fbf0177ccccbb411a7d800-Abstract-Conference.html
 4. Li et al. *BLIP-2*. ICML 2023. https://proceedings.mlr.press/v202/li23q.html

@@ -61,9 +61,11 @@ class _GatedLatentEnrichment(nn.Module):
         self.receiver_norm = nn.LayerNorm(receiver_dim)
         self.sender_norm = nn.LayerNorm(sender_dim)
         self.query = nn.Linear(receiver_dim, bottleneck_dim, bias=False)
-        # A fixed copy gives InfoNCE a stationary receiver-native target. Using
-        # the live query weights under detach() would still let the target drift
-        # between optimizer steps as caption/reconstruction gradients update Q.
+        # A fixed copy gives InfoNCE a stationary auxiliary coordinate.  It is
+        # not a learned semantic projector or proof that the receiver uses the
+        # channel.  Using the live query weights under detach() would still let
+        # this auxiliary target drift between optimizer steps as other losses
+        # update Q.
         self.register_buffer(
             "alignment_teacher_projection",
             self.query.weight.detach().clone(),
@@ -176,7 +178,10 @@ class _GatedLatentEnrichment(nn.Module):
         The sender side uses the same key map that the actual attention path
         reads.  The teacher is a contextual hidden representation produced by
         the frozen receiver under its native text interface, projected through
-        a stationary copy of the receiver query map.
+        a stationary copy of the receiver query map.  In the current pilot
+        this is only an auxiliary stationary coordinate; it is not a learned
+        receiver-semantic projector and cannot by itself establish causal
+        channel use.
         """
         student = self.key(self.sender_norm(sender_state.float())).mean(dim=1)
         if receiver_context.ndim == 2:

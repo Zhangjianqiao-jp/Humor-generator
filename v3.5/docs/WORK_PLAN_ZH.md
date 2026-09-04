@@ -1,5 +1,7 @@
 # v3.5 修正版实验计划
 
+> 本轮完整的算法/协议审计见 [`docs/ALGORITHM_AUDIT_V35_ZH.md`](ALGORITHM_AUDIT_V35_ZH.md)，方法—证据—引用逐项台账见 [`docs/METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md)。文中所有“已实现/已运行”均须能回溯到代码、配置和 artifact；`E1/E2/E3` 方案不能写成已验证结果。审计结论：A4 工程通过但语义机制仍为 `pilot_inconclusive`；在修正 A4 outer、按 channel 匹配 donor 长度并加入 zero-bridge 基线前，不得进入 caption 或 preference learning。
+
 ## 0A. A3 gap 诊断后的 A4 修订（2026-09-04）
 
 A3 的真实 channel gap 并不大：overall matched-minus-shuffled log-probability 为
@@ -74,9 +76,11 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 → Phase A3 replacement engineering smoke（已通过，job 6706516）
 → Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
 → Phase A3 gate：engineering pass，semantic pilot_inconclusive
-→ A3 outer semantic baseline（job 6708118 在 dirty-worktree preflight 停止，待 clean commit 重提）
-→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过；旧 c-batch 作业 6711074 在执行前取消；修正作业 6711109 已排队）
-→ latent/text 混合 caption 消融与盲评
+→ A3 outer semantic baseline（job 6708118 在 dirty-worktree preflight 停止；不能代替 A4）
+→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过；旧 c-batch 作业 6711074 在执行前取消；修正作业 6711109 已完成，gate=pilot_inconclusive）
+→ **当前停止：修正 A4 outer evaluator、channel-length donor 与 zero-bridge control**
+→ A4 outer semantic confirmation（修正协议，尚未提交）
+→ latent/text 混合 caption 消融与盲评（仅当 semantic gate 通过）
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```
 
@@ -88,11 +92,11 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 通过，但 24-cluster semantic gate 为 `pilot_inconclusive`，因此不能直接进入 caption
 bridge 或 preference learning。
 
-截至 2026-09-04，outer evaluator 曾由完整节点作业 `6708118` 启动，但
+截至 2026-09-04，A3 outer evaluator 曾由完整节点作业 `6708118` 启动，但
 `run_formal_preflight.py` 因 tracked worktree dirty 在实际 forward 前停止；75 tests、
 数据和 trace gate 均已通过，没有生成 outer 结果。该 baseline 必须在 clean commit 后
-用新输出目录重提，仍未提交 40×3 正式作业。通过后才提交一份 40 cluster × 3 seed 的
-sealed confirmation。A4 的新训练不覆盖该 baseline；MIG 和 DPO 均保持禁用。
+用新输出目录重提；它与 A4 的协议不同，不能复用为 A4 outer 结果。A4 的新训练不覆盖
+该 baseline；MIG 和 DPO 均保持禁用。
 
 ### A4 正式作业脚本修正（2026-09-04）
 
@@ -102,20 +106,22 @@ prompt、donor reconstruction、非零 bridge update 和冻结策略检查。随
 使用了旧的输出目录，因此在可能产生混淆前主动取消。该事件记录为工程/可追溯性问题，
 不构成方法 No-Go，也不覆盖 A4 smoke 证据。
 
-现行 `jobs/cross_attention_phase_a4.pjm` 已满足；修正后的正式作业 `6711109` 已提交：
+现行 `jobs/cross_attention_phase_a4.pjm` 已满足；修正后的正式作业 `6711109` 已完成：
 
 ```text
 c-batch + gpu=1（单张完整 native GPU）
 独立输出 outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
 locked preflight → CUDA/resource smoke → A4 validator → bridge-only training
-→ 动态读取本次输出目录的 semantic_gate.json（当前状态 QUE，预计 2026-09-05 12:00 启动）
+→ 动态读取本次输出目录的 semantic_gate.json（完成，状态 `pilot_inconclusive`）
 ```
 
-正式提交前必须再次通过 `.venv/bin/python -m pytest -q`、`git diff --check`、
-`scripts/run_formal_preflight.py`；若 semantic gate 为 `pilot_inconclusive`，作业应
-保留完整日志但 fail-closed，不得进入 caption 生成。smoke 通过只能保证工程协议
-可执行和因果比较可解释，不能预先保证 latent 收益；真正有效性仍由 A4 validation
-gate 及后续 held-out caption/盲评共同决定。
+本次作业已通过 `.venv/bin/python -m pytest -q`、`git diff --check`、
+`scripts/run_formal_preflight.py` 和 A4 validator；semantic gate 为
+`pilot_inconclusive`，因此按 fail-closed 规则保留完整日志但未进入 caption 生成。
+smoke/训练完成只能证明工程协议可执行和比较条件已建立，不能预先保证 latent 收益；
+真正有效性仍由修正后的 A4 outer semantic confirmation 及后续 held-out caption/盲评
+共同决定。A4 的完整数值见本文件后面的结果小节和
+`outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1/semantic_gate.json`。
 
 `docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md` 是旧 bridge 重评的数值结果；它只能说明
 v1/v2 在 24-cluster pilot 上证据不足，不能替代新的 A3 训练。以下各节若与本节的当前
@@ -244,7 +250,7 @@ Teacher 与 student 均使用原图和相同 caption；teacher 获得三个真�
 无区分基线 `softplus(0.2)`，以及 conflict router mass 降至 `0.0289`。原 retrieval
 数值不参与该判断。
 
-### Phase A3：通道平衡语义恢复（已完成，下一步为 outer confirmation）
+### Phase A3：通道平衡语义恢复（已完成；旧 outer baseline 与 A4 协议不同）
 
 本轮使用 `64 train / 24 validation`、只训练 bridge、冻结两个 7B。不得直接进入
 caption bridge。训练和选择规则为：
@@ -264,9 +270,12 @@ L_A3  = lambda_rec * L_rec + lambda_NCE * L_NCE
   balancing 正则的 learned gate；
 - 分别只替换 conflict、local、global，保存每张图的
   `delta_conflict/delta_local/delta_global`，不再只交换整个 memory；
-- InfoNCE 必须真正进入 loss，并按 channel 计算。teacher 改为冻结 Generator 对同一
-  receiver-native 文本字段的 contextual hidden representation；v2 的固定随机投影只
-  能证明 trace identity/词汇区分，不能证明 Receiver 学到可用语义；
+- InfoNCE 必须真正进入 loss，并按 channel 计算。当前 A4 虽使用冻结 Generator 的
+  contextual hidden，但仍经过初始化时复制的 query projection，不能称为完整的
+  receiver-native semantic projector；它只能作 auxiliary identity/alignment diagnostic。
+  下一版正式 outer 前必须在 train-only contextual states 上拟合并冻结 projector（或
+  改为 target-span/output-distribution alignment）。v2 的固定随机投影只可能证明
+  trace identity/词汇区分，不能证明 Receiver 学到可用语义；
 - 所有 contrastive 统计以 image cluster 为单位，一 cluster 一个样本；保存逐图数值，
   使用 image-clustered bootstrap 95% CI；
 - 同时保留跨图 TF-IDF hard negative 作为次要 stress test，但主 gate 使用单通道
@@ -309,9 +318,39 @@ preflight、CUDA allocator 检查和训练后 validator 均通过。运行 prove
 均改善，更新有限且无 NaN/OOM；然而 24-cluster 的 channel-wise matched/shuffled
 bootstrap CI 仍跨 0（conflict `[-0.002806, 0.002740]`、local `[-0.001935,
 0.001354]`、global `[-0.000262, 0.002396]`）。这不是技术失败，也不是 latent 方法的
-最终 No-Go；它只说明低功效 pilot 尚未证明稳定的逐通道 Receiver 使用。下一步必须运行
-sealed 的 40-cluster outer semantic confirmation（共同 3 seeds），并继续禁止 caption
-quality 结论、DPO 和 preference learning。
+最终 No-Go；它只说明低功效 pilot 尚未证明稳定的逐通道 Receiver 使用。A3 的旧 outer
+baseline 可以在 clean commit 后作为历史对照重提，但不能代替新的 A4 protocol；当前
+仍继续禁止 caption quality 结论、DPO 和 preference learning。
+
+### Phase A4：channel-isolated functional semantic pilot（已完成）
+
+A4 使用 `configs/pilot/cross_attention_semantic_phase_a4.yaml`，仍只训练 bridge、冻结
+7B receiver，且关闭 semantic-recovery 图像输入。每次只启用目标 channel，并加入 donor-side
+reconstruction；这些是本项目的因果诊断扩展，不是 HOMER 原方法。作业 `6711109` 完成
+5 epochs/80 optimizer steps，`complete.json` 为 `status=complete`，工程 gate 通过，
+但 semantic gate 为 `pilot_inconclusive`。
+
+| 指标 | A4 validation |
+|---|---:|
+| overall matched−counterfactual log-probability gap | 0.0064997 |
+| conflict / local / global gap | 0.0088532 / 0.0051597 / 0.0054863 |
+| conflict / local / global bootstrap 95% CI | [-0.0078013, 0.0270501] / [0.0014195, 0.0093984] / [0.0003536, 0.0114575] |
+| InfoNCE retrieval@1（overall） | 0.5625 |
+| mean relative update norm | 0.02503 |
+
+因此 A4 只能证明当前实现完成了可运行的 target-only/donor-reconstruction 机制 pilot；
+它没有证明稳定的 channel-causal use，更没有产生 caption 质量、latent-vs-text 或
+偏好学习结果。A4 checkpoint 不得直接进入 caption；下一步必须先重写独立的 A4 outer
+evaluator，并补上按 channel token length 匹配 donor、zero-bridge control 和预注册的
+cluster-level 统计规则。旧的 A3 outer 脚本不能冒充 A4 evaluator。
+
+注意：`outputs/pilot_validation/` 中已有的 `text_homer`、`learned_kl`、`typed_kl` 等
+caption 文件是在旧的 visual-caption pilot（commit `cdcfbbd...`）下生成的，不是 A4
+修订方法的结果。它们没有通过 A4 semantic gate，也缺少当前要求的完整 checkpoint/
+evaluator provenance；其中 `token_embedding`、`statebridge` 和 `typed_quantized` 还出现
+了空输出或乱码。故本轮不计算其 `good-caption rate`，不把这些文件用于比较，也不把
+已有 880 个 Group-of-3 packet 写成新方法的盲评证据。必须在 A4 outer 通过后，使用新
+checkpoint、新 output 目录和完整 manifest 重新生成 caption，再交给盲评。
 
 ### Phase A3 的验证协议与样本量定位
 
@@ -416,7 +455,7 @@ confirmation 通过后才可提交。每个仅 64 train clusters、24 validation
 
 ## 8. 生成与盲评
 
-主质量评测：121 张 adapter-unseen 图片、10 个共同 generation seeds、每条件 Group-of-10。它对齐 Humor in AI 的候选组规模；Group-of-3 仅作为历史敏感性分析，不承担主结论。每个比较生成 A/B 镜像方向，组内候选顺序独立随机化。评审必须支持看图，记录 provider/model/version/temperature/prompt hash。用 `build_judge_calibration.py` 从非 test 的官方 crowd ranking 构造五个清晰偏好示例；它复现官方 5-shot 校准思想，但不是论文每个测试项随机配五对的逐样本实现。本项目的 `Tie` 与绝对标签也属于额外扩展，因此应表述为“paper-aligned adaptation”，不能声称逐行复现官方 judge。
+主质量评测：121 张 adapter-unseen 图片、10 个共同 generation seeds、每条件 Group-of-10。候选数量参考 Humor in AI 官方仓库中公开的 10-caption 生成/排序资产，但 Group-of-10、镜像 A/B、绝对标签并非该论文的逐行复现；Group-of-3 仅作为历史敏感性分析，不承担主结论。每个比较生成 A/B 镜像方向，组内候选顺序独立随机化。评审必须支持看图，记录 provider/model/version/temperature/prompt hash。用 `build_judge_calibration.py` 从非 test 的官方 crowd ranking 构造五个清晰偏好示例；它复现官方 5-shot 校准思想，但不是论文每个测试项随机配五对的逐样本实现。本项目的 `Tie` 与绝对标签也属于额外扩展，因此应表述为“paper-aligned adaptation”，不能声称逐行复现官方 judge。
 
 A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必须先在每个 `rater × image × comparison` 内折叠镜像方向；否则会人为扩大样本量并污染 rater agreement。
 
@@ -484,10 +523,14 @@ A/B 镜像只用于诊断位置偏差，不是两个独立观测。统计前必�
 - v2 post-fix GPU smoke：作业 6688566 已通过；冻结 policy trainable params=0，bridge params=2,820,804，InfoNCE=0.7612，smoke retrieval@1=0.5，gradient/update finite，峰值显存约 11.82 GB。该数值只证明训练路径执行，不能作为泛化结果；
 - Hierarchical Phase A v2：作业 6688689 已完成并判定为**当前配置的操作性 No-Go**。validation NLL 从 1.1196 降至 0.6326，但 matched-minus-shuffled gap 仅 0.002664（工程 gate 0.02），`gap>0.2` 的比例为 0；conflict channel 权重从约 0.315 降至 0.0289。它说明当前 loss/router 没有形成足够的 plan 条件依赖，不得外推为“latent 方法失败”；
 - v2 报告的 validation retrieval@1=0.190476 不可作为正式结论：实现错误地把同一 cluster 的 3/6 条 caption 行当作互为 negatives。未来已修正为每个 image cluster 只取一条 representation。该数值既不能支持也不能反对 v2；
-- caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来绕过语义门。下一项只允许上述 Phase A3：通道平衡 reconstruction、channel-wise contextual InfoNCE、单通道 counterfactual、固定等权 gate；若 conflict 仍不过门，则进入预注册的 `C-text + A-latent`；
+- caption bridge 继续禁止。不得通过增加 epoch 或扩为 602 条来绕过语义门。A3 已完成，A4
+  也已完成但为 `pilot_inconclusive`；下一项只允许修正 A4 outer evaluator、channel-length
+  donor 与 zero-bridge control，不能直接进入 `C-text + A-latent`；
 - Phase A3 已实现并通过 CPU suite；配置为 `configs/pilot/cross_attention_semantic_phase_a3.yaml`。真实双样本 GPU smoke 首次作业 `6689653` 因 `electronic_sheep:325:0` 的 `492 > 384` token 上限配置错误退出；配置提高到 `768` 后，replacement smoke `6706516` 已在完整 H100 上通过 validator，未截断完整 HOMER chain；
 - A3 replacement smoke 已通过冻结参数、真实两 cluster、逐通道 counterfactual、contextual InfoNCE、有限梯度与实际 update 门禁；随后 formal A3 job `6707953` 已在 b-batch 单张完整 H100 上以 exit code 0 完成 5 epoch/80 steps。其工程 gate 通过但 semantic gate 为 `pilot_inconclusive`，不得把 validation NLL/retrieval 的改善写成 caption 质量收益；
-- Formal A3 的逐轮 checkpoint、validation JSONL、`complete.json`、`semantic_gate.json`、preflight 和 job stats 均已保留。下一步只允许对剩余 40 个 outer semantic clusters 做 sealed confirmation（共同 3 seeds）；在该 gate 之前不得启动 caption bridge、DPO 或任何 preference job；
+- Formal A3 与 A4 的逐轮 checkpoint、validation JSONL、`complete.json`、`semantic_gate.json`、
+  preflight 和 job stats 均已保留。A3 的旧 outer 结果尚不存在，A4 的新 outer evaluator
+  尚未提交；在该 A4 gate 之前不得启动 caption bridge、DPO 或任何 preference job；
 - pilot 真实生成评估：训练后自动生成 packet，但必须由独立评审完成才允许放大；
 - preference learning/DPO：属于旧方案，在 v3.5 latent gate 通过前禁用。
 
@@ -526,12 +569,12 @@ smoke/formal 脚本统一使用 `b-batch + node=1`，不再写显式 `gpu` 或
 资源类型冲突，不改变模型、数据或语义实验设计；smoke 通过后才允许提交 40-cluster
 outer confirmation。
 
-smoke 通过后已提交正式 40-cluster outer confirmation `6708118`，同样使用
-`b-batch + node=1` 的节点独占模式（调度统计为 `simplex=true,gpu=4`），walltime
-为 1 小时；当前调度器预计启动时间为 `2026-09-05 12:00 JST`。该等待是长时段
-simplex 资源预约造成的，不是代码或方法失败；不得为缩短等待改回 MIG（已有
-allocator 故障记录）或未经确认改用共享 GPU。正式作业开始后仍需以其自身的
-`check_cuda_resource.py` 输出确认单卡 H100，再解释 outer 结果。
+随后提交的旧 A3 40-cluster outer confirmation `6708118` 在实际 forward 前因
+tracked worktree dirty 被 preflight 拒绝，因此没有 outer 结果；它不能被当作 A4
+confirmation。A4 `6711109` 已完成但 gate 仍为 `pilot_inconclusive`。下一次 outer
+confirmation 必须使用独立的 A4 evaluator、新输出目录和 clean provenance。不得为
+缩短等待改回 MIG（已有 allocator 故障记录）或未经确认改用共享 GPU；正式作业仍须
+由自身的 `check_cuda_resource.py` 确认设备后才解释数值。
 
 ## 14. 权威参考
 

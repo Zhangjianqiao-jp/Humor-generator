@@ -209,6 +209,26 @@ def test_a4_formal_job_is_strict_and_reads_its_own_gate() -> None:
     assert job.index("train_bridge.py") < job.index("check_semantic_training_gate.py")
 
 
+def test_a4_outer_evaluator_is_independent_and_fail_closed() -> None:
+    evaluator = (ROOT / "scripts/run_outer_semantic_confirmation_a4.py").read_text()
+    validator = (ROOT / "scripts/validate_outer_semantic_confirmation_a4.py").read_text()
+    job = (ROOT / "jobs/outer_semantic_confirmation_a4.pjm").read_text()
+    smoke = (ROOT / "jobs/outer_semantic_confirmation_a4_smoke.pjm").read_text()
+    assert "channel_isolated_v4" in evaluator
+    assert "active = (channel,)" in evaluator
+    assert '"zero_bridge_gap": 0.0' in evaluator
+    assert "length_matched_channel_donors" in evaluator
+    assert "target_only" in validator
+    assert "zero_bridge_included" in validator
+    assert "cross_attention_semantic_phase_a4.yaml" in job
+    assert "cross_attention_semantic_phase_a4_cbatch_retry1" in job
+    assert "--seeds 20260830 20260831 20260832" in job
+    assert "--max-clusters 2" in smoke
+    assert "PYTORCH_ALLOC_CONF=backend:native" in job
+    assert "#PJM -L node=1" in job
+    assert "#PJM -L gpu=1" not in job
+
+
 def test_dataset_audit_checks_every_byte_level_dependency() -> None:
     audit = (ROOT / "scripts/audit_dataset_records.py").read_text()
     for contract in (

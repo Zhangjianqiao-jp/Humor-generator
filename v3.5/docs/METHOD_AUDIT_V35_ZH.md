@@ -1,5 +1,7 @@
 # v3.5 方法审计与修正记录
 
+> 本文件保留历史审计内容；当前逐项证据、引用和“已运行/未运行”状态以 [`METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md) 为准。A4 已于 2026-09-04 完成 5 epochs/80 steps，但 gate 为 `pilot_inconclusive`；因此下游 caption 与 preference learning 仍未解锁。
+
 ## 结论
 
 v3.5 当前是一个可检验的 bridge-only latent 实验，而不是“latent 必然更好”的展示工程。基础真实 GPU engineering smoke 已通过；A3 replacement smoke 首次作业 `6689653` 因 target-token 配置错误在 forward/backward 前退出，修正上限后 replacement `6706516` 已通过真实双样本 validator。该结果只关闭工程门禁，仍没有 A3 training artifact 或 held-out 模型收益；不能启动 preference learning。

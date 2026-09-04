@@ -5,6 +5,10 @@ frozen 7B HOMER-style Planner can communicate conflict and associative
 imagination to a frozen image-conditioned 7B Generator more effectively in
 continuous states than in text. It never imports or executes v2.5/v3.0 code.
 
+Every method claim is classified as implemented, literature-supported but
+adapted, project-specific, or not yet run in
+[`docs/METHOD_CITATION_EVIDENCE_ZH.md`](docs/METHOD_CITATION_EVIDENCE_ZH.md).
+
 ## Scientific scope
 
 Two systems are deliberately separated:
@@ -65,24 +69,24 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.5
 .venv/bin/python scripts/verify_clustered_dataset.py
 ```
 
-The original real-trace GPU engineering smoke passed. The first Phase A3
+The original real-trace GPU engineering smoke passed. Phase A3 and the
+channel-isolated A4 semantic-recovery pilot have completed with bridge-only
+updates and both 7B policies frozen. A4 is `pilot_inconclusive`, not a latent
+success or failure: it has no caption-quality result. The next executable step
+is a corrected A4 outer evaluator with length-matched donors and a zero-bridge
+control; caption pilots remain locked until that semantic gate is passed.
+
+The first Phase A3
 replacement smoke (`6689653`) stopped before forward/backward because a valid
 492-token HOMER target exceeded the old 384-token bound; after raising the bound
-to 768, replacement smoke `6706516` passed on a full H100. This closes the
-engineering gate but is not a scientific semantic result. The first executable
-training stage is therefore the channel-balanced Phase A3 semantic-recovery
-pilot: 64 train clusters, 24 validation clusters, bridge-only updates, and both
-7B policies frozen. Only after that pilot and the 40-cluster outer semantic
-confirmation pass may the three caption-level pilots (Learned+KL, Typed+KL,
-Typed without KL) be unlocked. Group-of-3 remains screening-only and Group-of-10
-is the confirmatory endpoint. Preference learning/DPO belongs to the superseded
-v2.5 plan and is disabled in v3.5; it cannot be used to rescue an unproven
-communication mechanism.
+to 768, replacement smoke `6706516` passed on a full H100. This historical smoke
+record closes only an engineering gate, not a scientific semantic result.
 
 ## Evaluation
 
-The primary evaluation uses Group-of-10, matching the scale of the NeurIPS
-2024 Humor-in-AI benchmark; Group-of-3 is retained only as a legacy sensitivity
+The primary evaluation uses Group-of-10, referencing the ten-caption groups
+exposed by the NeurIPS 2024 Humor-in-AI assets; it is not a claim of exact
+protocol reproduction. Group-of-3 is retained only as a legacy sensitivity
 analysis. Formal packets use both A/B orientations, randomize caption order,
 and keep primary and mechanistic comparisons in separate correction families. Reports
 include overall win rate, best-pick win rate, candidate `good/weak/bad`, seed
