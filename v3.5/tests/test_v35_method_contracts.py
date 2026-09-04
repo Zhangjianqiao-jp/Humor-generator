@@ -255,6 +255,8 @@ def test_a5_repair_and_caption_jobs_are_sequentially_fail_closed() -> None:
     assert "validate_test_trace_cache.py" in traces
     assert "--max-clusters 2" in outer
     assert "--expected-clusters 121" in outer
+    assert "--donor-trace-index" in outer
+    assert "planner_traces_homer_strict_v35/index.jsonl" in outer
     assert "outer_semantic_go" in caption
     assert "--group-size 10" in caption
     for job in (train, traces, outer, caption):
