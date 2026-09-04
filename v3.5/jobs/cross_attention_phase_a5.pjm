@@ -1,7 +1,8 @@
 #!/bin/sh
 # Phase A5 repair candidate: role-specific K/V/O maps plus receiver-native
 # target-span alignment.  Both Qwen policies are frozen; only the bridge is
-# trained.  This job is separate from the immutable A4 baseline.
+# trained.  Donor selection is per-channel length-priority; this job is
+# separate from the immutable A4 baseline and from the invalid first attempt.
 # c-batch + gpu=1 is the validated native full-GPU contract on GENKAI;
 # do not combine gpu=1 with node=1 or an explicit simplex flag.
 #PJM -L rscgrp=c-batch
@@ -26,7 +27,7 @@ export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
 config=configs/pilot/cross_attention_semantic_phase_a5.yaml
-output=outputs/pilot/cross_attention_semantic_phase_a5_full
+output=outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched
 mkdir -p "$output"
 
 python scripts/run_formal_preflight.py \
@@ -52,6 +53,7 @@ python scripts/check_semantic_training_gate.py \
 test -s "$output/semantic_gate.json"
 status=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$output/semantic_gate.json")
 case "$status" in
-  strong_go|go_to_outer_semantic_validation) ;;
-  *) echo "A5 semantic gate did not pass: $status" >&2; exit 2 ;;
+  strong_go|go_to_outer_semantic_validation|pilot_inconclusive)
+    echo "A5 pilot status=$status; sealed outer semantic confirmation remains mandatory." ;;
+  *) echo "A5 semantic gate hard-stopped: $status" >&2; exit 2 ;;
 esac

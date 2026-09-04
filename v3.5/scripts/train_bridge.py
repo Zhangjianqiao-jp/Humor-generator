@@ -24,6 +24,7 @@ from humor_generator_v35.training.formal_bridge import (
     FrozenReceiverBridgeTask,
     cluster_balanced_rows,
     hard_negative_cluster_map,
+    length_matched_channel_donors,
     load_trace_index,
     mean_metrics,
     prepare_example,
@@ -168,10 +169,29 @@ def main() -> None:
     if missing:
         raise RuntimeError(f"Planner traces missing for {len(missing)} clusters; first={missing[:5]}")
 
-    train_shuffle, train_negative_diagnostics = hard_negative_cluster_map(train_rows, traces)
-    validation_shuffle, validation_negative_diagnostics = hard_negative_cluster_map(
-        validation_rows, traces
+    semantic_channel_training = (
+        baseline == "receiver_cross_attention"
+        and str(config["training"].get("stage")) == "semantic_reconstruction"
+        and str(config["loss"].get("semantic_objective"))
+        in {"channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"}
     )
+    if semantic_channel_training:
+        # A semantic counterfactual must not conflate content replacement with
+        # a different attention denominator.  Training targets may draw a
+        # donor from the same split, but the target cluster is excluded from
+        # its own candidate list; validation donors remain train-only.
+        train_shuffle, train_negative_diagnostics = length_matched_channel_donors(
+            train_rows, train_rows, root=ROOT, trace_index=traces,
+            allow_target_donor_overlap=True,
+        )
+        validation_shuffle, validation_negative_diagnostics = length_matched_channel_donors(
+            validation_rows, train_rows, root=ROOT, trace_index=traces,
+        )
+    else:
+        train_shuffle, train_negative_diagnostics = hard_negative_cluster_map(train_rows, traces)
+        validation_shuffle, validation_negative_diagnostics = hard_negative_cluster_map(
+            validation_rows, traces
+        )
     if baseline == "receiver_cross_attention":
         task = ReceiverCrossAttentionTask(
             backend, bridge, root=ROOT, trace_index=traces,
@@ -233,9 +253,14 @@ def main() -> None:
         "use_cache": freeze_report.use_cache,
         "min_visual_tokens": int(config["model"]["min_visual_tokens"]),
         "max_visual_tokens": int(config["model"]["max_visual_tokens"]),
-        "negative_policy": "description_tfidf_nearest_same-source_different-conflict",
+        "negative_policy": (
+            "different_conflict_length_priority_per_channel_same_source_tfidf"
+            if semantic_channel_training
+            else "description_tfidf_nearest_same-source_different-conflict"
+        ),
         "train_negative_diagnostics": train_negative_diagnostics,
         "validation_negative_diagnostics": validation_negative_diagnostics,
+        "channel_length_matching": semantic_channel_training,
         "train_clusters": len({row["cluster_id"] for row in train_rows}),
         "validation_clusters": len({row["cluster_id"] for row in validation_rows}),
         "train_cluster_ids": sorted({row["cluster_id"] for row in train_rows}),
@@ -274,6 +299,27 @@ def main() -> None:
         ).hexdigest(),
     }
     (args.output / "run_manifest.json").write_text(json.dumps(run_manifest, indent=2) + "\n")
+
+    if semantic_channel_training:
+        donor_manifest = {
+            "schema_version": 1,
+            "policy": "different_conflict_length_priority_per_channel_same_source_tfidf",
+            "training": train_shuffle,
+            "validation": validation_shuffle,
+            "training_diagnostics": train_negative_diagnostics,
+            "validation_diagnostics": validation_negative_diagnostics,
+        }
+        (args.output / "channel_donors.json").write_text(
+            json.dumps(donor_manifest, ensure_ascii=False, indent=2) + "\n"
+        )
+        run_manifest.update({
+            "channel_donor_manifest": "channel_donors.json",
+            "channel_donor_manifest_sha256": sha256(args.output / "channel_donors.json"),
+            "channel_donor_policy": donor_manifest["policy"],
+        })
+        (args.output / "run_manifest.json").write_text(
+            json.dumps(run_manifest, indent=2) + "\n"
+        )
 
     best = float(resume_state.get("best_validation_total", float("inf"))) if resume_state else float("inf")
     stale = int(resume_state.get("stale_epochs", 0)) if resume_state else 0
@@ -328,11 +374,18 @@ def main() -> None:
                 json.dumps(current, indent=2) + "\n"
             )
             print(json.dumps(current), flush=True)
-            metrics = task.backward_example(
-                example,
-                train_shuffle[row["cluster_id"]],
-                loss_scale=1.0 / window_size,
-            )
+            if semantic_channel_training:
+                metrics = task.backward_example(
+                    example,
+                    shuffled_clusters=train_shuffle[row["cluster_id"]],
+                    loss_scale=1.0 / window_size,
+                )
+            else:
+                metrics = task.backward_example(
+                    example,
+                    train_shuffle[row["cluster_id"]],
+                    loss_scale=1.0 / window_size,
+                )
             if info_nce_weight > 0:
                 if not isinstance(task, ReceiverCrossAttentionTask):
                     raise RuntimeError("InfoNCE is currently defined for receiver cross-attention only")
@@ -418,9 +471,16 @@ def main() -> None:
         validation_by_cluster: dict[str, list[dict[str, float]]] = {}
         for row in validation_rows:
             example = prepare_example(row, traces[row["cluster_id"]], seed=seed)
-            validation_by_cluster.setdefault(row["cluster_id"], []).append(task.evaluate_example(
-                example, validation_shuffle[row["cluster_id"]]
-            ))
+            if semantic_channel_training:
+                evaluated = task.evaluate_example(
+                    example,
+                    shuffled_clusters=validation_shuffle[row["cluster_id"]],
+                )
+            else:
+                evaluated = task.evaluate_example(
+                    example, validation_shuffle[row["cluster_id"]]
+                )
+            validation_by_cluster.setdefault(row["cluster_id"], []).append(evaluated)
         validation_metrics = [
             mean_metrics(validation_by_cluster[cluster])
             for cluster in sorted(validation_by_cluster)

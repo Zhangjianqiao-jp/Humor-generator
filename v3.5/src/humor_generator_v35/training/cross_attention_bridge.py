@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import torch
 from torch.nn import functional as F
@@ -553,16 +553,29 @@ class ReceiverCrossAttentionTask:
             },
         }
 
-    def backward_example(self, example: PreparedExample, shuffled_cluster: str, *,
-                         loss_scale: float = 1.0) -> dict[str, float]:
+    def backward_example(
+        self,
+        example: PreparedExample,
+        shuffled_cluster: str | None = None,
+        *,
+        shuffled_clusters: Mapping[str, str] | None = None,
+        loss_scale: float = 1.0,
+    ) -> dict[str, float]:
         if self.stage == "semantic_reconstruction" and self.semantic_objective in {
             "channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"
         }:
+            if shuffled_clusters is None and shuffled_cluster is None:
+                raise ValueError("semantic backward requires a channel donor mapping")
             results = []
             for channel in TypedLatentBridge.channel_order:
                 prepared = self.prepare_semantic_channel(example, channel)
+                donor = (
+                    shuffled_clusters[channel]
+                    if shuffled_clusters is not None
+                    else shuffled_cluster
+                )
                 results.append(self._forward_channel_metrics(
-                    example, prepared, shuffled_cluster, channel=channel, backward=True,
+                    example, prepared, donor, channel=channel, backward=True,
                     loss_scale=loss_scale / len(TypedLatentBridge.channel_order),
                 ))
             summary = mean_metrics(results)
@@ -575,14 +588,27 @@ class ReceiverCrossAttentionTask:
         )
 
     @torch.no_grad()
-    def evaluate_example(self, example: PreparedExample,
-                         shuffled_cluster: str) -> dict[str, float]:
+    def evaluate_example(
+        self,
+        example: PreparedExample,
+        shuffled_cluster: str | None = None,
+        *,
+        shuffled_clusters: Mapping[str, str] | None = None,
+    ) -> dict[str, float]:
         if self.stage == "semantic_reconstruction" and self.semantic_objective in {
             "channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"
         }:
+            if shuffled_clusters is None and shuffled_cluster is None:
+                raise ValueError("semantic evaluation requires a channel donor mapping")
             results = [
                 self._forward_channel_metrics(
-                    example, self.prepare_semantic_channel(example, channel), shuffled_cluster,
+                    example,
+                    self.prepare_semantic_channel(example, channel),
+                    (
+                        shuffled_clusters[channel]
+                        if shuffled_clusters is not None
+                        else shuffled_cluster
+                    ),
                     channel=channel, backward=False,
                 )
                 for channel in TypedLatentBridge.channel_order
