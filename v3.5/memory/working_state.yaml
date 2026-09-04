@@ -1,9 +1,9 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-04T17:18:20+09:00"
+observed_at: "2026-09-04T17:23:15+09:00"
 must_revalidate: true
-source_commit: 1a114ec792e21ad41e736b10cad17d2dfc7f8883
+source_commit: bc495c672c9a32b490b26c577958334e69f81177
 branch: latent
 
 current_phase: a4_channel_isolated_implementation_pre_gpu_smoke
@@ -155,7 +155,7 @@ a4_channel_isolated_repair:
 
 current_gate:
   name: phase_a4_channel_isolated_real_trace_smoke
-  status: implementation_complete_waiting_clean_commit
+  status: replacement_required_after_monitoring_termination
   job_id: null
   config: configs/pilot/cross_attention_semantic_phase_a4.yaml
   job_script: jobs/cross_attention_phase_a4_smoke.pjm
@@ -166,7 +166,9 @@ current_gate:
     - target-only one-hot channel visibility for conflict/local/global
     - donor-side counterfactual reconstruction path is finite and executed
     - finite loss/gradient/update and policy trainable params equal zero
-    - results/engineering_smoke/cross_attention_semantic_phase_a4/report.json passes validator
+    - results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/report.json passes validator
+  failed_attempt_id: "6711036"
+  failed_attempt_status: terminated_by_monitoring_error_no_scientific_output
   on_pass: a4_bridge_only_64_train_24_validation_is_unlocked
   on_failure: preserve_log_and_update_docs_before_any_retry
 
@@ -221,7 +223,7 @@ program_risk_audit:
     provenance preflight because the tracked worktree was dirty.
 
 immediate_gate:
-  action: clean_commit_then_a4_real_trace_smoke_before_formal_training
+  action: amend_clean_commit_then_resubmit_a4_real_trace_smoke_before_formal_training
   prerequisite_job_id: "6707953"
   prerequisite_status: a3_pilot_inconclusive_with_engineering_pass
   smoke_job_id: null
@@ -232,8 +234,8 @@ immediate_gate:
   required_resource: one_full_gpu_native_allocator_cuda0
   smoke_requested_elapse_seconds: 1200
   scheduler_estimated_start: null
-  preflight: results/engineering_smoke/cross_attention_semantic_phase_a4/preflight.json
-  output: results/engineering_smoke/cross_attention_semantic_phase_a4
+  preflight: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/preflight.json
+  output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
   script: scripts/real_trace_bridge_smoke.py
   design:
     clusters: 2
@@ -246,7 +248,7 @@ immediate_gate:
     - Keep checkpoint, Planner, Generator, prompt and trace hashes fixed.
     - Exercise target-only one-hot masks without NaN in inactive attention arms.
     - Exercise donor reconstruction and finite bridge update.
-  status: pending_clean_commit
+  status: pending_replacement_clean_commit
   resource_request_note: >-
     GENKAI rejects node=1+gpu=1 and gpu=1+exec-policy=simplex. A node-allocated
     b-batch job is inherently simplex/node-exclusive and receives the node GPU
@@ -254,7 +256,7 @@ immediate_gate:
   validator: results/engineering_smoke/cross_attention_semantic_phase_a4/validation_contract.json
   smoke_exit_code: null
   smoke_elapsed_seconds: null
-  next_action: commit_then_submit_a4_smoke
+  next_action: amend_commit_then_submit_replacement_a4_smoke
   formal_job_id: null
   formal_status: not_submitted
   formal_scheduler_estimated_start: null
@@ -286,6 +288,8 @@ next_agent_actions:
   - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
   - A3 replacement smoke 6706516 and formal A3 6707953 passed engineering checks; do not rerun them unless code/config changes.
   - A4 smoke has not been submitted until the tracked worktree is clean; use only the new A4 job.
+  - Replacement smoke output must remain separate from terminated job 6711036.
+  - Never issue pjdel while pjstat is transiently empty; inspect pjstat -H and .stats terminal fields first.
   - Do not treat the historical outer smoke 6708113 as an A4 gate; it used the A3 protocol.
   - Preserve outer job 6708118 as an engineering/provenance failure; do not interpret it as a latent result.
   - Review and commit intended tracked changes before any formal resubmission; never use --allow-dirty.

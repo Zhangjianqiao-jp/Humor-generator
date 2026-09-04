@@ -23,8 +23,9 @@ export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
+# Retry output is intentionally distinct from the terminated 6711036 attempt.
 config=configs/pilot/cross_attention_semantic_phase_a4.yaml
-output=results/engineering_smoke/cross_attention_semantic_phase_a4
+output=results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
 mkdir -p "$output"
 
 python scripts/run_formal_preflight.py --output "$output/preflight.json"

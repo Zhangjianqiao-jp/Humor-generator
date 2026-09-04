@@ -32,6 +32,18 @@
 此事件使 outer A3 baseline 暂停，A4 channel-isolated pilot 也必须等 clean commit 后
 再提交。
 
+## V35-ENG-004（2026-09-04）：A4 smoke 被监控命令提前终止
+
+A4 real-trace smoke `6711036` 在 `genkai0002` 上启动，并在 preflight 仍运行时被发出
+`pjdel`，PJM 记录 signal 15、使用 62 秒；输出为空，A4 smoke 目录没有 report 或
+validator。触发原因是监控时 `pjstat` 暂时没有当前行，被误判为作业已结束。这是操作/监控
+工程错误，不是 CUDA、OOM、数据缺损或 latent 方法结果。
+
+保留 `.out/.stats` 作为证据；不得把该作业视为通过或失败的科学实验。修复规则是：
+`pjstat` 暂时无行时先用 `pjstat -H` 和 `.stats` 确认终态，不得直接 `pjdel`；替代 smoke
+必须使用新 output 目录，在同一 clean commit 上重新执行 preflight、真实 forward/backward、
+target-only one-hot mask 和 donor reconstruction validator。
+
 1. `cross_attention_semantic_v1` 是方法级 No-Go，不是运行失败。其 reconstruction
    NLL 明显下降，但 validation matched-minus-shuffled gap 只有 `0.004843`，低于
    `0.02` gate，且 `fraction_gap_gt_margin=0`。
