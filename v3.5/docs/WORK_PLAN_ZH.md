@@ -133,8 +133,11 @@ GPU 数量，已取消该 queued copy，改用内容完全相同的
 `jobs/cache_test_planner_traces_retry2.pjm`：仍使用同一 image manifest、Qwen revision、
 HOMER prompt、validator-feedback repair 和 provenance，只把 residual cluster 的随机
 尝试上限从 8 提到 16；成功记录由脚本跳过，失败记录仍会使 validator fail-closed。直到
-`test_planner_trace_validation_retry2.json` 报告 `121/121` 且 `status=pass`，A5 outer 和
-caption 作业均不得使用 sealed test。
+`test_planner_trace_validation_retry2.json` 报告 `119/121`（`nycc_323/394` 仍失败），故
+又注册 `jobs/cache_test_planner_traces_retry3.pjm`：只对这两个 residual cluster 进行最多
+32 次同协议采样。若 retry3 仍不能得到严格、可 replay 的 JSON，正式结论必须保留为
+`data gate blocked`，不得人工补写或放宽 schema；只有 `test_planner_trace_validation_retry3.json`
+报告 `121/121` 且 `status=pass`，A5 outer 和 caption 作业才可使用 sealed test。
 
 当前适用文献依据：BLIP-2 (Li et al., 2023)、HistAlign (Wan et al., EMNLP 2023)、
 Flamingo (Alayrac et al., NeurIPS 2022)、Multi-Source Attention (Libovický & Helcl,

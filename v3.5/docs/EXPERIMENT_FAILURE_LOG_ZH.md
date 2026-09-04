@@ -199,7 +199,20 @@ Qwen2.5-VL-7B revision、Planner SFT adapter、HOMER prompt 和 validator-feedba
 prompt/model/manifest。若第二轮仍失败，必须继续 fail-closed，重新设计受约束的生成/修复
 协议后再试，禁止用人工补写或放宽 schema 伪造 `121/121`。
 
+## V35-ENG-010（2026-09-05）：retry2 后仍有两个不可无损修复的 Planner association 输出
+
+retry2 已把 sealed cache 补到 `119/121`，但 `nycc_323` 仍输出嵌套 association 数组，
+`nycc_394` 仍输出多键 mapping 列表。严格 validator 报告缺少可 replay 的三步链；从这些
+结构无法在不增删或重排语义的前提下推断唯一合法 JSON，因此没有采用人工重写或放宽
+schema。该事件仍属于 **data/provenance completeness**，不构成 latent 方法失败。
+
+已注册 `jobs/cache_test_planner_traces_retry3.pjm`，只对这两个 cluster 使用相同
+manifest、model revision、HOMER base prompt 和 repair policy，最多 32 次尝试。若仍失败，
+必须停在 `data gate blocked`，另立“受约束 Planner serialization”实验后再继续；不得用
+不完整 cache 运行 outer 或 caption。
+
 ## 权威依据
+
 
 1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o
 2. He et al., MoCo, CVPR 2020: https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
