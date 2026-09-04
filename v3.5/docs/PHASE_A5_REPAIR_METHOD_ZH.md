@@ -91,8 +91,9 @@ matched/shuffled causal gap。
 4. Outer 以 image-cluster 为统计单位、3 seeds，报告每 channel gap、每图正 gap 比例、
    donor 长度差相关与 bootstrap CI。只有三个 channel 的点阈值和 CI 都通过，才解锁 caption。
 5. Caption 阶段固定同一模型 revision、SFT adapter、HOMER planner traces；每图每条件
-   10 个 generation seeds，Text-HOMER 与 A5 latent 做 mirrored Group-of-10。结果需经
-   独立多评审盲评，再按 image cluster bootstrap；不能用语义 gap 代替“真正好笑”。
+   10 个 generation seeds，同时生成 Text-HOMER、full-plan text（公平文本条件）与
+   A5 latent，做 mirrored Group-of-10。结果需经独立多评审盲评，再按 image cluster
+   bootstrap；不能用语义 gap 代替“真正好笑”。
 
 ## 限制
 
