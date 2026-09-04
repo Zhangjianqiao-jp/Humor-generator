@@ -715,3 +715,37 @@ validator 通过，但 gate 为 `outer_semantic_inconclusive`；因此当前仍�
 15. Graham et al. Statistical Power and Translationese in Machine Translation Evaluation. EMNLP 2020. https://aclanthology.org/2020.emnlp-main.6/
 16. Howcroft and Rieser. What happens if you treat ordinal ratings as interval data? EMNLP 2021. https://aclanthology.org/2021.emnlp-main.703/
 17. Koehn. Statistical Significance Tests for Machine Translation Evaluation. EMNLP 2004. https://aclanthology.org/W04-3250/
+
+## 15. 当前执行状态（2026-09-05）
+
+- A4 的 outer 结果仍只说明 local/grounding gap=`0.0049407572`、global/association
+  gap=`0.0032089539` 未达到预注册 `0.01`，不能作为 latent 方法已失败的充分证据。
+- A5 修正版采用逐 channel 长度优先 donor、per-channel K/V/O、target-only mask、
+  receiver-native contextual alignment、实际调用 InfoNCE 和 fixed-equal fusion；两套
+  7B policy 冻结，只更新 bridge。精确方法与引用见 `PHASE_A5_REPAIR_METHOD_ZH.md`。
+- sealed held-out Planner trace 的 validator-repair 已完成第三轮有界重试：
+  `121/121` records、`missing=0`、`failure_records=0`，验证文件为
+  `outputs/preflight/test_planner_trace_validation_retry3.json`。所有输出均保持
+  原始 hash/provenance，未人工改写语义。
+- 当前 A5 canonical 输出目录曾被取消作业 `6712281` 留下空目录，重跑 `6712296` 因
+  provenance guard 正确拒绝；空目录已可恢复地隔离为
+  `outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched_canceled_6712281_empty`，
+  事件记录为 `V35-ENG-011`。下一次提交不得复用部分/空输出，也不得删除历史证据。
+- `a5_pre_submit_20260905_0207.json` 在 clean commit `d275122` 上通过完整 preflight。
+  canonical 目录清空后，才允许按已验证的 c-batch node-exclusive 资源契约重新提交
+  A5；A5 semantic gate 通过后才可运行 sealed outer，outer gate 通过后才可生成 caption。
+- 禁止提前把 bridge 的 semantic gap 当作好笑 caption 提升。最终需要共同 seeds、
+  image-clustered bootstrap 和独立 Group-of-10 盲评；`good / weak / bad` 绝对标签与
+  相对 win-rate 必须分开报告。没有实际 judge packet 结果时，不得填写 good-caption rate。
+
+### 15.1 本轮执行顺序
+
+```text
+121/121 trace gate (pass)
+→ clean preflight (pass)
+→ A5 bridge-only training (pending)
+→ A5 semantic gate (mandatory)
+→ sealed outer semantic confirmation (mandatory)
+→ Text-HOMER / full-plan-text / A5 latent caption generation
+→ Group-of-3 pilot screening, then Group-of-10 mirrored multi-rater evaluation
+```

@@ -213,6 +213,17 @@ manifest、model revision、HOMER base prompt 和 repair policy，最多 32 次�
 
 ## 权威依据
 
+## V35-ENG-011（2026-09-05）：A5 重跑被残留空输出目录保护性拒绝
+
+提交 A5 修正版作业 `6712296` 后，作业在任何模型加载或 GPU forward 之前退出，日志为
+`refusing to reuse A5 output directory`。此前被取消的 `6712281` 只留下了一个空目录，
+没有 checkpoint、metrics 或科学输出；因此该事件不提供方法、模型或 GPU 结论。
+
+这是 provenance guard 的预期行为，不是新的 latent 失败。空目录已移动为
+`outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched_canceled_6712281_empty`，
+没有删除历史证据。正式重跑必须确认 canonical 输出路径不存在，再使用同一已通过
+preflight 的 A5 脚本；这次拒绝已写入 `docs/EXPERIMENT_FAILURES.jsonl`。
+
 
 1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o
 2. He et al., MoCo, CVPR 2020: https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
