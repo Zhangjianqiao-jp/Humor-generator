@@ -235,6 +235,16 @@ forward 之前，`real_trace_bridge_smoke.py` 在 donor-policy 分支读取了�
 并加入静态回归测试；`V35-ENG-012` 已记录在 `EXPERIMENT_FAILURES.jsonl`。修复后必须
 重新通过 `.venv` compile/pytest、真实两 cluster smoke，再提交新的 A5 canonical 输出。
 
+## V35-ENG-013（2026-09-05）：重复 A5 提交被提前取消
+
+在查询 GPU 资源后，重复提交的 A5 作业 `6712325` 发现 canonical 路径仍保留作业
+`6712300` 写入的 `preflight.json`，因此在启动前取消；没有模型 forward、GPU 科学计算或
+checkpoint。该 partial 目录已移动为
+`outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched_partial_6712300_preflight`，
+原始日志和调度记录保留。根因是资源查询与提交之间没有再次执行输出路径检查；以后提交
+必须分离资源检查、路径检查和 `pjsub`，并在重复作业启动前确认取消状态。事件已写入
+`docs/EXPERIMENT_FAILURES.jsonl`，不构成方法结论。
+
 
 1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o
 2. He et al., MoCo, CVPR 2020: https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
