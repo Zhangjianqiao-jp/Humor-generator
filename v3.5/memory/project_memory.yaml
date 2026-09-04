@@ -183,9 +183,12 @@ experiment_plan:
       formal_elapse_seconds: 3600
     - id: A4
       name: channel_isolated_functional_semantic_pilot
-      status: implementation_complete_pre_gpu_smoke
+      status: engineering_smoke_passed_formal_pilot_ready
       config: configs/pilot/cross_attention_semantic_phase_a4.yaml
       smoke_job: jobs/cross_attention_phase_a4_smoke.pjm
+      smoke_job_id: "6711052"
+      smoke_output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
+      smoke_validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
       budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
       trainable: bridge_only
       frozen: [planner_7b, generator_7b]
@@ -194,7 +197,7 @@ experiment_plan:
         semantic_prompt_include_image: false
         counterfactual_reconstruction_weight: 0.75
         objective: channel_isolated_v4
-      status_gate: blocked_until_clean_commit_and_real_trace_smoke
+      status_gate: formal_bridge_only_64_train_24_validation_unlocked
       scientific_claim_boundary: >-
         A4 is a causal-identifiability mechanism pilot. It is not a caption-quality
         claim until held-out caption generation and blinded evaluation pass.

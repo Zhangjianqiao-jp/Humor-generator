@@ -75,7 +75,7 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 → Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
 → Phase A3 gate：engineering pass，semantic pilot_inconclusive
 → A3 outer semantic baseline（job 6708118 在 dirty-worktree preflight 停止，待 clean commit 重提）
-→ A4 channel-isolated functional semantic pilot（代码已修改，尚未提交 GPU）
+→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过，正式 pilot 待提交）
 → latent/text 混合 caption 消融与盲评
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```

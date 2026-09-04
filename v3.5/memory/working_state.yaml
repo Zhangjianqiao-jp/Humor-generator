@@ -1,7 +1,7 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-04T17:23:15+09:00"
+observed_at: "2026-09-04T17:30:33+09:00"
 must_revalidate: true
 source_commit: bc495c672c9a32b490b26c577958334e69f81177
 branch: latent
@@ -143,20 +143,30 @@ latest_outer_attempt:
     traces 666/666 passed; no outer semantic or caption conclusion is allowed.
 
 a4_channel_isolated_repair:
-  status: implementation_complete_pre_gpu_smoke
+  status: engineering_smoke_passed_formal_ready
   config: configs/pilot/cross_attention_semantic_phase_a4.yaml
   job_script: jobs/cross_attention_phase_a4.pjm
   objective: channel_isolated_v4
   channel_visibility: target_only
   semantic_prompt_include_image: false
   counterfactual_reconstruction_weight: 0.75
-  formal_status: blocked_until_clean_commit
+  formal_status: unlocked_after_smoke_6711052
+  smoke_job_id: "6711052"
+  smoke_output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
+  smoke_validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
+  smoke_status: pass
+  smoke_clusters: [nycc_888, nycc_325]
+  smoke_peak_allocated_gib: 9.32
+  smoke_peak_reserved_gib: 9.51
+  smoke_bridge_gradient_norm: 2.1927127838134766
+  smoke_bridge_update_norm: 0.16706088185310364
+  smoke_policy_trainable_parameters: 0
   scientific_training_started: false
 
 current_gate:
   name: phase_a4_channel_isolated_real_trace_smoke
-  status: replacement_required_after_monitoring_termination
-  job_id: null
+  status: passed_formal_pilot_unlocked
+  job_id: "6711052"
   config: configs/pilot/cross_attention_semantic_phase_a4.yaml
   job_script: jobs/cross_attention_phase_a4_smoke.pjm
   required_checks:
@@ -169,6 +179,7 @@ current_gate:
     - results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/report.json passes validator
   failed_attempt_id: "6711036"
   failed_attempt_status: terminated_by_monitoring_error_no_scientific_output
+  replacement_status: pass
   on_pass: a4_bridge_only_64_train_24_validation_is_unlocked
   on_failure: preserve_log_and_update_docs_before_any_retry
 
@@ -219,15 +230,15 @@ program_risk_audit:
     - A4 semantic recovery disables the image shortcut and masks all non-target channels
     - A4 donor reconstruction requires a swapped channel to decode donor semantics
   highest_open_risk: >-
-    A4 real-trace GPU smoke has not run; outer A3 baseline 6708118 stopped at
-    provenance preflight because the tracked worktree was dirty.
+    A4 formal 64/24 semantic pilot has not run; the real-trace engineering smoke
+    passed, while outer A3 baseline 6708118 remains a provenance-only failure.
 
 immediate_gate:
-  action: amend_clean_commit_then_resubmit_a4_real_trace_smoke_before_formal_training
+  action: commit_smoke_result_then_submit_a4_bridge_only_formal_pilot
   prerequisite_job_id: "6707953"
   prerequisite_status: a3_pilot_inconclusive_with_engineering_pass
-  smoke_job_id: null
-  superseded_smoke_job_id: null
+  smoke_job_id: "6711052"
+  superseded_smoke_job_id: "6711036"
   resource_group: b-batch
   allocation_policy: node_allocated_simplex
   visible_cuda_devices: "0"
@@ -248,15 +259,15 @@ immediate_gate:
     - Keep checkpoint, Planner, Generator, prompt and trace hashes fixed.
     - Exercise target-only one-hot masks without NaN in inactive attention arms.
     - Exercise donor reconstruction and finite bridge update.
-  status: pending_replacement_clean_commit
+  status: formal_pilot_ready_after_smoke
   resource_request_note: >-
     GENKAI rejects node=1+gpu=1 and gpu=1+exec-policy=simplex. A node-allocated
     b-batch job is inherently simplex/node-exclusive and receives the node GPU
     custom resource; CUDA_VISIBLE_DEVICES=0 keeps the process single-device.
-  validator: results/engineering_smoke/cross_attention_semantic_phase_a4/validation_contract.json
-  smoke_exit_code: null
-  smoke_elapsed_seconds: null
-  next_action: amend_commit_then_submit_replacement_a4_smoke
+  validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
+  smoke_exit_code: 0
+  smoke_elapsed_seconds: 243
+  next_action: commit_smoke_result_then_submit_formal_a4_pilot
   formal_job_id: null
   formal_status: not_submitted
   formal_scheduler_estimated_start: null
@@ -269,7 +280,6 @@ immediate_gate:
     allocator incident and prior batch rejection.
 
 remaining_sequence_after_resource_gate:
-  - a4_channel_isolated_real_trace_smoke
   - a4_bridge_only_64_train_24_validation
   - a4_semantic_gate
   - clean_commit_and_repeat_a3_outer_baseline
@@ -280,20 +290,20 @@ eta:
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
   outer_semantic_confirmation: blocked_by_preflight_dirty_worktree
-  a4_real_trace_smoke: approximately_5_to_10_minutes_after_gpu_start
+  a4_real_trace_smoke: completed_in_4m03s_job_6711052
   a4_semantic_pilot: approximately_30_to_60_minutes_after_gpu_start
   excluded: caption_generation_and_independent_blind_rating
 
 next_agent_actions:
   - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
   - A3 replacement smoke 6706516 and formal A3 6707953 passed engineering checks; do not rerun them unless code/config changes.
-  - A4 smoke has not been submitted until the tracked worktree is clean; use only the new A4 job.
+  - A4 smoke 6711052 passed on a node-exclusive b-batch allocation; retain its validator and hashes.
   - Replacement smoke output must remain separate from terminated job 6711036.
   - Never issue pjdel while pjstat is transiently empty; inspect pjstat -H and .stats terminal fields first.
   - Do not treat the historical outer smoke 6708113 as an A4 gate; it used the A3 protocol.
   - Preserve outer job 6708118 as an engineering/provenance failure; do not interpret it as a latent result.
-  - Review and commit intended tracked changes before any formal resubmission; never use --allow-dirty.
-  - Run A4 real-trace smoke and its validator before A4 bridge-only training; verify target-only one-hot channel mass.
+  - Commit the smoke-result memory update before formal A4 submission; never use --allow-dirty.
+  - Submit A4 bridge-only training next; verify target-only one-hot channel mass and donor reconstruction in its formal gate.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning unless the revised semantic gate passes.
 
@@ -301,11 +311,11 @@ automation:
   tmux_session: null
   state: null
   poll_seconds: null
-  behavior: manual_until_A4_real_trace_smoke_is_submitted
+  behavior: manual_until_A4_formal_pilot_is_submitted
 
 verification_commands:
   - pjstat
   - .venv/bin/python scripts/check_trace_completion.py
   - .venv/bin/python scripts/validate_phase_a3_smoke.py --config configs/pilot/cross_attention_semantic_phase_a3.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a3.json
-  - .venv/bin/python scripts/validate_phase_a4_smoke.py --config configs/pilot/cross_attention_semantic_phase_a4.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a4/report.json
+  - .venv/bin/python scripts/validate_phase_a4_smoke.py --config configs/pilot/cross_attention_semantic_phase_a4.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/report.json
   - .venv/bin/python scripts/validate_project_memory.py
