@@ -1,0 +1,42 @@
+#!/bin/sh
+# Bounded retry for only the failed sealed Planner clusters.  This job is
+# submitted only after cache_test_planner_traces_csimplex.pjm has terminated;
+# it never regenerates successful records and keeps the same input manifest.
+# c-batch + node=1 is the validated full-GPU node-exclusive contract.
+#PJM -L rscgrp=c-batch
+#PJM -L node=1
+#PJM -L elapse=06:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+cache=data/cache/planner_traces_homer_strict_v35_test
+manifest=data/processed/latent_bridge_v35/test_trace_inputs.jsonl
+test -s "$cache/failures.json"
+ids=$(python -c 'import json,sys; print(" ".join(item["cluster_id"] for item in json.load(open(sys.argv[1]))))' "$cache/failures.json")
+if [ -n "$ids" ]; then
+  python scripts/cache_planner_traces.py \
+    --dataset data/processed/latent_bridge_v35 \
+    --input-manifest "$manifest" \
+    --splits internal_test official_hia_unseen_test \
+    --cluster-ids $ids --attempts 8 --retry-round 1 \
+    --enable-validator-repair --output "$cache"
+fi
+python scripts/validate_test_trace_cache.py \
+  --cache "$cache" --input-manifest "$manifest" \
+  --output outputs/preflight/test_planner_trace_validation_retry.json
+test -s outputs/preflight/test_planner_trace_validation_retry.json
