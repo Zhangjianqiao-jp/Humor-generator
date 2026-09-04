@@ -594,6 +594,13 @@ caption 或 `good-caption rate`。在 smoke/outer gate 结束前，历史
 混合统计。若 smoke 通过，再提交 40-cluster × 3-seed sealed outer evaluator；只有
 其 `outer_semantic_go` 才解锁新的 caption generation 和盲评。
 
+2-cluster smoke `6711856` 已通过工程 validator；其 semantic status 为
+`outer_semantic_inconclusive`，符合小样本 smoke 的预期，不能外推为方法结论。随后
+唯一的 40-cluster × 3-seed sealed outer job `6711870` 已提交到 `b-batch + node=1`
+（2 小时 walltime），当前等待调度。该 job 的输出目录为
+`outputs/outer_semantic_confirmation/a4_outer40`；完成后必须先通过
+`validate_outer_semantic_confirmation_a4.py`，再按预注册 gate 决定是否解锁 caption。
+
 ## 14. 权威参考
 
 1. Shang et al. HOMER. ICLR 2026. https://openreview.net/pdf?id=SzaRhPom4o
