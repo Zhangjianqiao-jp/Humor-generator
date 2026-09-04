@@ -120,6 +120,12 @@ clean commit + CPU tests
 cluster 的 image hash/description，并把 input-manifest hash、prompt hash、adapter hash
 写入每条 trace。缺 trace、repair failure、hash 不一致或 outer semantic gate 不通过时，
 caption 作业 fail-closed，不生成“提升”结论。
+
+资源策略：共享 `c-batch + gpu=1` 的 A5 作业曾被排到 13:00；为优先最快且不增加
+GPU 数量，已取消该 queued copy，改用内容完全相同的
+`jobs/cross_attention_phase_a5_csimplex.pjm`（`c-batch + node=1`，一张原生整卡，
+不叠加 `gpu=1`/`exec-policy=simplex`）。它必须等待 retry2 释放当前 node 后再启动；该
+切换只改变调度契约，不改变模型、数据、seed、loss 或输出目录。
 若首次 sealed cache 的 `failures.json` 非空，只能提交
 `jobs/cache_test_planner_traces_retry.pjm` 对失败 cluster 做有界重试；不得删除或覆盖已
 成功 trace，也不得把失败 cluster 当作完整 121 条使用。第一轮重试达到 `117/121` 后
