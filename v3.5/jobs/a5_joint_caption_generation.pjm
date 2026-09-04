@@ -35,6 +35,7 @@ config=configs/pilot/cross_attention_semantic_phase_a5.yaml
 checkpoint=outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/best_bridge.pt
 trace_index=data/cache/planner_traces_homer_strict_v35_test/index.jsonl
 out=outputs/caption_eval/a5_joint_10
+test ! -e "$out" || { echo "refusing to overwrite caption output directory: $out" >&2; exit 2; }
 mkdir -p "$out"
 seeds="20260901 20260902 20260903 20260904 20260905 20260906 20260907 20260908 20260909 20260910"
 

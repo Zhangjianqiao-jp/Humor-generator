@@ -28,6 +28,7 @@ export NLTK_DATA="$PWD/artifacts/nltk_data"
 
 config=configs/pilot/cross_attention_semantic_phase_a5.yaml
 output=outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched
+test ! -e "$output" || { echo "refusing to reuse A5 output directory: $output" >&2; exit 2; }
 mkdir -p "$output"
 
 python scripts/run_formal_preflight.py \
