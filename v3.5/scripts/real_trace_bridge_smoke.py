@@ -102,6 +102,7 @@ def main() -> None:
             heads=int(config["bridge"]["heads"]),
             gate_init=float(config["bridge"]["gate_init"]),
             channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
+            projection_mode=str(config["bridge"].get("projection_mode", "shared")),
         ).to(device)
     else:
         common_bridge_args = {

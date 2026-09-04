@@ -114,6 +114,7 @@ def load_bridge(
         heads=int(bridge_config["heads"]),
         gate_init=float(bridge_config.get("gate_init", 0.1)),
         channel_fusion=str(bridge_config["channel_fusion"]),
+        projection_mode=str(bridge_config.get("projection_mode", "shared")),
     )
     payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     if "bridge" not in payload:

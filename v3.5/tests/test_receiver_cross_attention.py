@@ -147,6 +147,29 @@ def test_isolated_channel_with_no_valid_inactive_attention_is_finite() -> None:
     assert torch.isfinite(output).all()
 
 
+def test_per_channel_projection_is_typed_and_isolated() -> None:
+    """A5's role-specific K/V/O maps keep inactive channels out of the path."""
+    torch.manual_seed(23)
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2,
+        channel_fusion="fixed_equal", projection_mode="per_channel",
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    hidden = torch.randn(2, 5, 16)
+    states = _states()
+    with bridge.inject(model, states, active_channels=("local",)):
+        local_only = model(hidden)
+    changed = {name: value.clone() for name, value in states.items()}
+    changed["conflict"].add_(1000.0)
+    changed["global"].mul_(0.0)
+    with bridge.inject(model, changed, active_channels=("local",)):
+        local_only_again = model(hidden)
+    torch.testing.assert_close(local_only, local_only_again)
+    assert bridge.projection_mode == "per_channel"
+
+
 def test_alignment_representations_preserve_channel_identity_and_gradients() -> None:
     bridge = ReceiverDrivenCrossAttentionBridge(
         16, 16, layer_indices=[0, 1], bottleneck_dim=8, heads=2

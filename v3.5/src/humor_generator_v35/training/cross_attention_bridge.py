@@ -75,6 +75,27 @@ def contextual_teacher_messages(channel: str, semantics: str) -> list[dict[str, 
     }]
 
 
+def semantic_teacher_messages(channel: str, semantics: str) -> list[dict[str, Any]]:
+    """Build a receiver-native teacher condition for semantic recovery.
+
+    The teacher exposes exactly one typed field in ordinary receiver text and
+    is used only to cache the frozen receiver's target-span hidden state.  The
+    latent student sees the same recovery instruction but not this text, so
+    the alignment target is a receiver-native semantic representation rather
+    than a random projection of the sender trace.
+    """
+    if channel not in TypedLatentBridge.channel_order:
+        raise ValueError(f"unknown semantic channel: {channel}")
+    return [{
+        "role": "user",
+        "content": [text_part(
+            "Use the following Humor Planner field to answer exactly. "
+            "Return only the field, without explanation.\n"
+            f"<{channel.upper()}>\n{semantics}\n</{channel.upper()}>"
+        )],
+    }]
+
+
 def exact_typed_semantics(states: dict[str, AlignedMessageStates]) -> str:
     if set(states) != set(TypedLatentBridge.channel_order):
         raise ValueError("semantic target requires conflict/local/global")
@@ -125,10 +146,17 @@ class ReceiverCrossAttentionTask:
         }:
             raise ValueError("unsupported alignment_teacher")
         if self.semantic_objective not in {
-            "joint_reconstruction_v2", "channel_balanced_v3", "channel_isolated_v4"
+            "joint_reconstruction_v2", "channel_balanced_v3", "channel_isolated_v4",
+            "channel_isolated_v5",
         }:
             raise ValueError("unsupported semantic_objective")
         self._contextual_teacher_cache: dict[str, dict[str, torch.Tensor]] = {}
+        self.semantic_target_alignment_weight = float(
+            loss_config.get("semantic_target_alignment", 0.0)
+        )
+        if self.semantic_target_alignment_weight < 0:
+            raise ValueError("semantic_target_alignment must be non-negative")
+        self._semantic_target_teacher_cache: dict[str, dict[str, torch.Tensor]] = {}
         for parameter in backend.model.parameters():
             parameter.requires_grad_(False)
         if any(parameter.requires_grad for parameter in backend.model.parameters()):
@@ -195,6 +223,68 @@ class ReceiverCrossAttentionTask:
                 name: self._contextual_teacher(name, states[name].semantics)
                 for name in TypedLatentBridge.channel_order
             }
+
+    @torch.no_grad()
+    def _semantic_target_teacher(self, channel: str, semantics: str) -> torch.Tensor:
+        """Pool the frozen receiver's native hidden state over target tokens.
+
+        This is the semantic-recovery counterpart of BLIP-2's generative
+        alignment stage: the receiver remains frozen, while a bridge is
+        trained to produce a state the receiver can interpret.  Pooling keeps
+        the cache small (one D-dimensional vector per channel) and avoids
+        retaining vocabulary-sized teacher logits.
+        """
+        messages = semantic_teacher_messages(channel, semantics)
+        _, full, targets = _prompt_and_full(self.backend, messages, semantics)
+        embeddings, positions = self.backend.multimodal_embeddings_and_positions(full)
+        captured: list[torch.Tensor] = []
+
+        def hook(_module: torch.nn.Module, _inputs: tuple[Any, ...], output: Any) -> None:
+            hidden = output if torch.is_tensor(output) else output[0]
+            if not torch.is_tensor(hidden) or hidden.ndim != 3:
+                raise RuntimeError("receiver teacher did not emit [B,T,D] hidden states")
+            captured.append(hidden.detach())
+
+        handle = find_last_decoder_layer(self.backend.model).register_forward_hook(hook)
+        try:
+            self.backend.model(
+                inputs_embeds=embeddings,
+                attention_mask=full["attention_mask"],
+                position_ids=positions,
+                labels=None,
+                use_cache=False,
+                logits_to_keep=1,
+            )
+        finally:
+            handle.remove()
+        if len(captured) != 1:
+            raise RuntimeError(f"expected one semantic teacher hook call, got {len(captured)}")
+        # The causal logit for each target token is emitted at the preceding
+        # position, matching caption_only_logits' indexing contract.
+        target_hidden = captured[0][:, -targets.shape[1] - 1:-1, :]
+        if target_hidden.shape[1] != targets.shape[1]:
+            raise RuntimeError("semantic teacher target-span alignment is off by one")
+        return target_hidden.float().mean(dim=1).to(torch.float16).cpu()
+
+    def cache_semantic_target_teachers(self, clusters: list[str] | set[str]) -> None:
+        """Cache one receiver-native target-span vector per cluster/channel."""
+        if self.semantic_target_alignment_weight <= 0:
+            return
+        for cluster in sorted(set(clusters)):
+            if cluster in self._semantic_target_teacher_cache:
+                continue
+            states = self._states(cluster)
+            self._semantic_target_teacher_cache[cluster] = {
+                name: self._semantic_target_teacher(name, states[name].semantics)
+                for name in TypedLatentBridge.channel_order
+            }
+
+    def semantic_target_teacher(self, cluster: str, channel: str) -> torch.Tensor:
+        if self.semantic_target_alignment_weight <= 0:
+            raise RuntimeError("semantic target alignment is disabled")
+        if cluster not in self._semantic_target_teacher_cache:
+            self.cache_semantic_target_teachers([cluster])
+        return self._semantic_target_teacher_cache[cluster][channel]
 
     def semantic_alignment_pairs(
         self, example: PreparedExample,
@@ -317,24 +407,76 @@ class ReceiverCrossAttentionTask:
         embeddings, positions = self.backend.multimodal_embeddings_and_positions(full)
         return embeddings, full["attention_mask"], positions, targets, None, states
 
-    def _logits(self, embeddings: torch.Tensor, attention_mask: torch.Tensor,
-                positions: torch.Tensor, targets: torch.Tensor,
-                states: dict[str, AlignedMessageStates],
-                *, active_channels: Sequence[str] | None = None) -> torch.Tensor:
+    def _logits_and_hidden(
+        self, embeddings: torch.Tensor, attention_mask: torch.Tensor,
+        positions: torch.Tensor, targets: torch.Tensor,
+        states: dict[str, AlignedMessageStates],
+        *, active_channels: Sequence[str] | None = None,
+        capture_hidden: bool = False,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         # No latent pseudo-token is inserted.  This is the stable out-of-band
         # "zero-prefix" receiver interface requested for the new pipeline.
+        captured: list[torch.Tensor] = []
+        # Register the bridge hooks before the diagnostic hook.  When a
+        # selected bridge layer is the final decoder block, PyTorch runs
+        # hooks in registration order; capturing first would observe the
+        # pre-injection hidden state and make the target-alignment loss
+        # silently train against the wrong representation.
         with self.bridge.inject(
             self.backend.model,
             self._tensor_states(states),
             active_channels=active_channels,
         ):
-            return caption_only_logits(
-                self.backend.model,
-                inputs_embeds=embeddings,
-                attention_mask=attention_mask,
-                position_ids=positions,
-                caption_tokens=int(targets.shape[1]),
-            )
+            handle = None
+            if capture_hidden:
+                def hook(_module: torch.nn.Module, _inputs: tuple[Any, ...], output: Any) -> None:
+                    hidden = output if torch.is_tensor(output) else output[0]
+                    if not torch.is_tensor(hidden) or hidden.ndim != 3:
+                        raise RuntimeError("receiver did not emit [B,T,D] hidden states")
+                    captured.append(hidden)
+                handle = find_last_decoder_layer(self.backend.model).register_forward_hook(hook)
+            try:
+                logits = caption_only_logits(
+                    self.backend.model,
+                    inputs_embeds=embeddings,
+                    attention_mask=attention_mask,
+                    position_ids=positions,
+                    caption_tokens=int(targets.shape[1]),
+                )
+            finally:
+                if handle is not None:
+                    handle.remove()
+        if not capture_hidden:
+            return logits, None
+        if len(captured) != 1:
+            raise RuntimeError(f"expected one receiver hidden hook call, got {len(captured)}")
+        hidden = captured[0][:, -targets.shape[1] - 1:-1, :]
+        if hidden.shape[1] != targets.shape[1]:
+            raise RuntimeError("receiver target-span hidden alignment is off by one")
+        return logits, hidden
+
+    def _logits(self, embeddings: torch.Tensor, attention_mask: torch.Tensor,
+                positions: torch.Tensor, targets: torch.Tensor,
+                states: dict[str, AlignedMessageStates],
+                *, active_channels: Sequence[str] | None = None) -> torch.Tensor:
+        return self._logits_and_hidden(
+            embeddings, attention_mask, positions, targets, states,
+            active_channels=active_channels,
+        )[0]
+
+    def _semantic_target_alignment_loss(
+        self, hidden: torch.Tensor, *, cluster: str, channel: str,
+    ) -> torch.Tensor:
+        """Align a student's target-span state to a frozen native-text state."""
+        teacher = self.semantic_target_teacher(cluster, channel).to(
+            device=hidden.device, dtype=hidden.dtype
+        )
+        student = hidden.float().mean(dim=1)
+        # Scale-free cosine distillation is stable across the three channels
+        # and does not force the bridge to reproduce arbitrary hidden-state
+        # norms.  A separate NLL and counterfactual term still controls task
+        # behavior, so this auxiliary loss cannot win by making outputs random.
+        return (1.0 - F.cosine_similarity(student, teacher.float(), dim=-1)).mean()
 
     def _forward_metrics(self, prepared: tuple[Any, ...], shuffled_cluster: str,
                          *, backward: bool, loss_scale: float = 1.0) -> dict[str, float]:
@@ -414,7 +556,7 @@ class ReceiverCrossAttentionTask:
     def backward_example(self, example: PreparedExample, shuffled_cluster: str, *,
                          loss_scale: float = 1.0) -> dict[str, float]:
         if self.stage == "semantic_reconstruction" and self.semantic_objective in {
-            "channel_balanced_v3", "channel_isolated_v4"
+            "channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"
         }:
             results = []
             for channel in TypedLatentBridge.channel_order:
@@ -436,7 +578,7 @@ class ReceiverCrossAttentionTask:
     def evaluate_example(self, example: PreparedExample,
                          shuffled_cluster: str) -> dict[str, float]:
         if self.stage == "semantic_reconstruction" and self.semantic_objective in {
-            "channel_balanced_v3", "channel_isolated_v4"
+            "channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"
         }:
             results = [
                 self._forward_channel_metrics(
@@ -489,20 +631,30 @@ class ReceiverCrossAttentionTask:
             coefficient = torch.sigmoid(-matched0 + counterfactual0 + margin).detach()
             margin_loss = F.softplus(-matched0 + counterfactual0 + margin).mean()
 
-        matched = self._logits(
+        matched, matched_hidden = self._logits_and_hidden(
             embeddings, mask, positions, targets, matched_states,
             active_channels=active_channels,
+            capture_hidden=self.semantic_target_alignment_weight > 0,
         )
         reconstruction_nll = token_cross_entropy(matched, targets)
         matched_logp = sequence_log_probability(matched, targets)
         nll_value = reconstruction_nll.detach()
+        semantic_alignment = matched.new_zeros(())
+        if self.semantic_target_alignment_weight > 0:
+            if matched_hidden is None:
+                raise RuntimeError("semantic target alignment requested without hidden states")
+            semantic_alignment = self._semantic_target_alignment_loss(
+                matched_hidden, cluster=example.row["cluster_id"], channel=channel
+            )
         if backward:
             matched_part = (
                 float(self.loss_config["caption_nll"]) * reconstruction_nll
                 - counterfactual_weight * (coefficient * matched_logp).mean()
+                + self.semantic_target_alignment_weight * semantic_alignment
             )
             (loss_scale * matched_part).backward()
-        del matched, reconstruction_nll, matched_logp
+        semantic_alignment_value = semantic_alignment.detach()
+        del matched, matched_hidden, reconstruction_nll, matched_logp, semantic_alignment
 
         if backward:
             counterfactual = self._logits(
@@ -551,6 +703,7 @@ class ReceiverCrossAttentionTask:
             float(self.loss_config["caption_nll"]) * nll_value
             + counterfactual_weight * margin_loss
             + self.counterfactual_reconstruction_weight * donor_reconstruction_value
+            + self.semantic_target_alignment_weight * semantic_alignment_value
         )
         diagnostics = self.bridge.last_diagnostics
         return {
@@ -559,6 +712,7 @@ class ReceiverCrossAttentionTask:
             "teacher_kl": 0.0,
             "shuffled_margin": float(margin_loss.cpu()),
             "counterfactual_reconstruction_nll": float(donor_reconstruction_value.cpu()),
+            "semantic_target_alignment": float(semantic_alignment_value.cpu()),
             "matched_logp": float(matched0.mean().cpu()),
             "shuffled_logp": float(counterfactual0.mean().cpu()),
             "matched_minus_shuffled_logp": float(gap.mean().cpu()),

@@ -49,7 +49,8 @@ class CrossAttentionDiagnostics:
 
 class _GatedLatentEnrichment(nn.Module):
     def __init__(self, receiver_dim: int, sender_dim: int, bottleneck_dim: int, heads: int,
-                 gate_init: float, channel_fusion: str) -> None:
+                 gate_init: float, channel_fusion: str,
+                 projection_mode: str = "shared") -> None:
         super().__init__()
         if bottleneck_dim % heads:
             raise ValueError("bottleneck_dim must be divisible by heads")
@@ -57,7 +58,10 @@ class _GatedLatentEnrichment(nn.Module):
         self.head_dim = bottleneck_dim // heads
         if channel_fusion not in {"learned", "fixed_equal"}:
             raise ValueError("channel_fusion must be learned or fixed_equal")
+        if projection_mode not in {"shared", "per_channel"}:
+            raise ValueError("projection_mode must be shared or per_channel")
         self.channel_fusion = channel_fusion
+        self.projection_mode = projection_mode
         self.receiver_norm = nn.LayerNorm(receiver_dim)
         self.sender_norm = nn.LayerNorm(sender_dim)
         self.query = nn.Linear(receiver_dim, bottleneck_dim, bias=False)
@@ -71,9 +75,24 @@ class _GatedLatentEnrichment(nn.Module):
             self.query.weight.detach().clone(),
             persistent=True,
         )
-        self.key = nn.Linear(sender_dim, bottleneck_dim, bias=False)
-        self.value = nn.Linear(sender_dim, bottleneck_dim, bias=False)
-        self.output = nn.Linear(bottleneck_dim, receiver_dim, bias=False)
+        # A4 used one K/V/O map for all three semantic roles.  That is a
+        # useful parameter-controlled baseline, but it forces conflict,
+        # grounding and association into one projection subspace.  The
+        # per-channel variant gives each typed source its own receiver map,
+        # while keeping the receiver frozen and the cross-attention budget
+        # explicit.  This is a small multi-source-attention adaptation, not a
+        # claim that the cited multi-source papers use these exact channels.
+        if projection_mode == "shared":
+            self.key = nn.Linear(sender_dim, bottleneck_dim, bias=False)
+            self.value = nn.Linear(sender_dim, bottleneck_dim, bias=False)
+            self.output = nn.Linear(bottleneck_dim, receiver_dim, bias=False)
+        else:
+            self.key = nn.ModuleDict({name: nn.Linear(sender_dim, bottleneck_dim, bias=False)
+                                      for name in CHANNELS})
+            self.value = nn.ModuleDict({name: nn.Linear(sender_dim, bottleneck_dim, bias=False)
+                                        for name in CHANNELS})
+            self.output = nn.ModuleDict({name: nn.Linear(bottleneck_dim, receiver_dim, bias=False)
+                                         for name in CHANNELS})
         # Hierarchical multi-source attention: normalize positions inside each
         # semantic source first, then let the receiver choose among sources.
         # This prevents a long association channel from receiving more mass
@@ -89,15 +108,23 @@ class _GatedLatentEnrichment(nn.Module):
             batch, target_len, self.heads, self.head_dim
         ).transpose(1, 2)
 
+    def _projection(self, module: nn.ModuleDict | nn.Linear, channel: str) -> nn.Module:
+        if self.projection_mode == "shared":
+            return module  # type: ignore[return-value]
+        return module[channel]  # type: ignore[index]
+
     def _attend_channel(
         self, q: torch.Tensor, memory: torch.Tensor, memory_mask: torch.Tensor,
+        channel: str,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch, source_len, _ = memory.shape
         normalized_memory = self.sender_norm(memory.float())
-        k = self.key(normalized_memory).view(
+        key = self._projection(self.key, channel)
+        value = self._projection(self.value, channel)
+        k = key(normalized_memory).view(
             batch, source_len, self.heads, self.head_dim
         ).transpose(1, 2)
-        v = self.value(normalized_memory).view(
+        v = value(normalized_memory).view(
             batch, source_len, self.heads, self.head_dim
         ).transpose(1, 2)
         scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) / self.head_dim**0.5
@@ -134,7 +161,7 @@ class _GatedLatentEnrichment(nn.Module):
         entropy_by_channel = []
         for name in CHANNELS:
             attended, probabilities = self._attend_channel(
-                q, memories[name], memory_masks[name]
+                q, memories[name], memory_masks[name], name
             )
             attended_by_channel.append(attended)
             entropy_by_channel.append(
@@ -157,7 +184,16 @@ class _GatedLatentEnrichment(nn.Module):
                 dim=-1, keepdim=True
             ).clamp_min(1e-12)
         attended = (channel_probabilities.unsqueeze(-1) * contexts.float()).sum(2)
-        delta = torch.tanh(self.gate) * self.output(attended)
+        if self.projection_mode == "per_channel":
+            transformed = []
+            for index, name in enumerate(CHANNELS):
+                channel_context = attended_by_channel[index].reshape(batch, target_len, -1)
+                transformed.append(self._projection(self.output, name)(channel_context))
+            attended_projected = torch.stack(transformed, dim=2)
+            attended = (channel_probabilities.unsqueeze(-1) * attended_projected.float()).sum(2)
+            delta = torch.tanh(self.gate) * attended
+        else:
+            delta = torch.tanh(self.gate) * self.output(attended)
         entropy = torch.stack(entropy_by_channel).mean()
         mean_channel_weights = channel_probabilities.mean(dim=(0, 1))
         relative = delta.float().norm() / hidden.float().norm().clamp_min(1e-6)
@@ -172,6 +208,7 @@ class _GatedLatentEnrichment(nn.Module):
         self,
         sender_state: torch.Tensor,
         receiver_context: torch.Tensor,
+        channel: str = "conflict",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return one channel's sender and contextual-receiver representations.
 
@@ -183,7 +220,8 @@ class _GatedLatentEnrichment(nn.Module):
         receiver-semantic projector and cannot by itself establish causal
         channel use.
         """
-        student = self.key(self.sender_norm(sender_state.float())).mean(dim=1)
+        key = self._projection(self.key, channel)
+        student = key(self.sender_norm(sender_state.float())).mean(dim=1)
         if receiver_context.ndim == 2:
             receiver_context = receiver_context.unsqueeze(1)
         teacher = torch.nn.functional.linear(
@@ -198,7 +236,8 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
 
     def __init__(self, receiver_dim: int, sender_dim: int, *, layer_indices: list[int],
                  bottleneck_dim: int = 64, heads: int = 4, gate_init: float = 0.1,
-                 channel_fusion: str = "learned") -> None:
+                 channel_fusion: str = "learned",
+                 projection_mode: str = "shared") -> None:
         super().__init__()
         if not layer_indices or len(set(layer_indices)) != len(layer_indices):
             raise ValueError("layer_indices must be non-empty and unique")
@@ -206,11 +245,15 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
             raise ValueError("layer indices must be non-negative")
         self.layer_indices = tuple(layer_indices)
         self.channel_fusion = channel_fusion
+        if projection_mode not in {"shared", "per_channel"}:
+            raise ValueError("projection_mode must be shared or per_channel")
+        self.projection_mode = projection_mode
         self.channel_types = nn.Parameter(torch.zeros(len(CHANNELS), 1, sender_dim))
         nn.init.normal_(self.channel_types, std=sender_dim**-0.5)
         self.layers = nn.ModuleDict({
             str(index): _GatedLatentEnrichment(
-                receiver_dim, sender_dim, bottleneck_dim, heads, gate_init, channel_fusion
+                receiver_dim, sender_dim, bottleneck_dim, heads, gate_init,
+                channel_fusion, projection_mode
             ) for index in self.layer_indices
         })
         self.last_diagnostics: list[CrossAttentionDiagnostics] = []
@@ -266,7 +309,9 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
         result: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
         for name in CHANNELS:
             layer_pairs = [
-                adapter.alignment_representations(memories[name], receiver_contexts[name])
+                adapter.alignment_representations(
+                    memories[name], receiver_contexts[name], channel=name
+                )
                 for adapter in self.layers.values()
             ]
             result[name] = (

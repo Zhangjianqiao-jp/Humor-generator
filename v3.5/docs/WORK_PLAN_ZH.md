@@ -56,6 +56,61 @@ semantic gate 仍只允许 `strong_go` 或 `go_to_outer_semantic_validation` 进
 随机行为；A4 先用可解释的 channel isolation + donor reconstruction + 原有 margin。
 若 A4 仍失败，再单独比较 JS/conditional-separation ablation，不同时改变多项变量。
 
+## 0B. A4 未达标后的 A5 修复候选（2026-09-05）
+
+A4 outer 的三 seed、40 image-cluster 结果为：conflict `0.0115005`，local
+`0.004940757`，global `0.003208954`。local/global 的点估计没有达到预注册的
+`0.01`，但 bootstrap lower bound 为正；因此结论仍是“因果通道使用未证实”，不是
+“latent 类方法无效”。A4 的 immutable artifact 不覆盖，证据仍保留在
+`outputs/outer_semantic_confirmation/a4_outer40/summary.json`。
+
+本次只实现一个有文献依据、可归因的低风险修复候选，不声称它必然提高 gap：
+
+1. `cross_attention.py` 增加 `projection_mode=per_channel`，为 conflict/local/global
+   分别学习 K/V/O 投影；shared projection 仍保留为 A4 基线。多源 attention 的 flat 与
+   hierarchical 组合有 ACL 2017 的架构依据，但本项目的三类幽默字段和该实现是本项目
+   的适配，不是论文原样复现。
+2. A5 保持 `target_only` channel mask、无图像 semantic-recovery prompt、donor
+   reconstruction、matched/shuffled margin、三路 InfoNCE 和 fixed-equal fusion，避免
+   用其它通道或图像 shortcut 解释目标。
+3. 增加 `semantic_target_alignment=0.5`：冻结 Receiver 在原生文字字段条件下产生
+   target-span final hidden 的 teacher，bridge student 对其做 cosine distillation；这
+   是 BLIP-2 的“冻结模型 + 轻量 bridge、表示对齐后再做生成可解释性”原则，以及
+   HistAlign 对 memory/current hidden misalignment 的针对性借鉴。该项只提供 receiver-
+   native 表征对齐，不能单独证明 causal channel use，最终仍由 matched/counterfactual
+   和 caption 结果决定。
+4. A5 训练使用全部 602 train clusters、64 validation clusters（不再用 24-cluster
+   development subset），仍只训练 bridge，两个 7B policy 完全冻结。因为 per-channel
+   K/V/O 使参数量增加约三倍，A5 是“修复候选”而非公平 placement ablation；若有效，后
+   续必须单独做 projection-only 与 alignment-only 消融。
+
+训练/评测顺序固定为：
+
+```text
+clean commit + CPU tests
+→ A5 real-trace bridge smoke (≤2 samples, no scientific training)
+→ A5 bridge-only training (all 602/64, frozen 7B)
+→ sealed held-out Planner traces (internal_test 97 + official unseen 24)
+→ A5 outer semantic confirmation (121 clusters × 3 seeds)
+→ only if outer semantic_go: Text-HOMER vs A5 latent caption generation
+→ 10 candidates/condition/image, mirrored Group-of-10 packet
+→ independent multi-rater blind aggregation + image-cluster bootstrap
+```
+
+测试 Planner traces 单独存于
+`data/cache/planner_traces_homer_strict_v35_test`，输入 manifest 为
+`data/processed/latent_bridge_v35/test_trace_inputs.jsonl`；不得把 test trace 追加到
+训练/validation 的 666 条 index。`cache_planner_traces.py` 会校验 manifest 中每个
+cluster 的 image hash/description，并把 input-manifest hash、prompt hash、adapter hash
+写入每条 trace。缺 trace、repair failure、hash 不一致或 outer semantic gate 不通过时，
+caption 作业 fail-closed，不生成“提升”结论。
+
+当前适用文献依据：BLIP-2 (Li et al., 2023)、HistAlign (Wan et al., EMNLP 2023)、
+Flamingo (Alayrac et al., NeurIPS 2022)、Multi-Source Attention (Libovický & Helcl,
+ACL 2017)、CPC/InfoNCE (van den Oord et al., 2018)。这些文献支持冻结 receiver、轻量
+bridge、receiver-native alignment、gated/cross attention 和 contrastive negatives；没有
+任何一篇文献保证本项目的 `0.01` gap 阈值，因此 A5 结果必须实测、不得预写。
+
 2026-09-04 的 outer confirmation 作业 `6708118` 已获得完整节点但在正式 forward 前被
 `run_formal_preflight.py` 因 tracked worktree dirty 拒绝，退出码为 1；compile、75 tests、
 dataset `2846/2846`、trace `666/666` 均通过。该作业没有产生 outer 结果，也没有改变

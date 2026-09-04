@@ -119,6 +119,7 @@ def main() -> None:
             heads=int(config["bridge"]["heads"]),
             gate_init=float(config["bridge"].get("gate_init", 0.1)),
             channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
+            projection_mode=str(config["bridge"].get("projection_mode", "shared")),
         ).to(device)
     else:
         bridge = (
@@ -190,6 +191,14 @@ def main() -> None:
                 "channels_per_cluster": 3,
             }), flush=True)
             task.cache_contextual_teachers(required)
+        if float(config["loss"].get("semantic_target_alignment", 0.0)) > 0:
+            print(json.dumps({
+                "status": "caching_semantic_target_teachers",
+                "clusters": len(required),
+                "channels_per_cluster": 3,
+                "teacher": "receiver_final_layer_target_span_mean",
+            }), flush=True)
+            task.cache_semantic_target_teachers(required)
     else:
         task = FrozenReceiverBridgeTask(
             backend,
@@ -238,11 +247,20 @@ def main() -> None:
             if baseline == "receiver_cross_attention" else "input_soft_prefix"
         ),
         "channel_fusion": config["bridge"].get("channel_fusion"),
+        "projection_mode": config["bridge"].get("projection_mode", "shared"),
         "semantic_objective": config["loss"].get("semantic_objective"),
         "alignment_teacher": config["loss"].get("alignment_teacher"),
         "channel_visibility": config["loss"].get("channel_visibility", "all"),
         "counterfactual_reconstruction_weight": config["loss"].get(
             "counterfactual_reconstruction", 0.0
+        ),
+        "semantic_target_alignment_weight": config["loss"].get(
+            "semantic_target_alignment", 0.0
+        ),
+        "semantic_target_teacher": (
+            "receiver_final_layer_target_span_mean"
+            if float(config["loss"].get("semantic_target_alignment", 0.0)) > 0
+            else None
         ),
         "semantic_prompt_include_image": config["training"].get(
             "semantic_prompt_include_image", True

@@ -158,6 +158,19 @@ def test_a4_config_removes_shortcuts_and_requires_donor_reconstruction() -> None
     assert config["model"]["frozen"] is True
 
 
+def test_a5_repair_config_uses_role_specific_projection_and_receiver_alignment() -> None:
+    config = yaml.safe_load(
+        (ROOT / "configs/pilot/cross_attention_semantic_phase_a5.yaml").read_text()
+    )
+    assert config["loss"]["semantic_objective"] == "channel_isolated_v5"
+    assert config["bridge"]["projection_mode"] == "per_channel"
+    assert config["loss"]["channel_visibility"] == "target_only"
+    assert config["loss"]["semantic_target_alignment"] > 0
+    assert config["training"]["semantic_prompt_include_image"] is False
+    assert config["training"]["max_train_clusters"] is None
+    assert config["training"]["max_validation_clusters"] is None
+
+
 def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
     smoke = (ROOT / "scripts/real_trace_bridge_smoke.py").read_text()
     assert "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples" in smoke
@@ -228,6 +241,30 @@ def test_a4_outer_evaluator_is_independent_and_fail_closed() -> None:
     assert "#PJM -L rscgrp=c-batch" in job
     assert "#PJM -L gpu=1" in job
     assert "#PJM -L node=1" not in job
+
+
+def test_a5_repair_and_caption_jobs_are_sequentially_fail_closed() -> None:
+    train = (ROOT / "jobs/cross_attention_phase_a5.pjm").read_text()
+    traces = (ROOT / "jobs/cache_test_planner_traces.pjm").read_text()
+    outer = (ROOT / "jobs/outer_semantic_confirmation_a5.pjm").read_text()
+    caption = (ROOT / "jobs/a5_joint_caption_generation.pjm").read_text()
+    assert "cross_attention_semantic_phase_a5.yaml" in train
+    assert "validate_phase_a5_smoke.py" in train
+    assert "role-specific" in train
+    assert "--input-manifest data/processed/latent_bridge_v35/test_trace_inputs.jsonl" in traces
+    assert "validate_test_trace_cache.py" in traces
+    assert "--max-clusters 2" in outer
+    assert "--expected-clusters 121" in outer
+    assert "outer_semantic_go" in caption
+    assert "--group-size 10" in caption
+    assert "#PJM -L rscgrp=b-batch" in train
+    assert "#PJM -L node=1" in train
+    for job in (traces, outer, caption):
+        assert "PYTORCH_ALLOC_CONF=backend:native" in job
+        assert "#PJM -L rscgrp=c-batch" in job
+        assert "#PJM -L gpu=1" in job
+        assert "#PJM -L node=1" not in job
+        assert "exec-policy=simplex" not in job
 
 
 def test_dataset_audit_checks_every_byte_level_dependency() -> None:

@@ -1,0 +1,64 @@
+#!/bin/sh
+# Caption-stage evaluation is unlocked only by an A5 outer semantic_go.
+# Generates ten fixed candidates per image/condition, then emits mirrored
+# Group-of-10 blind packets.  Human/LLM raters are external to this job; no
+# heuristic score is substituted for the registered blind protocol.
+# c-batch + gpu=1 is the validated native full-GPU shared contract.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=08:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/run_formal_preflight.py \
+  --output "outputs/preflight/a5_joint_caption_generation_$(date +%Y%m%d_%H%M%S).json"
+python scripts/check_cuda_resource.py
+outer=outputs/outer_semantic_confirmation/a5_outer121
+test "$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$outer/summary.json")" = outer_semantic_go
+
+config=configs/pilot/cross_attention_semantic_phase_a5.yaml
+checkpoint=outputs/pilot/cross_attention_semantic_phase_a5_full/best_bridge.pt
+trace_index=data/cache/planner_traces_homer_strict_v35_test/index.jsonl
+out=outputs/caption_eval/a5_joint_10
+mkdir -p "$out"
+seeds="20260901 20260902 20260903 20260904 20260905 20260906 20260907 20260908 20260909 20260910"
+
+for split in internal_test official_hia_unseen_test; do
+  python scripts/generate_formal_baseline.py \
+    --condition text_homer --label text_homer --receiver sft \
+    --config "$config" --split "$split" --trace-index "$trace_index" \
+    --output "$out/text_homer_${split}.jsonl" --seeds $seeds --max-new-tokens 96
+  python scripts/generate_formal_baseline.py \
+    --condition receiver_cross_attention --label a5_typed --receiver sft \
+    --config "$config" --checkpoint "$checkpoint" --split "$split" \
+    --trace-index "$trace_index" --output "$out/a5_typed_${split}.jsonl" \
+    --seeds $seeds --max-new-tokens 96
+done
+
+python scripts/build_group_packets.py \
+  --generations "$out/text_homer_internal_test.jsonl" \
+    "$out/text_homer_official_hia_unseen_test.jsonl" \
+    "$out/a5_typed_internal_test.jsonl" \
+    "$out/a5_typed_official_hia_unseen_test.jsonl" \
+  --packet "$out/blind_packet_group10.jsonl" \
+  --private-mapping "$out/private_mapping_group10.jsonl" \
+  --group-size 10 --family a5_joint_caption --mirror-sides \
+  --calibration data/cache/judge_calibration.json \
+  --comparison text_homer:a5_typed
+test -s "$out/blind_packet_group10.jsonl"
+test -s "$out/private_mapping_group10.jsonl"

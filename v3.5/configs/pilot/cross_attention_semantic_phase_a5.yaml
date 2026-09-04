@@ -1,0 +1,68 @@
+experiment:
+  name: phase_a5_receiver_native_typed_alignment
+  baseline: receiver_cross_attention
+  receiver: sft_qwen_7b
+  protocol: >-
+    A4-preserving channel-isolated semantic recovery with role-specific
+    K/V/O projections and frozen-receiver target-span hidden-state alignment.
+    This is a repair candidate, not a claim of success; A4 remains the frozen
+    historical baseline.
+model:
+  name: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+  adapter: artifacts/checkpoints/generator_sft
+  frozen: true
+  min_visual_tokens: 256
+  max_visual_tokens: 1280
+data:
+  dataset: data/processed/latent_bridge_v35
+  trace_index: data/cache/planner_traces_homer_strict_v35/index.jsonl
+bridge:
+  layer_indices: [6, 13, 20, 27]
+  bottleneck_dim: 48
+  heads: 4
+  gate_init: 0.1
+  channel_fusion: fixed_equal
+  projection_mode: per_channel
+  memory_policy: full_typed_states_no_truncation
+loss:
+  semantic_objective: channel_isolated_v5
+  alignment_teacher: receiver_contextual_final_hidden
+  channel_visibility: target_only
+  caption_nll: 1.0
+  text_teacher_forward_kl: 0.0
+  matched_shuffled_margin: 1.0
+  margin: 0.2
+  counterfactual_reconstruction: 0.75
+  info_nce: 0.5
+  info_nce_temperature: 0.07
+  variance_floor: 0.05
+  # Receiver-native target-span cosine distillation (not random projection).
+  semantic_target_alignment: 0.5
+  temperature: 1.0
+training:
+  stage: semantic_reconstruction
+  semantic_prompt_include_image: false
+  seed: 20260901
+  epochs: 5
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  gradient_accumulation: 4
+  max_grad_norm: 1.0
+  max_target_tokens: 768
+  early_stopping_patience: 2
+  early_stopping_min_delta: 0.002
+  log_every_examples: 32
+  # Use every fit cluster and every held-out validation cluster.  The
+  # validation split remains checkpoint-selection only; test clusters are
+  # sealed for the later outer semantic/caption evaluation.
+  max_train_clusters: null
+  max_validation_clusters: null
+gate:
+  min_channel_validation_gap: 0.01
+  min_channel_fraction_gap_gt_0: 0.60
+  min_channel_retrieval_at_1: 0.125
+  min_counterfactual_nll_improvement: 0.01
+  min_nll_improvement: 0.0
+  max_relative_update_norm: 0.25
+  equal_channel_weight_tolerance: 0.0001

@@ -88,6 +88,13 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20260830)
     parser.add_argument("--retry-round", type=int, default=0)
     parser.add_argument("--cluster-ids", nargs="+")
+    parser.add_argument(
+        "--input-manifest", type=Path,
+        help=(
+            "Cluster-level planner inputs to hash and verify. Defaults to the dataset's "
+            "train/validation trace_inputs.jsonl; test traces must pass an explicit sealed manifest."
+        ),
+    )
     parser.add_argument("--enable-validator-repair", action="store_true")
     args = parser.parse_args()
     args.dataset = args.dataset.resolve()
@@ -97,9 +104,16 @@ def main() -> None:
     if args.retry_round < 0:
         raise ValueError("retry-round must be non-negative")
 
+    input_manifest = (
+        args.input_manifest.resolve()
+        if args.input_manifest is not None
+        else args.dataset / "trace_inputs.jsonl"
+    )
+    if not input_manifest.is_file():
+        raise FileNotFoundError(f"planner input manifest not found: {input_manifest}")
     provenance = {
         "git_commit": repository_commit(),
-        "trace_input_manifest_sha256": sha256(args.dataset / "trace_inputs.jsonl"),
+        "trace_input_manifest_sha256": sha256(input_manifest),
         "homer_prompts_sha256": sha256(ROOT / "src/humor_generator_v35/homer/prompts.py"),
         "adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),
     }
@@ -118,6 +132,24 @@ def main() -> None:
         selected = [row for row in selected if row["cluster_id"] in requested]
     if args.max_clusters is not None:
         selected = selected[: args.max_clusters]
+    input_rows = {
+        str(item["cluster_id"]): item
+        for item in read_jsonl(input_manifest)
+    }
+    selected_ids = {str(row["cluster_id"]) for row in selected}
+    missing_inputs = sorted(selected_ids - set(input_rows))
+    if missing_inputs:
+        raise RuntimeError(
+            f"planner input manifest is missing {len(missing_inputs)} selected clusters; "
+            f"first={missing_inputs[:5]}"
+        )
+    for row in selected:
+        expected = input_rows[str(row["cluster_id"])]
+        for field in ("image_sha256", "standard_description"):
+            if str(expected.get(field)) != str(row[field]):
+                raise RuntimeError(
+                    f"planner input manifest mismatch for {row['cluster_id']} field={field}"
+                )
 
     backend = QwenBackend.load(
         MODEL,
@@ -128,6 +160,13 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     index_path = args.output / "index.jsonl"
     existing = {item["cluster_id"]: item for item in read_jsonl(index_path)} if index_path.exists() else {}
+    input_manifest_hash = provenance["trace_input_manifest_sha256"]
+    for cluster_id, record in existing.items():
+        recorded_hash = record.get("provenance", {}).get("trace_input_manifest_sha256")
+        if recorded_hash != input_manifest_hash:
+            raise RuntimeError(
+                f"existing trace {cluster_id} was built from a different planner input manifest"
+            )
     failures: list[dict] = []
     completed_success = len(existing)
     with index_path.open("a", encoding="utf-8") as index:

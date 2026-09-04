@@ -54,15 +54,19 @@ def main() -> None:
     gate = config["gate"]
     first_nll = float(rows[0]["validation"]["caption_nll"])
     objective = str(config["loss"].get("semantic_objective"))
-    phase_channel = objective in {"channel_balanced_v3", "channel_isolated_v4"}
+    phase_channel = objective in {
+        "channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"
+    }
 
     if phase_channel:
         channel_metric_names = [
             "matched_minus_shuffled_logp", "fraction_gap_gt_0",
             "caption_nll", "info_nce_retrieval_at_1",
         ]
-        if objective == "channel_isolated_v4":
+        if objective in {"channel_isolated_v4", "channel_isolated_v5"}:
             channel_metric_names.append("counterfactual_reconstruction_nll")
+        if objective == "channel_isolated_v5":
+            channel_metric_names.append("semantic_target_alignment")
         required_channel_metrics = {
             f"{metric}_{channel}"
             for channel in CHANNELS
@@ -90,7 +94,7 @@ def main() -> None:
                     float(values[f"info_nce_retrieval_at_1_{channel}"])
                     >= float(gate["min_channel_retrieval_at_1"])
                 )
-                if objective == "channel_isolated_v4":
+                if objective in {"channel_isolated_v4", "channel_isolated_v5"}:
                     result[f"donor_reconstruction_improved_{channel}"] = (
                         float(rows[0]["validation"][
                             f"counterfactual_reconstruction_nll_{channel}"

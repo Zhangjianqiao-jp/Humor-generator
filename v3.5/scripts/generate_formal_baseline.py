@@ -84,6 +84,8 @@ def load_bridge(config: dict[str, Any], checkpoint: Path, backend: QwenBackend) 
             bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
             heads=int(config["bridge"]["heads"]),
             gate_init=float(config["bridge"].get("gate_init", 0.1)),
+            channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
+            projection_mode=str(config["bridge"].get("projection_mode", "shared")),
         )
     else:
         bridge = (
