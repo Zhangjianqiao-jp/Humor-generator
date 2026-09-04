@@ -184,6 +184,21 @@ queued `b-batch` 作业 `6711814` 后，尝试提交同一 smoke 的 inter 版�
 后台模式。以后资源选择同时检查：GPU/节点是否空闲、账户限额、作业模式权限和历史
 兼容性；`*-inter` 只用于显式的短交互调试，不用于正式或自动化后台实验。
 
+## V35-ENG-009（2026-09-05）：sealed Planner trace 第一轮有界重试仍残留四条 schema 失败
+
+第一轮 sealed test trace 缓存最初只有 `105/121` 条完整记录。使用同一输入 manifest、
+Qwen2.5-VL-7B revision、Planner SFT adapter、HOMER prompt 和 validator-feedback repair
+进行 8 次有界重试后，缓存增加到 `117/121`；`test_planner_trace_validation_retry.json`
+正确报告 `status=fail`、`missing_clusters=4`，残留为 `nycc_236`、`nycc_323`、
+`nycc_394`、`nycc_682`。错误分别是 record-style JSON 缺少严格字段、association 重复
+实体或错误嵌套；这些输出不能由无损 repair 自动改写成合法语义，因此没有被强行接受。
+
+该事件是 **data/provenance completeness**，不是 latent 方法、模型或 CUDA 失败。已保留
+第一轮的原始输出和失败原因，新增 `jobs/cache_test_planner_traces_retry2.pjm` 做第二轮
+有界重试（仅 residual IDs，16 attempts，`retry_round=2`），不改写已成功 trace，不变更
+prompt/model/manifest。若第二轮仍失败，必须继续 fail-closed，重新设计受约束的生成/修复
+协议后再试，禁止用人工补写或放宽 schema 伪造 `121/121`。
+
 ## 权威依据
 
 1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o

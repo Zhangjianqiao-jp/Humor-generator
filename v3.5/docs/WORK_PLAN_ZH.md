@@ -122,7 +122,13 @@ cluster 的 image hash/description，并把 input-manifest hash、prompt hash、
 caption 作业 fail-closed，不生成“提升”结论。
 若首次 sealed cache 的 `failures.json` 非空，只能提交
 `jobs/cache_test_planner_traces_retry.pjm` 对失败 cluster 做有界重试；不得删除或覆盖已
-成功 trace，也不得把失败 cluster 当作完整 121 条使用。
+成功 trace，也不得把失败 cluster 当作完整 121 条使用。第一轮重试达到 `117/121` 后
+仍有 4 条严格 schema 失败（`nycc_236/323/394/682`），因此新增
+`jobs/cache_test_planner_traces_retry2.pjm`：仍使用同一 image manifest、Qwen revision、
+HOMER prompt、validator-feedback repair 和 provenance，只把 residual cluster 的随机
+尝试上限从 8 提到 16；成功记录由脚本跳过，失败记录仍会使 validator fail-closed。直到
+`test_planner_trace_validation_retry2.json` 报告 `121/121` 且 `status=pass`，A5 outer 和
+caption 作业均不得使用 sealed test。
 
 当前适用文献依据：BLIP-2 (Li et al., 2023)、HistAlign (Wan et al., EMNLP 2023)、
 Flamingo (Alayrac et al., NeurIPS 2022)、Multi-Source Attention (Libovický & Helcl,
