@@ -738,14 +738,21 @@ validator 通过，但 gate 为 `outer_semantic_inconclusive`；因此当前仍�
   image-clustered bootstrap 和独立 Group-of-10 盲评；`good / weak / bad` 绝对标签与
   相对 win-rate 必须分开报告。没有实际 judge packet 结果时，不得填写 good-caption rate。
 
-### 15.1 本轮执行顺序
+### 15.1 本轮执行顺序（A5 已通过语义 gate）
 
 ```text
 121/121 trace gate (pass)
 → clean preflight (pass)
-→ A5 bridge-only training (pending)
-→ A5 semantic gate (mandatory)
-→ sealed outer semantic confirmation (mandatory)
-→ Text-HOMER / full-plan-text / A5 latent caption generation
+→ A5 bridge-only training (job 6712327, complete)
+→ A5 semantic gate (strong_go; epoch 5)
+→ sealed outer semantic confirmation (job 6712454, outer_semantic_go)
+→ Text-HOMER / full-plan-text / A5 latent caption generation (job 6712460, running)
+→ generation integrity validation
 → Group-of-3 pilot screening, then Group-of-10 mirrored multi-rater evaluation
+
+本轮 A5 的可引用结果、精确 gap/CI 和方法证据边界见
+[`PHASE_A5_RESULTS_ZH.md`](PHASE_A5_RESULTS_ZH.md)。A5 的语义 gate 只证明
+channel-specific causal sensitivity；在盲评完成前，不得填写 good-caption rate、
+win rate 或“更幽默”的结论。caption job 失败时保留已写入 JSONL，使用新输出目录
+续跑，不覆盖已有记录。
 ```
