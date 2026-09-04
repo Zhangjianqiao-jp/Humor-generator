@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-04T17:42:00+09:00"
+observed_at: "2026-09-04T17:49:55+09:00"
 must_revalidate: true
-source_commit: bc495c672c9a32b490b26c577958334e69f81177
+source_commit: e6763d6a2314fd2da7f1ee2ec9a1512710d7eb2f
 branch: latent
 
-current_phase: a4_channel_isolated_formal_script_corrected_not_submitted
+current_phase: a4_channel_isolated_formal_pilot_queued_corrected_script
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -143,14 +143,14 @@ latest_outer_attempt:
     traces 666/666 passed; no outer semantic or caption conclusion is allowed.
 
 a4_channel_isolated_repair:
-  status: engineering_smoke_passed_formal_ready_corrected_script
+  status: corrected_formal_pilot_queued
   config: configs/pilot/cross_attention_semantic_phase_a4.yaml
   job_script: jobs/cross_attention_phase_a4.pjm
   objective: channel_isolated_v4
   channel_visibility: target_only
   semantic_prompt_include_image: false
   counterfactual_reconstruction_weight: 0.75
-  formal_status: not_submitted_corrected_script
+  formal_status: queued_corrected_script
   smoke_job_id: "6711052"
   smoke_output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
   smoke_validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
@@ -161,15 +161,15 @@ a4_channel_isolated_repair:
   smoke_bridge_gradient_norm: 2.1927127838134766
   smoke_bridge_update_norm: 0.16706088185310364
   smoke_policy_trainable_parameters: 0
-  formal_job_id: null
+  formal_job_id: "6711109"
   formal_resource_group: c-batch
-  formal_scheduler_estimated_start: null
+  formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
   formal_output: outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
   scientific_training_started: false
 
 current_gate:
   name: phase_a4_channel_isolated_real_trace_smoke
-  status: passed_formal_script_corrected_not_submitted
+  status: formal_pilot_queued_corrected_script
   job_id: "6711052"
   config: configs/pilot/cross_attention_semantic_phase_a4.yaml
   job_script: jobs/cross_attention_phase_a4_smoke.pjm
@@ -184,8 +184,8 @@ current_gate:
   failed_attempt_id: "6711036"
   failed_attempt_status: terminated_by_monitoring_error_no_scientific_output
   replacement_status: pass
-  formal_job_id: null
-  formal_scheduler_estimated_start: null
+  formal_job_id: "6711109"
+  formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
   on_pass: a4_bridge_only_64_train_24_validation_is_unlocked
   on_failure: preserve_log_and_update_docs_before_any_retry
 
@@ -240,7 +240,7 @@ program_risk_audit:
     passed, while outer A3 baseline 6708118 remains a provenance-only failure.
 
 immediate_gate:
-  action: commit_and_submit_corrected_a4_formal_pilot
+  action: monitor_6711109_corrected_a4_formal_pilot
   prerequisite_job_id: "6707953"
   prerequisite_status: a3_pilot_inconclusive_with_engineering_pass
   smoke_job_id: "6711052"
@@ -265,7 +265,7 @@ immediate_gate:
     - Keep checkpoint, Planner, Generator, prompt and trace hashes fixed.
     - Exercise target-only one-hot masks without NaN in inactive attention arms.
     - Exercise donor reconstruction and finite bridge update.
-  status: corrected_formal_pilot_ready_to_submit
+  status: formal_pilot_queued_corrected_script
   resource_request_note: >-
     GENKAI rejects node=1+gpu=1 and gpu=1+exec-policy=simplex. The corrected A4
     formal script uses c-batch + gpu=1 without node=1 or exec-policy; CUDA_VISIBLE_DEVICES=0
@@ -273,10 +273,10 @@ immediate_gate:
   validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   smoke_exit_code: 0
   smoke_elapsed_seconds: 243
-  next_action: commit_corrected_script_then_submit_a4_formal
-  formal_job_id: null
-  formal_status: canceled_before_forward_generic_script_missing_a4_gate
-  formal_scheduler_estimated_start: null
+  next_action: monitor_6711109_preflight_then_a4_gate
+  formal_job_id: "6711109"
+  formal_status: queued_corrected_script
+  formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
   formal_elapse_seconds: 14400
   queue_note: >-
     The prior shared c-batch probes 6708041 and 6708044 and b-batch duplicate 6708042
@@ -311,7 +311,7 @@ next_agent_actions:
   - Never issue pjdel while pjstat is transiently empty; inspect pjstat -H and .stats terminal fields first.
   - Do not treat the historical outer smoke 6708113 as an A4 gate; it used the A3 protocol.
   - Preserve outer job 6708118 as an engineering/provenance failure; do not interpret it as a latent result.
-  - Commit the corrected A4 job, test contract, plan and memory update before formal submission; never use --allow-dirty.
+  - Corrected A4 job 6711109 is queued; wait for its start and verify preflight before classifying any scientific result.
   - Submit only jobs/cross_attention_phase_a4.pjm; verify target-only one-hot channel mass and donor reconstruction in its own semantic gate.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning unless the revised semantic gate passes.

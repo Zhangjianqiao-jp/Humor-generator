@@ -75,7 +75,7 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 → Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
 → Phase A3 gate：engineering pass，semantic pilot_inconclusive
 → A3 outer semantic baseline（job 6708118 在 dirty-worktree preflight 停止，待 clean commit 重提）
-→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过；旧 c-batch 作业 6711074 在执行前取消，严格 gate 脚本已修正，待 clean commit 后重提）
+→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过；旧 c-batch 作业 6711074 在执行前取消；修正作业 6711109 已排队）
 → latent/text 混合 caption 消融与盲评
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```
@@ -102,13 +102,13 @@ prompt、donor reconstruction、非零 bridge update 和冻结策略检查。随
 使用了旧的输出目录，因此在可能产生混淆前主动取消。该事件记录为工程/可追溯性问题，
 不构成方法 No-Go，也不覆盖 A4 smoke 证据。
 
-现行 `jobs/cross_attention_phase_a4.pjm` 已满足：
+现行 `jobs/cross_attention_phase_a4.pjm` 已满足；修正后的正式作业 `6711109` 已提交：
 
 ```text
 c-batch + gpu=1（单张完整 native GPU）
 独立输出 outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
 locked preflight → CUDA/resource smoke → A4 validator → bridge-only training
-→ 动态读取本次输出目录的 semantic_gate.json
+→ 动态读取本次输出目录的 semantic_gate.json（当前状态 QUE，预计 2026-09-05 12:00 启动）
 ```
 
 正式提交前必须再次通过 `.venv/bin/python -m pytest -q`、`git diff --check`、
