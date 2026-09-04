@@ -129,6 +129,19 @@ target-only one-hot mask 和 donor reconstruction validator。
     `node=1` 与 `gpu=1` 或
     `exec-policy=simplex` 叠加。
 
+## V35-SCHED-003（2026-09-04）：空闲 inter 节点不接受 batch 脚本
+
+为缩短短 smoke 的等待，曾检查到 `b-inter` 有一个空闲完整节点；在取消唯一的
+queued `b-batch` 作业 `6711814` 后，尝试提交同一 smoke 的 inter 版本。PJM 返回
+`PJM 0070 pjsub No execute permission: pjsub batch`，没有启动 forward、没有生成
+输出，也没有占用科学计算资源。根因是 `b-inter` 只允许其交互作业模式，默认的
+`pjsub` batch 脚本没有执行权限；“节点空闲”不能替代“作业模式兼容”。
+
+该事件分类为 scheduler/engineering，不是模型、数据或方法结果。无效脚本已删除，
+不再与 batch/MIG 资源组 race；A4 outer smoke 应恢复到已验证的 `b-batch + node=1`
+后台模式。以后资源选择同时检查：GPU/节点是否空闲、账户限额、作业模式权限和历史
+兼容性；`*-inter` 只用于显式的短交互调试，不用于正式或自动化后台实验。
+
 ## 权威依据
 
 1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o
