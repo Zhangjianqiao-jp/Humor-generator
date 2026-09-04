@@ -120,6 +120,9 @@ clean commit + CPU tests
 cluster 的 image hash/description，并把 input-manifest hash、prompt hash、adapter hash
 写入每条 trace。缺 trace、repair failure、hash 不一致或 outer semantic gate 不通过时，
 caption 作业 fail-closed，不生成“提升”结论。
+若首次 sealed cache 的 `failures.json` 非空，只能提交
+`jobs/cache_test_planner_traces_retry.pjm` 对失败 cluster 做有界重试；不得删除或覆盖已
+成功 trace，也不得把失败 cluster 当作完整 121 条使用。
 
 当前适用文献依据：BLIP-2 (Li et al., 2023)、HistAlign (Wan et al., EMNLP 2023)、
 Flamingo (Alayrac et al., NeurIPS 2022)、Multi-Source Attention (Libovický & Helcl,
