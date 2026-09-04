@@ -603,6 +603,9 @@ caption 或 `good-caption rate`。在 smoke/outer gate 结束前，历史
 新 job。该 job 的输出目录为
 `outputs/outer_semantic_confirmation/a4_outer40`；完成后必须先通过
 `validate_outer_semantic_confirmation_a4.py`，再按预注册 gate 决定是否解锁 caption。
+运行结果和完整 hash/统计见 [`docs/A4_OUTER_VALIDATION_RESULTS_ZH.md`](A4_OUTER_VALIDATION_RESULTS_ZH.md)：
+validator 通过，但 gate 为 `outer_semantic_inconclusive`；因此当前仍不能报告
+`good-caption rate`。
 
 ## 14. 权威参考
 
