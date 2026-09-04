@@ -225,8 +225,9 @@ def test_a4_outer_evaluator_is_independent_and_fail_closed() -> None:
     assert "--seeds 20260830 20260831 20260832" in job
     assert "--max-clusters 2" in smoke
     assert "PYTORCH_ALLOC_CONF=backend:native" in job
-    assert "#PJM -L node=1" in job
-    assert "#PJM -L gpu=1" not in job
+    assert "#PJM -L rscgrp=c-batch" in job
+    assert "#PJM -L gpu=1" in job
+    assert "#PJM -L node=1" not in job
 
 
 def test_dataset_audit_checks_every_byte_level_dependency() -> None:

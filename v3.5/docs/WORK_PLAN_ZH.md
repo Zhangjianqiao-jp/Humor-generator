@@ -559,10 +559,11 @@ evaluation 五类；禁止把排队、NVML、OOM、依赖或代码异常写成�
 PJM 明确禁止把 `node=1` 与 `gpu=1` 同时指定（`GENKAI1006`），也禁止把
 `gpu=1` 与 `-P exec-policy=simplex` 同时指定（`GENKAI0029`）。在 GENKAI 上，
 `node=1` 的 node-allocated 作业就是 simplex/node-exclusive；GPU-capable 的
-`b-batch` 节点配置会自动给该作业分配 GPU。因此外层 semantic confirmation 的
-smoke/formal 脚本统一使用 `b-batch + node=1`，不再写显式 `gpu` 或
-`exec-policy`，并在进程内固定 `CUDA_VISIBLE_DEVICES=0`，使 PyTorch 仍只看到一张
-稳定设备。旧的共享 GPU 探针 `6708044` 已取消；修正后的节点独占 smoke 为
+`b-batch` 节点配置会自动给该作业分配 GPU。因此短 smoke 使用
+`b-batch + node=1`，不再写显式 `gpu` 或 `exec-policy`，并在进程内固定
+`CUDA_VISIBLE_DEVICES=0`，使 PyTorch 仍只看到一张稳定设备；正式 outer 在检查到
+完整 GPU 空闲且队列更短时使用已验证的 `c-batch + gpu=1`，不写 `node=1` 或
+`exec-policy`。旧的共享 GPU 探针 `6708044` 已取消；修正后的节点独占 smoke 为
 `6708113`，调度统计已确认 `NODE NUM=1`、`gpu=4`、`simplex=true`，并以 exit code 0
 在 2 分 01 秒完成。其真实 trace、forward、counterfactual、validator 均通过；2-cluster
 语义结果仍只标记 `outer_semantic_inconclusive`，不作方法结论。这次变更只修复调度
@@ -596,8 +597,10 @@ caption 或 `good-caption rate`。在 smoke/outer gate 结束前，历史
 
 2-cluster smoke `6711856` 已通过工程 validator；其 semantic status 为
 `outer_semantic_inconclusive`，符合小样本 smoke 的预期，不能外推为方法结论。随后
-唯一的 40-cluster × 3-seed sealed outer job `6711870` 已提交到 `b-batch + node=1`
-（2 小时 walltime），当前等待调度。该 job 的输出目录为
+原提交的 40-cluster × 3-seed sealed outer job `6711870` 因 b-batch 预测排到
+2026-09-10 而在启动前取消；没有 forward 或科学输出。当前正式请求已切换到
+已验证且当时有空闲完整 GPU 的 `c-batch + gpu=1`（2 小时 walltime），只保留一个
+新 job。该 job 的输出目录为
 `outputs/outer_semantic_confirmation/a4_outer40`；完成后必须先通过
 `validate_outer_semantic_confirmation_a4.py`，再按预注册 gate 决定是否解锁 caption。
 
