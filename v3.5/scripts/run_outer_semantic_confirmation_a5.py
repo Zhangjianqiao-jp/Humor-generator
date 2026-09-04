@@ -88,6 +88,14 @@ def main() -> None:
         help="Sealed Planner trace index for the evaluation split; defaults to the training/validation index.",
     )
     parser.add_argument(
+        "--donor-trace-index", type=Path,
+        help=(
+            "Trace index containing the validation donor traces.  The sealed "
+            "test index intentionally contains only held-out targets, so the "
+            "donor index is merged read-only for counterfactual matching."
+        ),
+    )
+    parser.add_argument(
         "--trace-input-manifest", type=Path,
         help="Hash-locked planner input manifest corresponding to --trace-index.",
     )
@@ -162,6 +170,18 @@ def main() -> None:
             ).digest(),
         )[:args.max_clusters]
     traces = load_trace_index(trace_index_path)
+    donor_trace_index_path = (
+        args.donor_trace_index.resolve()
+        if args.donor_trace_index is not None
+        else trace_index_path
+    )
+    if donor_trace_index_path != trace_index_path:
+        donor_traces = load_trace_index(donor_trace_index_path)
+        overlap = sorted(set(traces) & set(donor_traces))
+        for cluster in overlap:
+            if traces[cluster] != donor_traces[cluster]:
+                raise RuntimeError(f"conflicting trace records for merged cluster {cluster}")
+        traces.update({cluster: record for cluster, record in donor_traces.items() if cluster not in traces})
     missing = sorted({str(row["cluster_id"]) for row in rows} - set(traces))
     if missing:
         raise RuntimeError(f"A5 outer traces missing: {missing[:5]}")
@@ -237,6 +257,8 @@ def main() -> None:
         "config": str(config_path), "config_sha256": sha256(config_path),
         "dataset": str(dataset), "dataset_manifest_sha256": sha256(dataset / "manifest.json"),
         "trace_index": str(trace_index_path), "trace_index_sha256": sha256(trace_index_path),
+        "donor_trace_index": str(donor_trace_index_path),
+        "donor_trace_index_sha256": sha256(donor_trace_index_path),
         "trace_input_manifest": str(trace_input_manifest),
         "trace_input_manifest_sha256": sha256(trace_input_manifest),
         "frozen_adapter_manifest_sha256": sha256(ROOT / "manifests/frozen_7b_adapters.json"),

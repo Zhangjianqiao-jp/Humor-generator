@@ -29,6 +29,7 @@ python scripts/check_cuda_resource.py
 config=configs/pilot/cross_attention_semantic_phase_a5.yaml
 checkpoint=outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/best_bridge.pt
 trace_index=data/cache/planner_traces_homer_strict_v35_test/index.jsonl
+donor_trace_index=data/cache/planner_traces_homer_strict_v35/index.jsonl
 trace_inputs=data/processed/latent_bridge_v35/test_trace_inputs.jsonl
 output=outputs/outer_semantic_confirmation/a5_outer121
 
@@ -41,7 +42,8 @@ test -s "$checkpoint"
 # Two-cluster real evaluator smoke before the sealed 121-cluster run.
 python scripts/run_outer_semantic_confirmation_a5.py \
   --config "$config" --checkpoint "$checkpoint" \
-  --trace-index "$trace_index" --trace-input-manifest "$trace_inputs" \
+  --trace-index "$trace_index" --donor-trace-index "$donor_trace_index" \
+  --trace-input-manifest "$trace_inputs" \
   --output outputs/engineering_smoke/outer_semantic_confirmation_a5 \
   --seeds 20260901 --max-clusters 2
 python scripts/validate_outer_semantic_confirmation_a5.py \
@@ -51,7 +53,8 @@ python scripts/validate_outer_semantic_confirmation_a5.py \
 
 python scripts/run_outer_semantic_confirmation_a5.py \
   --config "$config" --checkpoint "$checkpoint" \
-  --trace-index "$trace_index" --trace-input-manifest "$trace_inputs" \
+  --trace-index "$trace_index" --donor-trace-index "$donor_trace_index" \
+  --trace-input-manifest "$trace_inputs" \
   --output "$output" --seeds 20260901 20260902 20260903
 python scripts/validate_outer_semantic_confirmation_a5.py \
   --output "$output" --expected-clusters 121 --expected-seeds 3 \
