@@ -20,6 +20,18 @@
 
 ## 当前结论
 
+## V35-ENG-003（2026-09-04）：outer preflight 因工作树未提交而停止
+
+作业 `6708118` 已获得 b-batch 独占节点，但在实际 outer forward 前由 provenance guard
+报告 `dirty_tracked_worktree` 并退出。compile、75 个测试、环境检查、2846/2846 数据行、
+949/949 图片和 666/666 Planner traces 均通过；因此这不是 GPU、OOM、数据或 latent
+方法结果。没有创建 `outputs/outer_semantic_confirmation/a3_outer40`。
+
+原因是 tracked docs/job/memory 文件存在未提交修改。修复方式是审查并提交有意保留的
+修改，或从 immutable clean worktree 重跑；不得用 `--allow-dirty` 绕过来源追踪门禁。
+此事件使 outer A3 baseline 暂停，A4 channel-isolated pilot 也必须等 clean commit 后
+再提交。
+
 1. `cross_attention_semantic_v1` 是方法级 No-Go，不是运行失败。其 reconstruction
    NLL 明显下降，但 validation matched-minus-shuffled gap 只有 `0.004843`，低于
    `0.02` gate，且 `fraction_gap_gt_margin=0`。
@@ -80,6 +92,15 @@
     update 非零，三路 contextual InfoNCE 和单通道 counterfactual 路径均实际执行，
     validator 返回 `status=pass`。因此第 13 项工程配置错误已关闭；它仍不提供 latent
     语义收益或 caption 质量证据，正式 A3 仍须单独运行 `64 train / 24 validation`。
+15. 外层语义确认 smoke 的资源请求曾连续被 PJM 拒绝：`node=1,gpu=1` 触发
+    `GENKAI1006`，`gpu=1,exec-policy=simplex` 触发 `GENKAI0029`。这是调度器资源
+    类型冲突，不是模型、CUDA 或数据错误。GENKAI 的节点分配作业本身就是
+    simplex/node-exclusive，并会按 b-batch 节点配置自动分配 GPU；已将脚本改为
+    `b-batch + node=1`，进程内固定 `CUDA_VISIBLE_DEVICES=0`，移除显式 `gpu` 和
+    `exec-policy`。旧探针 `6708044` 已取消，修正后的 smoke `6708113` 已以
+    exit code 0 完成，并显示 `simplex=true,gpu=4`；其 validator 通过。以后不得把
+    `node=1` 与 `gpu=1` 或
+    `exec-policy=simplex` 叠加。
 
 ## 权威依据
 

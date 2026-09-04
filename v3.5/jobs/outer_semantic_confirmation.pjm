@@ -1,6 +1,10 @@
 #!/bin/sh
-#PJM -L rscgrp=c-batch
-#PJM -L gpu=1
+# Node allocation is the simplex/node-exclusive GPU request on GENKAI.
+# Do not combine node=1 with gpu=1 or exec-policy=simplex: the scheduler
+# rejects those combinations.  b-batch nodes all carry the GPU custom
+# resource; CUDA_VISIBLE_DEVICES below exposes one device to the process.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
 #PJM -L elapse=01:00:00
 #PJM -j
 #PJM -S
@@ -16,6 +20,7 @@ export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
 export PYTORCH_ALLOC_CONF=backend:native
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=1
 
 config=configs/pilot/cross_attention_semantic_phase_a3.yaml

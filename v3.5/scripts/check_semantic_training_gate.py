@@ -53,16 +53,20 @@ def main() -> None:
             raise RuntimeError("non-finite validation metric")
     gate = config["gate"]
     first_nll = float(rows[0]["validation"]["caption_nll"])
-    phase_a3 = str(config["loss"].get("semantic_objective")) == "channel_balanced_v3"
+    objective = str(config["loss"].get("semantic_objective"))
+    phase_channel = objective in {"channel_balanced_v3", "channel_isolated_v4"}
 
-    if phase_a3:
+    if phase_channel:
+        channel_metric_names = [
+            "matched_minus_shuffled_logp", "fraction_gap_gt_0",
+            "caption_nll", "info_nce_retrieval_at_1",
+        ]
+        if objective == "channel_isolated_v4":
+            channel_metric_names.append("counterfactual_reconstruction_nll")
         required_channel_metrics = {
             f"{metric}_{channel}"
             for channel in CHANNELS
-            for metric in (
-                "matched_minus_shuffled_logp", "fraction_gap_gt_0",
-                "caption_nll", "info_nce_retrieval_at_1",
-            )
+            for metric in channel_metric_names
         }
         for row in rows:
             missing = required_channel_metrics - set(row["validation"])
@@ -71,7 +75,7 @@ def main() -> None:
 
     def checks_for(row: dict) -> dict[str, bool]:
         values = row["validation"]
-        if phase_a3:
+        if phase_channel:
             result: dict[str, bool] = {}
             for channel in CHANNELS:
                 result[f"positive_gap_{channel}"] = (
@@ -86,6 +90,15 @@ def main() -> None:
                     float(values[f"info_nce_retrieval_at_1_{channel}"])
                     >= float(gate["min_channel_retrieval_at_1"])
                 )
+                if objective == "channel_isolated_v4":
+                    result[f"donor_reconstruction_improved_{channel}"] = (
+                        float(rows[0]["validation"][
+                            f"counterfactual_reconstruction_nll_{channel}"
+                        ]) - float(values[
+                            f"counterfactual_reconstruction_nll_{channel}"
+                        ])
+                        >= float(gate.get("min_counterfactual_nll_improvement", 0.01))
+                    )
             result.update({
                 "nll_improved": first_nll - float(values["caption_nll"])
                 >= float(gate["min_nll_improvement"]),
@@ -120,7 +133,7 @@ def main() -> None:
     checks = checks_for(best)
     intervals = {}
     ci_checks = {}
-    if phase_a3:
+    if phase_channel:
         detail_path = args.metrics.parent / f"validation_epoch_{best['epoch']}.jsonl"
         if not detail_path.is_file():
             raise RuntimeError(f"missing per-cluster validation details: {detail_path}")
@@ -144,7 +157,7 @@ def main() -> None:
         if name in checks
     }
     engineering_pass = all(engineering_checks.values())
-    if phase_a3:
+    if phase_channel:
         if not engineering_pass:
             status = "hard_no_go"
         elif point_pass:
@@ -172,7 +185,8 @@ def main() -> None:
             "pilot_inconclusive rather than a method-level rejection because the pilot "
             "can have a high Type-II error rate. A failed engineering invariant is reported "
             "as hard_no_go; every valid non-technical result proceeds to the pre-registered "
-            "sealed outer semantic validation before caption-stage claims."
+            "sealed outer semantic validation before caption-stage claims. For Phase A4, "
+            "channel isolation and donor reconstruction are additional protocol conditions."
         ),
         "engineering_checks": engineering_checks,
         "engineering_gate_pass": engineering_pass,

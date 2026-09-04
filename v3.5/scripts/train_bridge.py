@@ -177,6 +177,9 @@ def main() -> None:
             loss_config=config["loss"],
             max_target_tokens=int(config["training"]["max_target_tokens"]),
             stage=str(config["training"]["stage"]),
+            semantic_prompt_include_image=bool(
+                config["training"].get("semantic_prompt_include_image", True)
+            ),
         )
         if str(config["loss"].get("alignment_teacher", "legacy_embedding_projection")) == (
             "receiver_contextual_final_hidden"
@@ -237,6 +240,13 @@ def main() -> None:
         "channel_fusion": config["bridge"].get("channel_fusion"),
         "semantic_objective": config["loss"].get("semantic_objective"),
         "alignment_teacher": config["loss"].get("alignment_teacher"),
+        "channel_visibility": config["loss"].get("channel_visibility", "all"),
+        "counterfactual_reconstruction_weight": config["loss"].get(
+            "counterfactual_reconstruction", 0.0
+        ),
+        "semantic_prompt_include_image": config["training"].get(
+            "semantic_prompt_include_image", True
+        ),
         "initial_bridge_checkpoint": None if args.init_bridge is None else str(args.init_bridge.resolve()),
         "train_cluster_ids_sha256": hashlib.sha256(
             "\n".join(sorted({row["cluster_id"] for row in train_rows})).encode()

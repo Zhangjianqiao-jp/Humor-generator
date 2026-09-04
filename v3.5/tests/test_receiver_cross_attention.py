@@ -108,6 +108,45 @@ def test_phase_a3_fixed_fusion_cannot_drop_a_channel() -> None:
     assert not bridge.layers["0"].channel_score.weight.requires_grad
 
 
+def test_isolated_channel_masks_inactive_memory_and_reports_one_hot_mass() -> None:
+    torch.manual_seed(17)
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2,
+        channel_fusion="fixed_equal",
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    hidden = torch.randn(2, 5, 16)
+    states = _states()
+    with bridge.inject(model, states, active_channels=("conflict",)):
+        conflict_only = model(hidden)
+    weights = bridge.last_diagnostics[0].channel_weights
+    torch.testing.assert_close(
+        torch.tensor(weights), torch.tensor([1.0, 0.0, 0.0]), atol=1e-6, rtol=1e-6
+    )
+    changed_inactive = {name: value.clone() for name, value in states.items()}
+    changed_inactive["local"].add_(1000.0)
+    changed_inactive["global"].mul_(0.0)
+    with bridge.inject(model, changed_inactive, active_channels=("conflict",)):
+        conflict_only_again = model(hidden)
+    torch.testing.assert_close(conflict_only, conflict_only_again)
+
+
+def test_isolated_channel_with_no_valid_inactive_attention_is_finite() -> None:
+    torch.manual_seed(19)
+    bridge = ReceiverDrivenCrossAttentionBridge(
+        16, 16, layer_indices=[0], bottleneck_dim=8, heads=2,
+        channel_fusion="fixed_equal",
+    )
+    model = _Core(16, 1)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    with bridge.inject(model, _states(), active_channels=("global",)):
+        output = model(torch.randn(2, 5, 16))
+    assert torch.isfinite(output).all()
+
+
 def test_alignment_representations_preserve_channel_identity_and_gradients() -> None:
     bridge = ReceiverDrivenCrossAttentionBridge(
         16, 16, layer_indices=[0, 1], bottleneck_dim=8, heads=2

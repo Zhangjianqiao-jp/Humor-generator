@@ -50,6 +50,7 @@ def main() -> None:
         [python, "scripts/verify_frozen_artifacts.py"],
         [python, "scripts/train_bridge.py", "--help"],
         [python, "scripts/real_trace_bridge_smoke.py", "--help"],
+        [python, "scripts/validate_phase_a4_smoke.py", "--help"],
         [python, "scripts/generate_formal_baseline.py", "--help"],
         [python, "scripts/run_outer_semantic_confirmation.py", "--help"],
         [python, "scripts/validate_outer_semantic_confirmation.py", "--help"],

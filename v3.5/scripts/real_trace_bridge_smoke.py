@@ -131,6 +131,9 @@ def main() -> None:
             loss_config=config["loss"],
             max_target_tokens=int(config["training"]["max_target_tokens"]),
             stage=str(config["training"]["stage"]),
+            semantic_prompt_include_image=bool(
+                config["training"].get("semantic_prompt_include_image", True)
+            ),
         )
         if baseline == "receiver_cross_attention"
         else FrozenReceiverBridgeTask(
@@ -237,6 +240,13 @@ def main() -> None:
         "communication_interface": (
             "receiver_driven_full_state_cross_attention_no_soft_prefix"
             if baseline == "receiver_cross_attention" else "input_soft_prefix"
+        ),
+        "channel_visibility": config["loss"].get("channel_visibility", "all"),
+        "semantic_prompt_include_image": config["training"].get(
+            "semantic_prompt_include_image", True
+        ),
+        "counterfactual_reconstruction_weight": config["loss"].get(
+            "counterfactual_reconstruction", 0.0
         ),
         "samples": sample_reports,
         "hard_negative_diagnostics": negative_diagnostics,

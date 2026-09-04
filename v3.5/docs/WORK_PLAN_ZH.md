@@ -1,5 +1,65 @@
 # v3.5 修正版实验计划
 
+## 0A. A3 gap 诊断后的 A4 修订（2026-09-04）
+
+A3 的真实 channel gap 并不大：overall matched-minus-shuffled log-probability 为
+`0.000216`；conflict/local/global 分别为 `-0.000040/-0.000317/0.001006`。此前日志中
+约 `0.798` 的 `shuffled_margin` 是
+`softplus(margin - gap)` 的损失值，不是语义 gap。A3 因此只能写作
+**因果通道使用未证实（pilot_inconclusive）**，不能写作 latent 类方法失败。
+
+A3 的主要可识别性缺陷是：单 channel 目标仍由三路 memory 共同提供，且 semantic
+recovery prompt 包含图片；不变 channel 和图像都可以预测目标。固定等权融合还令单路
+替换只改变约三分之一的残差。为避免“只把原目标概率压低”而伪造 gap，新增独立的
+`configs/pilot/cross_attention_semantic_phase_a4.yaml`，不覆盖 A3：
+
+```text
+channel_visibility = target_only
+semantic_prompt_include_image = false
+counterfactual_reconstruction = 0.75
+semantic_objective = channel_isolated_v4
+```
+
+对 channel `c`，A4 只允许 receiver 读取 `M_c`：
+
+```text
+z_c = B_phi(H_c)
+```
+
+matched 条件优化原语义 `s_c`，shuffled 条件同时满足：
+
+```text
+log p(s_c | M_c) > log p(s_c | M'_c)
+log p(s'_c | M'_c)  较低重建损失
+```
+
+第二项由 `counterfactual_reconstruction` 实现，要求替换后的 channel 能解码 donor
+语义，而不是产生任意扰动。`src/humor_generator_v35/latent/cross_attention.py` 的
+`active_channels` mask 会把未激活 channel 的 attention probability 置零；inactive
+channel 全为 mask 时使用有限 score floor，避免全 `-inf` softmax 产生 NaN。A3 默认
+`active_channels=None`，保持历史协议可复现。
+
+新增的 `scripts/validate_phase_a4_smoke.py` 会检查：两个真实 trace、冻结 7B、bridge
+非零更新、无 NaN、每个 target channel 的 channel weight 为 one-hot、donor reconstruction
+路径确实执行。作业 `jobs/cross_attention_phase_a4.pjm` 的顺序为：
+
+```text
+locked preflight → CUDA/resource smoke → A4 validator → bridge-only training
+→ semantic gate
+```
+
+semantic gate 仍只允许 `strong_go` 或 `go_to_outer_semantic_validation` 进入后续验证；
+任何 `pilot_inconclusive` 都不会触发 caption 生成。当前不增加 JS/全词表分布分离项，
+因为在 frozen 7B 上它会额外占用大块 vocabulary logits，且单独最大化分布差异可能制造
+随机行为；A4 先用可解释的 channel isolation + donor reconstruction + 原有 margin。
+若 A4 仍失败，再单独比较 JS/conditional-separation ablation，不同时改变多项变量。
+
+2026-09-04 的 outer confirmation 作业 `6708118` 已获得完整节点但在正式 forward 前被
+`run_formal_preflight.py` 因 tracked worktree dirty 拒绝，退出码为 1；compile、75 tests、
+dataset `2846/2846`、trace `666/666` 均通过。该作业没有产生 outer 结果，也没有改变
+A3 科学结论。重新提交前必须形成干净 commit 或从 immutable clean worktree 运行；不得
+用 `--allow-dirty` 绕过 provenance guard。
+
 ## 0. 当前执行基线（2026-09-03）
 
 本文件当前只管理 **v3.5 latent communication 主线**。旧 v2.5/v3.0 的 DPO、偏好对、
@@ -14,7 +74,8 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 → Phase A3 replacement engineering smoke（已通过，job 6706516）
 → Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
 → Phase A3 gate：engineering pass，semantic pilot_inconclusive
-→ 剩余 40 个 outer semantic clusters 确认（2-cluster real-trace smoke 已提交，job 6708044）
+→ A3 outer semantic baseline（job 6708118 在 dirty-worktree preflight 停止，待 clean commit 重提）
+→ A4 channel-isolated functional semantic pilot（代码已修改，尚未提交 GPU）
 → latent/text 混合 caption 消融与盲评
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```
@@ -27,13 +88,11 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 通过，但 24-cluster semantic gate 为 `pilot_inconclusive`，因此不能直接进入 caption
 bridge 或 preference learning。
 
-截至 2026-09-03 23:29 JST，outer evaluator 的完整 preflight 已通过（锁定环境内 75
-tests、数据和 trace gate 均通过）。为避免在未验证真实前向前占用正式时段，已提交仅
-2 个 outer cluster、共同 seed `20260830`、5 分钟 walltime 的真实 GPU smoke
-`6708044` 到 `c-batch`；调度器给出的最早启动时间为 2026-09-04 11:00。它是唯一保留
-的 outer smoke，未提交 40×3 正式作业。smoke 必须先通过
-`scripts/validate_outer_semantic_confirmation.py`；通过后才提交一份 40 cluster ×
-3 seed 的 sealed confirmation。MIG 和 DPO 均保持禁用。
+截至 2026-09-04，outer evaluator 曾由完整节点作业 `6708118` 启动，但
+`run_formal_preflight.py` 因 tracked worktree dirty 在实际 forward 前停止；75 tests、
+数据和 trace gate 均已通过，没有生成 outer 结果。该 baseline 必须在 clean commit 后
+用新输出目录重提，仍未提交 40×3 正式作业。通过后才提交一份 40 cluster × 3 seed 的
+sealed confirmation。A4 的新训练不覆盖该 baseline；MIG 和 DPO 均保持禁用。
 
 `docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md` 是旧 bridge 重评的数值结果；它只能说明
 v1/v2 在 24-cluster pilot 上证据不足，不能替代新的 A3 训练。以下各节若与本节的当前
@@ -428,6 +487,28 @@ association 组合显示收益后，才继续区分 local 与 global；避免直
 `docs/EXPERIMENT_FAILURE_LOG_ZH.md`。必须区分 environment/data/engineering/method/
 evaluation 五类；禁止把排队、NVML、OOM、依赖或代码异常写成方法失败。每次修复必须
 使用新输出目录，保留旧日志、checkpoint、配置和 job ID，并及时更新本计划的“当前可复现状态”。
+
+### 13.1 当前外层语义确认资源请求（2026-09-03）
+
+PJM 明确禁止把 `node=1` 与 `gpu=1` 同时指定（`GENKAI1006`），也禁止把
+`gpu=1` 与 `-P exec-policy=simplex` 同时指定（`GENKAI0029`）。在 GENKAI 上，
+`node=1` 的 node-allocated 作业就是 simplex/node-exclusive；GPU-capable 的
+`b-batch` 节点配置会自动给该作业分配 GPU。因此外层 semantic confirmation 的
+smoke/formal 脚本统一使用 `b-batch + node=1`，不再写显式 `gpu` 或
+`exec-policy`，并在进程内固定 `CUDA_VISIBLE_DEVICES=0`，使 PyTorch 仍只看到一张
+稳定设备。旧的共享 GPU 探针 `6708044` 已取消；修正后的节点独占 smoke 为
+`6708113`，调度统计已确认 `NODE NUM=1`、`gpu=4`、`simplex=true`，并以 exit code 0
+在 2 分 01 秒完成。其真实 trace、forward、counterfactual、validator 均通过；2-cluster
+语义结果仍只标记 `outer_semantic_inconclusive`，不作方法结论。这次变更只修复调度
+资源类型冲突，不改变模型、数据或语义实验设计；smoke 通过后才允许提交 40-cluster
+outer confirmation。
+
+smoke 通过后已提交正式 40-cluster outer confirmation `6708118`，同样使用
+`b-batch + node=1` 的节点独占模式（调度统计为 `simplex=true,gpu=4`），walltime
+为 1 小时；当前调度器预计启动时间为 `2026-09-05 12:00 JST`。该等待是长时段
+simplex 资源预约造成的，不是代码或方法失败；不得为缩短等待改回 MIG（已有
+allocator 故障记录）或未经确认改用共享 GPU。正式作业开始后仍需以其自身的
+`check_cuda_resource.py` 输出确认单卡 H100，再解释 outer 结果。
 
 ## 14. 权威参考
 

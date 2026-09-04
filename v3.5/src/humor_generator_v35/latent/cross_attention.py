@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Iterator, Mapping
+from typing import Any, Iterator, Mapping, Sequence
 
 import torch
 from torch import nn
@@ -18,6 +18,24 @@ from ..qwen_backend import find_decoder_layers
 
 
 CHANNELS = ("conflict", "local", "global")
+
+
+def _validate_active_channels(active_channels: Sequence[str] | None) -> tuple[str, ...]:
+    """Validate and canonicalize a receiver-visible channel subset.
+
+    ``None`` means the historical full-memory condition.  An explicit subset
+    is used by the A4 causal pilot to prevent the unchanged channels from
+    explaining a target channel during a matched/shuffled comparison.
+    """
+    if active_channels is None:
+        return CHANNELS
+    selected = tuple(dict.fromkeys(str(name) for name in active_channels))
+    if not selected:
+        raise ValueError("active_channels must contain at least one channel")
+    unknown = sorted(set(selected) - set(CHANNELS))
+    if unknown:
+        raise ValueError(f"unknown active channels: {unknown}")
+    return tuple(name for name in CHANNELS if name in selected)
 
 
 @dataclass(frozen=True)
@@ -81,8 +99,15 @@ class _GatedLatentEnrichment(nn.Module):
             batch, source_len, self.heads, self.head_dim
         ).transpose(1, 2)
         scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) / self.head_dim**0.5
-        scores = scores.masked_fill(~memory_mask[:, None, None, :].bool(), -torch.inf)
-        probabilities = torch.softmax(scores, dim=-1).to(v.dtype)
+        valid = memory_mask[:, None, None, :].bool()
+        # ``softmax([-inf, ..., -inf])`` is NaN.  In an isolated-channel
+        # condition the inactive channels intentionally have no valid memory,
+        # so use a finite floor and explicitly zero their probabilities after
+        # softmax.  This keeps the residual exactly zero for an inactive arm.
+        scores = scores.masked_fill(~valid, -torch.finfo(scores.dtype).max)
+        probabilities = torch.softmax(scores, dim=-1) * valid.to(scores.dtype)
+        probabilities = probabilities / probabilities.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+        probabilities = probabilities.to(v.dtype)
         attended = torch.matmul(probabilities, v).transpose(1, 2)
         return attended, probabilities
 
@@ -91,8 +116,13 @@ class _GatedLatentEnrichment(nn.Module):
         hidden: torch.Tensor,
         memories: Mapping[str, torch.Tensor],
         memory_masks: Mapping[str, torch.Tensor],
+        active_channels: Sequence[str] | None = None,
     ) -> tuple[torch.Tensor, float, float, tuple[float, float, float]]:
         batch, target_len, _ = hidden.shape
+        active = _validate_active_channels(active_channels)
+        active_mask = torch.tensor(
+            [name in active for name in CHANNELS], dtype=torch.bool, device=hidden.device
+        )
         # Keep the small trainable bridge in fp32 even when the frozen Qwen
         # receiver runs in bf16. Returning fp32 hidden states would leak the
         # dtype change into the next frozen decoder block, so only the residual
@@ -112,12 +142,18 @@ class _GatedLatentEnrichment(nn.Module):
         contexts = torch.stack(attended_by_channel, dim=2)  # [B,T,C,H,Dh]
         contexts = contexts.reshape(batch, target_len, len(CHANNELS), -1)
         if self.channel_fusion == "fixed_equal":
-            channel_probabilities = contexts.new_full(
-                (batch, target_len, len(CHANNELS)), 1.0 / len(CHANNELS)
+            channel_probabilities = contexts.new_zeros(
+                (batch, target_len, len(CHANNELS))
             )
+            channel_probabilities[..., active_mask] = 1.0 / len(active)
         else:
             channel_logits = self.channel_score(contexts.float()).squeeze(-1)
+            channel_logits = channel_logits.masked_fill(~active_mask, -torch.finfo(channel_logits.dtype).max)
             channel_probabilities = torch.softmax(channel_logits, dim=-1)
+            channel_probabilities = channel_probabilities * active_mask.to(channel_probabilities.dtype)
+            channel_probabilities = channel_probabilities / channel_probabilities.sum(
+                dim=-1, keepdim=True
+            ).clamp_min(1e-12)
         attended = (channel_probabilities.unsqueeze(-1) * contexts.float()).sum(2)
         delta = torch.tanh(self.gate) * self.output(attended)
         entropy = torch.stack(entropy_by_channel).mean()
@@ -192,10 +228,12 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
         return memory, mask
 
     def typed_memories(
-        self, states: Mapping[str, torch.Tensor]
+        self, states: Mapping[str, torch.Tensor],
+        active_channels: Sequence[str] | None = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         if set(states) != set(CHANNELS):
             raise ValueError(f"full-state bridge requires exactly {CHANNELS}")
+        active = set(_validate_active_channels(active_channels))
         batch = None
         memories: dict[str, torch.Tensor] = {}
         masks: dict[str, torch.Tensor] = {}
@@ -207,7 +245,9 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
             if value.shape[0] != batch:
                 raise ValueError("all memory channels must share a batch size")
             memories[name] = value + self.channel_types[index].to(value.dtype)
-            masks[name] = torch.ones(value.shape[:2], dtype=torch.bool, device=value.device)
+            masks[name] = torch.full(
+                value.shape[:2], name in active, dtype=torch.bool, device=value.device
+            )
         return memories, masks
 
     def alignment_representations_by_channel(
@@ -253,13 +293,20 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
         raise TypeError(f"unsupported decoder layer output: {type(output).__name__}")
 
     @contextmanager
-    def inject(self, model: Any, states: Mapping[str, torch.Tensor]) -> Iterator[None]:
+    def inject(
+        self,
+        model: Any,
+        states: Mapping[str, torch.Tensor],
+        *,
+        active_channels: Sequence[str] | None = None,
+    ) -> Iterator[None]:
         decoder_layers = find_decoder_layers(model)
         if max(self.layer_indices) >= len(decoder_layers):
             raise ValueError(
                 f"requested layer {max(self.layer_indices)} from {len(decoder_layers)} decoder layers"
             )
-        memories, memory_masks = self.typed_memories(states)
+        active = _validate_active_channels(active_channels)
+        memories, memory_masks = self.typed_memories(states, active_channels=active)
         handles = []
         diagnostics: list[CrossAttentionDiagnostics] = []
         for index in self.layer_indices:
@@ -269,7 +316,7 @@ class ReceiverDrivenCrossAttentionBridge(nn.Module):
                      layer_index: int = index, enrichment: _GatedLatentEnrichment = adapter) -> Any:
                 hidden = output if torch.is_tensor(output) else output[0]
                 updated, entropy, relative, channel_weights = enrichment(
-                    hidden, memories, memory_masks
+                    hidden, memories, memory_masks, active_channels=active
                 )
                 diagnostics.append(CrossAttentionDiagnostics(
                     layer=layer_index,

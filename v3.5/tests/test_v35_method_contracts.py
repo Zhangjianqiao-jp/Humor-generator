@@ -12,6 +12,7 @@ from humor_generator_v35.latent.bridges import nearest_vocabulary_embeddings
 from humor_generator_v35.training.formal_bridge import (
     full_plan_text_messages, hard_negative_cluster_map, latent_messages,
 )
+from humor_generator_v35.training.cross_attention_bridge import semantic_recovery_messages
 from humor_generator_v35.data.clustered import _finalists
 
 
@@ -60,6 +61,19 @@ def test_sft_receiver_conditions_always_include_the_image() -> None:
         assert content[0] == {"type": "image", "image": image}
     assert "Humor plan:" not in latent[0]["content"][1]["text"]
     assert "Humor plan:" in text[0]["content"][1]["text"]
+
+
+def test_a4_semantic_recovery_can_explicitly_disable_image_shortcut() -> None:
+    messages = semantic_recovery_messages(
+        "/tmp/example.jpg", "conflict", include_image=False
+    )
+    assert messages[0]["content"] == [{
+        "type": "text",
+        "text": (
+            "Recover only the exact conflict field carried by the external memory. "
+            "Preserve every word and output only that field, without a heading or explanation."
+        ),
+    }]
 
 
 def _plan(left: str, right: str) -> dict:
@@ -133,6 +147,17 @@ def test_all_formal_comparison_configs_share_visual_token_budget() -> None:
     assert budgets == {(256, 1280)}
 
 
+def test_a4_config_removes_shortcuts_and_requires_donor_reconstruction() -> None:
+    config = yaml.safe_load(
+        (ROOT / "configs/pilot/cross_attention_semantic_phase_a4.yaml").read_text()
+    )
+    assert config["loss"]["semantic_objective"] == "channel_isolated_v4"
+    assert config["loss"]["channel_visibility"] == "target_only"
+    assert config["loss"]["counterfactual_reconstruction"] > 0
+    assert config["training"]["semantic_prompt_include_image"] is False
+    assert config["model"]["frozen"] is True
+
+
 def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
     smoke = (ROOT / "scripts/real_trace_bridge_smoke.py").read_text()
     assert "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples" in smoke
@@ -156,6 +181,17 @@ def test_formal_job_is_fail_closed_in_smoke_data_gpu_train_order() -> None:
         '"scripts/verify_clustered_dataset.py"'
     )
     assert '"scripts/check_trace_completion.py"' in checker
+
+
+def test_a4_smoke_is_separate_and_has_no_scientific_training() -> None:
+    smoke = (ROOT / "jobs/cross_attention_phase_a4_smoke.pjm").read_text()
+    assert "cross_attention_semantic_phase_a4.yaml" in smoke
+    assert "real_trace_bridge_smoke.py" in smoke
+    assert "validate_phase_a4_smoke.py" in smoke
+    assert "train_bridge.py" not in smoke
+    assert "run_formal_preflight.py" in smoke
+    assert "PYTORCH_ALLOC_CONF=backend:native" in smoke
+    assert "CUDA_VISIBLE_DEVICES=0" in smoke
 
 
 def test_dataset_audit_checks_every_byte_level_dependency() -> None:

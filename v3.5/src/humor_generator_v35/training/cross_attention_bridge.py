@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import torch
 from torch.nn import functional as F
@@ -35,7 +35,18 @@ def zero_prefix_caption_messages(image: str) -> list[dict[str, Any]]:
     return [{"role": "user", "content": [image_part(image), text_part(GENERATOR_INSTRUCTION)]}]
 
 
-def semantic_recovery_messages(image: str, channel: str | None = None) -> list[dict[str, Any]]:
+def semantic_recovery_messages(
+    image: str,
+    channel: str | None = None,
+    *,
+    include_image: bool = True,
+) -> list[dict[str, Any]]:
+    """Build the semantic receiver prompt.
+
+    A3 keeps the image for historical reproduction.  A4 sets
+    ``include_image=False`` so a channel-isolated recovery example cannot
+    solve the target from an image/prompt shortcut instead of latent memory.
+    """
     instruction = SEMANTIC_RECOVERY_INSTRUCTION
     if channel is not None:
         if channel not in TypedLatentBridge.channel_order:
@@ -44,7 +55,11 @@ def semantic_recovery_messages(image: str, channel: str | None = None) -> list[d
             f"Recover only the exact {channel} field carried by the external memory. "
             "Preserve every word and output only that field, without a heading or explanation."
         )
-    return [{"role": "user", "content": [image_part(image), text_part(instruction)]}]
+    content: list[dict[str, Any]] = []
+    if include_image:
+        content.append(image_part(image))
+    content.append(text_part(instruction))
+    return [{"role": "user", "content": content}]
 
 
 def contextual_teacher_messages(channel: str, semantics: str) -> list[dict[str, Any]]:
@@ -80,7 +95,7 @@ class ReceiverCrossAttentionTask:
     def __init__(self, backend: QwenBackend, bridge: ReceiverDrivenCrossAttentionBridge, *,
                  root: Path, trace_index: dict[str, dict[str, Any]],
                  loss_config: dict[str, float], max_target_tokens: int,
-                 stage: str) -> None:
+                 stage: str, semantic_prompt_include_image: bool = True) -> None:
         if stage not in {"semantic_reconstruction", "caption"}:
             raise ValueError("stage must be semantic_reconstruction or caption")
         self.backend = backend
@@ -90,6 +105,15 @@ class ReceiverCrossAttentionTask:
         self.loss_config = loss_config
         self.max_target_tokens = max_target_tokens
         self.stage = stage
+        self.semantic_prompt_include_image = bool(semantic_prompt_include_image)
+        self.channel_visibility = str(loss_config.get("channel_visibility", "all"))
+        if self.channel_visibility not in {"all", "target_only"}:
+            raise ValueError("channel_visibility must be all or target_only")
+        self.counterfactual_reconstruction_weight = float(
+            loss_config.get("counterfactual_reconstruction", 0.0)
+        )
+        if self.counterfactual_reconstruction_weight < 0:
+            raise ValueError("counterfactual_reconstruction must be non-negative")
         self.semantic_objective = str(
             loss_config.get("semantic_objective", "joint_reconstruction_v2")
         )
@@ -101,7 +125,7 @@ class ReceiverCrossAttentionTask:
         }:
             raise ValueError("unsupported alignment_teacher")
         if self.semantic_objective not in {
-            "joint_reconstruction_v2", "channel_balanced_v3"
+            "joint_reconstruction_v2", "channel_balanced_v3", "channel_isolated_v4"
         }:
             raise ValueError("unsupported semantic_objective")
         self._contextual_teacher_cache: dict[str, dict[str, torch.Tensor]] = {}
@@ -250,12 +274,15 @@ class ReceiverCrossAttentionTask:
         return embeddings, full["attention_mask"], positions, targets, teacher_logits, states
 
     def prepare_semantic_channel(self, example: PreparedExample, channel: str) -> tuple[Any, ...]:
-        """Prepare one length-normalized semantic channel for Phase A3."""
+        """Prepare one length-normalized semantic channel for Phase A3/A4."""
         if self.stage != "semantic_reconstruction":
             raise RuntimeError("channel reconstruction is only defined for semantic Phase A")
         states = self._states(example.row["cluster_id"])
         target = states[channel].semantics
-        messages = semantic_recovery_messages(example.row["image"], channel)
+        messages = semantic_recovery_messages(
+            example.row["image"], channel,
+            include_image=self.semantic_prompt_include_image,
+        )
         _, full, targets = _prompt_and_full(self.backend, messages, target)
         if targets.shape[1] > self.max_target_tokens:
             raise RuntimeError(
@@ -265,12 +292,42 @@ class ReceiverCrossAttentionTask:
         embeddings, positions = self.backend.multimodal_embeddings_and_positions(full)
         return embeddings, full["attention_mask"], positions, targets, None, states
 
+    def prepare_semantic_target(
+        self, example: PreparedExample, channel: str, target: str,
+    ) -> tuple[Any, ...]:
+        """Prepare a semantic target under exactly the same receiver prompt.
+
+        A4 uses this for donor-side counterfactual reconstruction: after
+        replacing only channel ``c``, the receiver must decode the donor's
+        semantics, rather than merely lowering the original target's score.
+        """
+        if self.stage != "semantic_reconstruction":
+            raise RuntimeError("semantic target preparation is only defined for semantic Phase A")
+        states = self._states(example.row["cluster_id"])
+        messages = semantic_recovery_messages(
+            example.row["image"], channel,
+            include_image=self.semantic_prompt_include_image,
+        )
+        _, full, targets = _prompt_and_full(self.backend, messages, target)
+        if targets.shape[1] > self.max_target_tokens:
+            raise RuntimeError(
+                f"{channel} target exceeds max_target_tokens={self.max_target_tokens}: "
+                f"{example.row['row_id']}"
+            )
+        embeddings, positions = self.backend.multimodal_embeddings_and_positions(full)
+        return embeddings, full["attention_mask"], positions, targets, None, states
+
     def _logits(self, embeddings: torch.Tensor, attention_mask: torch.Tensor,
                 positions: torch.Tensor, targets: torch.Tensor,
-                states: dict[str, AlignedMessageStates]) -> torch.Tensor:
+                states: dict[str, AlignedMessageStates],
+                *, active_channels: Sequence[str] | None = None) -> torch.Tensor:
         # No latent pseudo-token is inserted.  This is the stable out-of-band
         # "zero-prefix" receiver interface requested for the new pipeline.
-        with self.bridge.inject(self.backend.model, self._tensor_states(states)):
+        with self.bridge.inject(
+            self.backend.model,
+            self._tensor_states(states),
+            active_channels=active_channels,
+        ):
             return caption_only_logits(
                 self.backend.model,
                 inputs_embeds=embeddings,
@@ -356,12 +413,14 @@ class ReceiverCrossAttentionTask:
 
     def backward_example(self, example: PreparedExample, shuffled_cluster: str, *,
                          loss_scale: float = 1.0) -> dict[str, float]:
-        if self.stage == "semantic_reconstruction" and self.semantic_objective == "channel_balanced_v3":
+        if self.stage == "semantic_reconstruction" and self.semantic_objective in {
+            "channel_balanced_v3", "channel_isolated_v4"
+        }:
             results = []
             for channel in TypedLatentBridge.channel_order:
                 prepared = self.prepare_semantic_channel(example, channel)
                 results.append(self._forward_channel_metrics(
-                    prepared, shuffled_cluster, channel=channel, backward=True,
+                    example, prepared, shuffled_cluster, channel=channel, backward=True,
                     loss_scale=loss_scale / len(TypedLatentBridge.channel_order),
                 ))
             summary = mean_metrics(results)
@@ -376,10 +435,12 @@ class ReceiverCrossAttentionTask:
     @torch.no_grad()
     def evaluate_example(self, example: PreparedExample,
                          shuffled_cluster: str) -> dict[str, float]:
-        if self.stage == "semantic_reconstruction" and self.semantic_objective == "channel_balanced_v3":
+        if self.stage == "semantic_reconstruction" and self.semantic_objective in {
+            "channel_balanced_v3", "channel_isolated_v4"
+        }:
             results = [
                 self._forward_channel_metrics(
-                    self.prepare_semantic_channel(example, channel), shuffled_cluster,
+                    example, self.prepare_semantic_channel(example, channel), shuffled_cluster,
                     channel=channel, backward=False,
                 )
                 for channel in TypedLatentBridge.channel_order
@@ -392,27 +453,46 @@ class ReceiverCrossAttentionTask:
         return self._forward_metrics(self.prepare(example), shuffled_cluster, backward=False)
 
     def _forward_channel_metrics(
-        self, prepared: tuple[Any, ...], shuffled_cluster: str, *, channel: str,
+        self, example: PreparedExample, prepared: tuple[Any, ...], shuffled_cluster: str, *, channel: str,
         backward: bool, loss_scale: float = 1.0,
     ) -> dict[str, float]:
-        """Swap exactly one channel while holding image, target and other memory fixed."""
+        """Evaluate one channel's matched/counterfactual communication.
+
+        In the historical A3 protocol all three channels are visible.  A4
+        sets ``channel_visibility=target_only`` and therefore makes the
+        replacement identifiable: only the selected channel can explain the
+        semantic target.  The optional donor reconstruction term additionally
+        requires the swapped channel to decode the donor semantics.
+        """
         embeddings, mask, positions, targets, _teacher_cpu, matched_states = prepared
         donor_states = self._states(shuffled_cluster)
         counterfactual_states = dict(matched_states)
         counterfactual_states[channel] = donor_states[channel]
+        active_channels: Sequence[str] | None = None
+        if self.channel_visibility == "target_only":
+            active_channels = (channel,)
         margin = float(self.loss_config["margin"])
         counterfactual_weight = float(self.loss_config["matched_shuffled_margin"])
         with torch.no_grad():
             matched0 = sequence_log_probability(
-                self._logits(embeddings, mask, positions, targets, matched_states), targets
+                self._logits(
+                    embeddings, mask, positions, targets, matched_states,
+                    active_channels=active_channels,
+                ), targets
             )
             counterfactual0 = sequence_log_probability(
-                self._logits(embeddings, mask, positions, targets, counterfactual_states), targets
+                self._logits(
+                    embeddings, mask, positions, targets, counterfactual_states,
+                    active_channels=active_channels,
+                ), targets
             )
             coefficient = torch.sigmoid(-matched0 + counterfactual0 + margin).detach()
             margin_loss = F.softplus(-matched0 + counterfactual0 + margin).mean()
 
-        matched = self._logits(embeddings, mask, positions, targets, matched_states)
+        matched = self._logits(
+            embeddings, mask, positions, targets, matched_states,
+            active_channels=active_channels,
+        )
         reconstruction_nll = token_cross_entropy(matched, targets)
         matched_logp = sequence_log_probability(matched, targets)
         nll_value = reconstruction_nll.detach()
@@ -426,7 +506,8 @@ class ReceiverCrossAttentionTask:
 
         if backward:
             counterfactual = self._logits(
-                embeddings, mask, positions, targets, counterfactual_states
+                embeddings, mask, positions, targets, counterfactual_states,
+                active_channels=active_channels,
             )
             counterfactual_logp = sequence_log_probability(counterfactual, targets)
             (
@@ -435,14 +516,49 @@ class ReceiverCrossAttentionTask:
             ).backward()
             del counterfactual, counterfactual_logp
 
+        # A4's donor reconstruction closes the loophole where the bridge only
+        # learns to make the original target unlikely after a swap.  With the
+        # same typed prompt and isolated channel, the swapped memory must also
+        # decode the donor semantics.  Weight zero exactly preserves A3.
+        donor_reconstruction_value = matched0.new_zeros(())
+        if self.counterfactual_reconstruction_weight > 0:
+            donor_prepared = self.prepare_semantic_target(
+                # The prompt/image is the target example; only the selected
+                # channel memory is replaced by the donor below.
+                example,
+                channel,
+                donor_states[channel].semantics,
+            )
+            donor_embeddings, donor_mask, donor_positions, donor_targets, _, _ = donor_prepared
+            donor_logits = self._logits(
+                donor_embeddings,
+                donor_mask,
+                donor_positions,
+                donor_targets,
+                counterfactual_states,
+                active_channels=active_channels,
+            )
+            donor_nll = token_cross_entropy(donor_logits, donor_targets)
+            donor_reconstruction_value = donor_nll.detach()
+            if backward:
+                (
+                    loss_scale * self.counterfactual_reconstruction_weight * donor_nll
+                ).backward()
+            del donor_logits, donor_nll
+
         gap = matched0 - counterfactual0
-        total = float(self.loss_config["caption_nll"]) * nll_value + counterfactual_weight * margin_loss
+        total = (
+            float(self.loss_config["caption_nll"]) * nll_value
+            + counterfactual_weight * margin_loss
+            + self.counterfactual_reconstruction_weight * donor_reconstruction_value
+        )
         diagnostics = self.bridge.last_diagnostics
         return {
             "total": float(total.cpu()),
             "caption_nll": float(nll_value.cpu()),
             "teacher_kl": 0.0,
             "shuffled_margin": float(margin_loss.cpu()),
+            "counterfactual_reconstruction_nll": float(donor_reconstruction_value.cpu()),
             "matched_logp": float(matched0.mean().cpu()),
             "shuffled_logp": float(counterfactual0.mean().cpu()),
             "matched_minus_shuffled_logp": float(gap.mean().cpu()),

@@ -161,15 +161,43 @@ experiment_plan:
         cross zero, so it neither proves nor rejects latent communication.
     - id: O
       name: outer_semantic_confirmation
-      status: real_trace_smoke_queued
+      status: blocked_provenance_failure_needs_clean_resubmission
       design: {clusters: 40, shared_seeds: 3, statistical_unit: image_cluster}
       script: scripts/run_outer_semantic_confirmation.py
       output: outputs/outer_semantic_confirmation/a3_outer40
-      smoke_job_id: "6708044"
-      smoke_resource_group: c-batch
+      smoke_job_id: "6708113"
+      superseded_smoke_job_id: "6708044"
+      smoke_resource_group: b-batch
+      smoke_allocation_policy: node_allocated_simplex
+      smoke_visible_cuda_devices: "0"
       smoke_elapse_seconds: 300
-      smoke_estimated_start: "2026-09-04T11:00:00+09:00"
+      smoke_estimated_start: "2026-09-03T23:55:11+09:00"
       preflight: results/preflight/outer_confirmation_preflight.json
+      smoke_validator: outputs/engineering_smoke/outer_semantic_confirmation/validation_contract.json
+      smoke_exit_code: 0
+      smoke_elapsed_seconds: 121
+      next_action: preserve_failed_attempt_and_resubmit_only_from_clean_commit
+      formal_job_id: "6708118"
+      formal_status: failed_before_forward_dirty_tracked_worktree
+      formal_scheduler_estimated_start: null
+      formal_elapse_seconds: 3600
+    - id: A4
+      name: channel_isolated_functional_semantic_pilot
+      status: implementation_complete_pre_gpu_smoke
+      config: configs/pilot/cross_attention_semantic_phase_a4.yaml
+      smoke_job: jobs/cross_attention_phase_a4_smoke.pjm
+      budget: {train_clusters: 64, validation_clusters: 24, seeds: 1}
+      trainable: bridge_only
+      frozen: [planner_7b, generator_7b]
+      protocol:
+        channel_visibility: target_only
+        semantic_prompt_include_image: false
+        counterfactual_reconstruction_weight: 0.75
+        objective: channel_isolated_v4
+      status_gate: blocked_until_clean_commit_and_real_trace_smoke
+      scientific_claim_boundary: >-
+        A4 is a causal-identifiability mechanism pilot. It is not a caption-quality
+        claim until held-out caption generation and blinded evaluation pass.
     - id: L
       name: latent_text_caption_ablation
       status: evidence_gated
@@ -225,7 +253,7 @@ resource_policy:
   priority: earliest_safe_start
   rules:
     - Query all legal GPU groups before accepting a delayed reservation.
-    - Prefer available MIG slices when model smoke confirms sufficient memory.
+    - Prefer one full native GPU for formal bridge work; do not use MIG for formal training.
     - Keep at most one active copy after a faster duplicate reaches RUN.
     - Serialize pilots so released resources can be reused immediately.
     - Never increase resource requests merely for safety margin.
