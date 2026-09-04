@@ -583,7 +583,8 @@ confirmation 必须使用独立的 A4 evaluator、新输出目录和 clean prove
 提交 2-cluster × 1-seed 的工程 smoke `6711814`（`b-batch + node=1`），但因检查到
 `b-inter` 空闲而在启动前取消；`b-inter` 的 batch 覆盖尝试被 PJM 拒绝，未执行任何
 forward。当前重新提交同一唯一 smoke 时仍使用已验证的 `b-batch + node=1`；该
-请求不显式申请 `gpu`、不使用 MIG，也没有与其他资源组并行 race。它只检查
+请求不显式申请 `gpu`、不使用 MIG，也没有与其他资源组并行 race；walltime 收紧为
+10 分钟，依据已通过的 A4 real-trace smoke 实测约 4 分钟。它只检查
 target-only channel isolation、image-free semantic prompt、length-matched donor、
 donor reconstruction、zero-bridge control 和 artifact validator，不能产生 humorous
 caption 或 `good-caption rate`。在 smoke/outer gate 结束前，历史

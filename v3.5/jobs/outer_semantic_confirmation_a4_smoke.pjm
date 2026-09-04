@@ -3,7 +3,9 @@
 # simplex/node-exclusive GPU mode on GENKAI; do not add gpu=1 or exec-policy.
 #PJM -L rscgrp=b-batch
 #PJM -L node=1
-#PJM -L elapse=00:30:00
+# The completed A4 real-trace smoke used about four minutes; keep this short
+# so the scheduler can backfill it without reserving an oversized window.
+#PJM -L elapse=00:10:00
 #PJM -j
 #PJM -S
 
