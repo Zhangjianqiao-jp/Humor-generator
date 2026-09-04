@@ -45,6 +45,10 @@ for split in internal_test official_hia_unseen_test; do
     --config "$config" --split "$split" --trace-index "$trace_index" \
     --output "$out/text_homer_${split}.jsonl" --seeds $seeds --max-new-tokens 96
   python scripts/generate_formal_baseline.py \
+    --condition full_plan_text --label full_plan_text --receiver sft \
+    --config "$config" --split "$split" --trace-index "$trace_index" \
+    --output "$out/full_plan_text_${split}.jsonl" --seeds $seeds --max-new-tokens 96
+  python scripts/generate_formal_baseline.py \
     --condition receiver_cross_attention --label a5_typed --receiver sft \
     --config "$config" --checkpoint "$checkpoint" --split "$split" \
     --trace-index "$trace_index" --output "$out/a5_typed_${split}.jsonl" \
@@ -54,12 +58,15 @@ done
 python scripts/build_group_packets.py \
   --generations "$out/text_homer_internal_test.jsonl" \
     "$out/text_homer_official_hia_unseen_test.jsonl" \
+    "$out/full_plan_text_internal_test.jsonl" \
+    "$out/full_plan_text_official_hia_unseen_test.jsonl" \
     "$out/a5_typed_internal_test.jsonl" \
     "$out/a5_typed_official_hia_unseen_test.jsonl" \
   --packet "$out/blind_packet_group10.jsonl" \
   --private-mapping "$out/private_mapping_group10.jsonl" \
   --group-size 10 --family a5_joint_caption --mirror-sides \
   --calibration data/cache/judge_calibration.json \
-  --comparison text_homer:a5_typed
+  --comparison text_homer:a5_typed \
+  --comparison full_plan_text:a5_typed
 test -s "$out/blind_packet_group10.jsonl"
 test -s "$out/private_mapping_group10.jsonl"

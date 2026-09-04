@@ -259,6 +259,8 @@ def test_a5_repair_and_caption_jobs_are_sequentially_fail_closed() -> None:
     assert "planner_traces_homer_strict_v35/index.jsonl" in outer
     assert "outer_semantic_go" in caption
     assert "--group-size 10" in caption
+    assert "--condition full_plan_text" in caption
+    assert "--comparison full_plan_text:a5_typed" in caption
     for job in (train, traces, outer, caption):
         assert "PYTORCH_ALLOC_CONF=backend:native" in job
         assert "#PJM -L rscgrp=c-batch" in job
