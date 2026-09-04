@@ -20,6 +20,21 @@
 
 ## 当前结论
 
+## V35-ENG-005（2026-09-04）：旧 A4 正式脚本在执行前取消
+
+旧 c-batch 作业 `6711074` 在获得资源并开始模型 forward 前被取消。审查发现该作业
+调用的是通用 bridge 训练流程：没有 A4 专用的 `validate_phase_a4_smoke.py`/动态
+`semantic_gate.json` 约束，且输出目录与 A4 既定目录不一致。继续运行会使“训练完成”
+与 A4 gate 的 provenance 混淆，因此在无 scientific output 前主动停止。该事件是
+工程/可追溯性问题，不是 CUDA、OOM、数据缺损或 latent 方法结果。
+
+修复为独立的 `jobs/cross_attention_phase_a4.pjm`：使用 `c-batch + gpu=1`，固定
+native allocator/CUDA0，先执行 locked preflight、真实 trace resource smoke 和
+A4 validator，再训练 bridge；训练后只读取本次 `$output/semantic_gate.json`，并在
+gate 未通过时 fail-closed。A4 output 改用新目录
+`outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1`，不得覆盖旧实验。
+修复后重新运行本地回归测试和 formal preflight，再提交新作业。
+
 ## V35-ENG-003（2026-09-04）：outer preflight 因工作树未提交而停止
 
 作业 `6708118` 已获得 b-batch 独占节点，但在实际 outer forward 前由 provenance guard

@@ -194,6 +194,21 @@ def test_a4_smoke_is_separate_and_has_no_scientific_training() -> None:
     assert "CUDA_VISIBLE_DEVICES=0" in smoke
 
 
+def test_a4_formal_job_is_strict_and_reads_its_own_gate() -> None:
+    job = (ROOT / "jobs/cross_attention_phase_a4.pjm").read_text()
+    assert "#PJM -L rscgrp=c-batch" in job
+    assert "#PJM -L gpu=1" in job
+    assert "#PJM -L node=1" not in job
+    assert "#PJM -L exec-policy=simplex" not in job
+    assert "cross_attention_semantic_phase_a4_cbatch_retry1" in job
+    assert "check_semantic_training_gate.py" in job
+    assert '"$output/semantic_gate.json"' in job
+    assert 'open(sys.argv[1])' in job
+    assert "outputs/pilot/cross_attention_semantic_phase_a4/semantic_gate.json" not in job
+    assert job.index("run_formal_preflight.py") < job.index("train_bridge.py")
+    assert job.index("train_bridge.py") < job.index("check_semantic_training_gate.py")
+
+
 def test_dataset_audit_checks_every_byte_level_dependency() -> None:
     audit = (ROOT / "scripts/audit_dataset_records.py").read_text()
     for contract in (

@@ -75,7 +75,7 @@ checkpoint 或 preference 结果都不得被 v3.5 作业自动调用。
 → Phase A3：64 train / 24 validation，只训练 bridge，冻结两个 7B（已完成，job 6707953）
 → Phase A3 gate：engineering pass，semantic pilot_inconclusive
 → A3 outer semantic baseline（job 6708118 在 dirty-worktree preflight 停止，待 clean commit 重提）
-→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过，c-batch 正式 pilot 6711074 已排队）
+→ A4 channel-isolated functional semantic pilot（real-trace smoke 6711052 已通过；旧 c-batch 作业 6711074 在执行前取消，严格 gate 脚本已修正，待 clean commit 后重提）
 → latent/text 混合 caption 消融与盲评
 → 只有 latent bridge 有稳定 held-out 收益后，才重新讨论 preference learning
 ```
@@ -93,6 +93,29 @@ bridge 或 preference learning。
 数据和 trace gate 均已通过，没有生成 outer 结果。该 baseline 必须在 clean commit 后
 用新输出目录重提，仍未提交 40×3 正式作业。通过后才提交一份 40 cluster × 3 seed 的
 sealed confirmation。A4 的新训练不覆盖该 baseline；MIG 和 DPO 均保持禁用。
+
+### A4 正式作业脚本修正（2026-09-04）
+
+替代 smoke `6711052` 已通过真实 trace、target-only one-hot mask、无图像 semantic
+prompt、donor reconstruction、非零 bridge update 和冻结策略检查。随后提交的通用
+脚本作业 `6711074` 尚未执行 forward；审查发现它没有调用 A4 专用 semantic gate，且
+使用了旧的输出目录，因此在可能产生混淆前主动取消。该事件记录为工程/可追溯性问题，
+不构成方法 No-Go，也不覆盖 A4 smoke 证据。
+
+现行 `jobs/cross_attention_phase_a4.pjm` 已满足：
+
+```text
+c-batch + gpu=1（单张完整 native GPU）
+独立输出 outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
+locked preflight → CUDA/resource smoke → A4 validator → bridge-only training
+→ 动态读取本次输出目录的 semantic_gate.json
+```
+
+正式提交前必须再次通过 `.venv/bin/python -m pytest -q`、`git diff --check`、
+`scripts/run_formal_preflight.py`；若 semantic gate 为 `pilot_inconclusive`，作业应
+保留完整日志但 fail-closed，不得进入 caption 生成。smoke 通过只能保证工程协议
+可执行和因果比较可解释，不能预先保证 latent 收益；真正有效性仍由 A4 validation
+gate 及后续 held-out caption/盲评共同决定。
 
 `docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md` 是旧 bridge 重评的数值结果；它只能说明
 v1/v2 在 24-cluster pilot 上证据不足，不能替代新的 A3 训练。以下各节若与本节的当前

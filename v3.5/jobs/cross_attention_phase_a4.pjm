@@ -1,9 +1,10 @@
 #!/bin/sh
-# A4 is a bridge-only semantic pilot.  It uses one node/full native GPU and
-# never unfreezes either 7B policy.  Caption generation is blocked unless the
-# channel-isolated semantic gate passes.
-#PJM -L rscgrp=b-batch
-#PJM -L node=1
+# A4 is a bridge-only semantic pilot.  It uses one full native GPU and never
+# unfreezes either 7B policy.  Caption generation is blocked unless the
+# channel-isolated semantic gate passes. c-batch gpu=1 is the earliest
+# compatible full-GPU form; do not add node=1 or exec-policy=simplex here.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
 #PJM -L elapse=04:00:00
 #PJM -j
 #PJM -S
@@ -24,7 +25,7 @@ export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
 config=configs/pilot/cross_attention_semantic_phase_a4.yaml
-output=outputs/pilot/cross_attention_semantic_phase_a4
+output=outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
 
 python scripts/run_formal_preflight.py --output "$output/preflight.json"
 python scripts/check_cuda_resource.py
@@ -46,7 +47,7 @@ python scripts/check_semantic_training_gate.py \
   --output "$output/semantic_gate.json" \
   --report-only
 test -s "$output/semantic_gate.json"
-status=$(python -c 'import json; print(json.load(open("outputs/pilot/cross_attention_semantic_phase_a4/semantic_gate.json"))["status"])')
+status=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$output/semantic_gate.json")
 case "$status" in
   strong_go|go_to_outer_semantic_validation) ;;
   *) echo "A4 semantic gate did not pass: $status" >&2; exit 2 ;;
