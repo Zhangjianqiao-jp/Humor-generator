@@ -29,9 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from humor_generator_v35.data.traces import read_jsonl
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
-from humor_generator_v35.training.formal_bridge import load_trace_index, prepare_example
+from humor_generator_v35.training.formal_bridge import (
+    length_matched_channel_donors,
+    load_trace_index,
+    prepare_example,
+)
 from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
-from re_evaluate_failed_semantic_bridges import length_matched_channel_donors
 from run_outer_semantic_confirmation_a4 import (
     CHANNELS,
     evaluate_channel,

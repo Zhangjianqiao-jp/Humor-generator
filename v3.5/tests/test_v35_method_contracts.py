@@ -257,6 +257,9 @@ def test_a5_repair_and_caption_jobs_are_sequentially_fail_closed() -> None:
     assert "--expected-clusters 121" in outer
     assert "--donor-trace-index" in outer
     assert "planner_traces_homer_strict_v35/index.jsonl" in outer
+    assert "from re_evaluate_failed_semantic_bridges import length_matched_channel_donors" not in (
+        ROOT / "scripts/run_outer_semantic_confirmation_a5.py"
+    ).read_text()
     assert "outer_semantic_go" in caption
     assert "--group-size 10" in caption
     assert "--condition full_plan_text" in caption

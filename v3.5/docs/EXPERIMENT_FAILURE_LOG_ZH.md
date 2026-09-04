@@ -20,6 +20,17 @@
 
 ## 当前结论
 
+## V35-ENG-008（2026-09-05）：A5 outer donor helper 的 split 契约错误（已在执行前修复）
+
+进一步的静态审计发现 outer evaluator 复用了旧失败重评脚本的 donor helper；该 helper
+硬编码 donor 必须来自 `train`，而 A5 outer 预注册的是 validation donor。即使补上第二
+份 trace index，原 helper 仍会在 forward 前拒绝合法的 validation donor。
+
+已改为使用 `training/formal_bridge.py::length_matched_channel_donors`，该实现保留
+per-channel length-priority、different-conflict、same-source/TF-IDF tie-break，同时
+允许 outer 的 validation donor。该问题没有产生 GPU forward 或科学 artifact；旧 helper
+只继续用于历史 v1/v2 重评，不得用于 A5 outer。
+
 ## V35-ENG-007（2026-09-05）：A5 outer donor trace index 缺失（已在执行前修复）
 
 静态审计发现 outer evaluator 原命令只传入 sealed held-out test trace index，但

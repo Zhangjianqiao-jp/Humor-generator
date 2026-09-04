@@ -96,6 +96,9 @@ map 与长度诊断写入 `channel_donors.json`。新作业输出固定为
 该问题已记录为 V35-ENG-007 并修复：outer 命令必须同时传入
 `--trace-index ..._test/index.jsonl` 与 `--donor-trace-index .../index.jsonl`，脚本合并两者
 并保存 donor index hash；禁止使用只含 held-out target 的旧命令。
+随后发现旧重评 helper 还硬编码 `split=train`，与 A5 outer 的 validation donor 预案冲突；
+已改用 formal bridge 的通用 length-matched donor 实现，并记录为 V35-ENG-008。outer
+提交前必须在合并 index 上完成 validation-donor mapping smoke。
 
 训练/评测顺序固定为：
 
