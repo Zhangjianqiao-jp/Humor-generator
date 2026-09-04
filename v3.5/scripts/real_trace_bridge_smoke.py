@@ -26,6 +26,7 @@ from humor_generator_v35.training.formal_bridge import (
     FrozenReceiverBridgeTask,
     cluster_balanced_rows,
     hard_negative_cluster_map,
+    length_matched_channel_donors,
     load_trace_index,
     prepare_example,
 )
@@ -78,7 +79,19 @@ def main() -> None:
         smoke_rows.append(next(
             row for row in selected if row["cluster_id"] != smoke_rows[0]["cluster_id"]
         ))
-    negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
+    semantic_channel_training = (
+        baseline == "receiver_cross_attention"
+        and str(config["training"].get("stage")) == "semantic_reconstruction"
+        and str(config["loss"].get("semantic_objective"))
+        in {"channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"}
+    )
+    if semantic_channel_training:
+        negative_map, negative_diagnostics = length_matched_channel_donors(
+            rows, rows, root=ROOT, trace_index=traces,
+            allow_target_donor_overlap=True,
+        )
+    else:
+        negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
 
     adapter = config["model"].get("adapter")
     backend = QwenBackend.load(
@@ -164,9 +177,15 @@ def main() -> None:
         torch.cuda.reset_peak_memory_stats(device)
         example = prepare_example(row, traces[row["cluster_id"]], seed=seed)
         negative_cluster = negative_map[row["cluster_id"]]
-        sample_metrics = task.backward_example(
-            example, negative_cluster, loss_scale=1.0 / len(smoke_rows)
-        )
+        if semantic_channel_training:
+            sample_metrics = task.backward_example(
+                example, shuffled_clusters=negative_cluster,
+                loss_scale=1.0 / len(smoke_rows)
+            )
+        else:
+            sample_metrics = task.backward_example(
+                example, negative_cluster, loss_scale=1.0 / len(smoke_rows)
+            )
         if (
             isinstance(task, ReceiverCrossAttentionTask)
             and float(config["loss"].get("info_nce", 0.0)) > 0
@@ -251,6 +270,7 @@ def main() -> None:
         ),
         "samples": sample_reports,
         "hard_negative_diagnostics": negative_diagnostics,
+        "channel_length_matching": semantic_channel_training,
         "policy_trainable_parameters": freeze_report.policy_trainable,
         "bridge_trainable_parameters": freeze_report.bridge_trainable,
         "gradient_checkpointing": freeze_report.gradient_checkpointing,
