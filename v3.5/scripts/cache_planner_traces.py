@@ -43,7 +43,7 @@ def sha256(path: Path) -> str:
 def repository_commit() -> str:
     repo = ROOT.parent
     status = subprocess.run(
-        ["git", "status", "--porcelain", "--", "v3.5"],
+        ["git", "status", "--porcelain", "--untracked-files=no", "--", "v3.5"],
         cwd=repo,
         check=True,
         capture_output=True,
