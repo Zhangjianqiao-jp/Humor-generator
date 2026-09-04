@@ -20,6 +20,25 @@
 
 ## 当前结论
 
+## V35-ENG-006（2026-09-05）：A5 训练 donor 未按 channel 长度匹配
+
+A5 初次全量作业 `6712005` 已在第 2 epoch 中途主动取消。第 1 epoch 的 validation
+窗口出现 global mean gap `0.205538`、单 cluster 最大 gap `1.293392`，而 A5 的
+outer 协议要求按被替换 channel 的 token length 选择 donor。检查发现训练入口仍调用
+旧的 `hard_negative_cluster_map`，同一个 donor 映射同时用于三个 channel，未控制
+attention 候选数量/sequence-log-probability 的长度混淆。因此这批输出不能作为方法收益、
+semantic gate 或 caption 生成依据；原始 checkpoint、metrics 和 stdout 保留在
+`outputs/pilot/cross_attention_semantic_phase_a5_full/` 作为审计证据。
+
+该事件分类为工程协议错误，不是 OOM、CUDA、数据缺损或 latent 方法失败。修复为
+`training/formal_bridge.py::length_matched_channel_donors`：length 是首要匹配键，
+随后才使用 different-conflict、same-source 和 TF-IDF 相似度；训练允许 donor pool
+与 target split 重叠但排除自身 cluster，validation 仍只从 train donor pool 取样。新运行
+将把完整 donor map、各 channel 的 exact-length fraction/mean absolute length delta
+和 hash 写入 `channel_donors.json` / `run_manifest.json`。修复后的作业必须使用新输出
+目录 `outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/`，重新通过
+静态测试、real-trace smoke、完整训练和 sealed outer gate 后才可进入 caption 阶段。
+
 ## V35-ENG-005（2026-09-04）：旧 A4 正式脚本在执行前取消
 
 旧 c-batch 作业 `6711074` 在获得资源并开始模型 forward 前被取消。审查发现该作业

@@ -84,6 +84,14 @@ A4 outer 的三 seed、40 image-cluster 结果为：conflict `0.0115005`，local
    K/V/O 使参数量增加约三倍，A5 是“修复候选”而非公平 placement ablation；若有效，后
    续必须单独做 projection-only 与 alignment-only 消融。
 
+协议更正（2026-09-05）：A5 初次作业 `6712005` 的训练入口误用了未按 channel 长度匹配
+的 `hard_negative_cluster_map`，第 1 epoch 的 global gap 出现明显 outlier；该作业已
+取消，输出标记为工程协议错误，绝不用于科学结论。修复后的训练入口使用
+`length_matched_channel_donors(..., allow_target_donor_overlap=True)`，并把完整 donor
+map 与长度诊断写入 `channel_donors.json`。新作业输出固定为
+`outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/`，必须重新 smoke 后才
+能训练；详见 `docs/EXPERIMENT_FAILURE_LOG_ZH.md` 的 V35-ENG-006。
+
 训练/评测顺序固定为：
 
 ```text
