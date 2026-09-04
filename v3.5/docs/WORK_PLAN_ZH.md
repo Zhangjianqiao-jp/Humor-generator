@@ -576,6 +576,19 @@ confirmation 必须使用独立的 A4 evaluator、新输出目录和 clean prove
 缩短等待改回 MIG（已有 allocator 故障记录）或未经确认改用共享 GPU；正式作业仍须
 由自身的 `check_cuda_resource.py` 确认设备后才解释数值。
 
+### A4 outer evaluator smoke（2026-09-04）
+
+新的 A4 专用 outer evaluator 已在 clean commit `6fb5c32` 后通过全量 preflight（全量
+测试、编译、数据 `2846/2846`、trace `666/666`、frozen-artifact 校验均通过）。只
+提交了一个 2-cluster × 1-seed 的工程 smoke `6711814`，使用 `b-batch + node=1`；该
+请求不显式申请 `gpu`、不使用 MIG，也没有与其他资源组并行 race。它只检查
+target-only channel isolation、image-free semantic prompt、length-matched donor、
+donor reconstruction、zero-bridge control 和 artifact validator，不能产生 humorous
+caption 或 `good-caption rate`。在 smoke/outer gate 结束前，历史
+`outputs/pilot_validation/` 的 120-row caption 文件仍保持 quarantine，不能与新协议
+混合统计。若 smoke 通过，再提交 40-cluster × 3-seed sealed outer evaluator；只有
+其 `outer_semantic_go` 才解锁新的 caption generation 和盲评。
+
 ## 14. 权威参考
 
 1. Shang et al. HOMER. ICLR 2026. https://openreview.net/pdf?id=SzaRhPom4o
