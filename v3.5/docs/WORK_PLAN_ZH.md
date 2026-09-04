@@ -92,6 +92,11 @@ map 与长度诊断写入 `channel_donors.json`。新作业输出固定为
 `outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/`，必须重新 smoke 后才
 能训练；详见 `docs/EXPERIMENT_FAILURE_LOG_ZH.md` 的 V35-ENG-006。
 
+执行前审计又发现 A5 outer 的 sealed target trace index 不包含 validation donor trace。
+该问题已记录为 V35-ENG-007 并修复：outer 命令必须同时传入
+`--trace-index ..._test/index.jsonl` 与 `--donor-trace-index .../index.jsonl`，脚本合并两者
+并保存 donor index hash；禁止使用只含 held-out target 的旧命令。
+
 训练/评测顺序固定为：
 
 ```text

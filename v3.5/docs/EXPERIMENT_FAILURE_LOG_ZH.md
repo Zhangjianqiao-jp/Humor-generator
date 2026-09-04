@@ -20,6 +20,18 @@
 
 ## 当前结论
 
+## V35-ENG-007（2026-09-05）：A5 outer donor trace index 缺失（已在执行前修复）
+
+静态审计发现 outer evaluator 原命令只传入 sealed held-out test trace index，但
+length-matched counterfactual donor 必须读取 validation/train trace。若直接运行，目标
+trace 能加载而 donor lookup 会缺少记录，因而不能产生合法的 outer gap。该问题在任何
+outer forward 之前发现，未产生科学输出。
+
+修复为 `run_outer_semantic_confirmation_a5.py --donor-trace-index`：目标 index 与
+666-record train/validation index 只读合并，并对重复 cluster 做记录一致性检查；summary
+同时保存 donor index 路径和 SHA-256。旧命令禁止使用，A5 outer 仍须等待 121 条 sealed
+trace 完整校验和修复后 checkpoint。
+
 ## V35-ENG-006（2026-09-05）：A5 训练 donor 未按 channel 长度匹配
 
 A5 初次全量作业 `6712005` 已在第 2 epoch 中途主动取消。第 1 epoch 的 validation
