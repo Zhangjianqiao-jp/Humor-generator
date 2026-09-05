@@ -22,6 +22,17 @@ llm_judge_3
 outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/judge_prompts.jsonl
 ```
 
+为避免把归档目标遗漏，已经另外生成三个可直接投喂的文件；它们在每行末尾明确写有
+对应的 `rater_id` 和目标文件：
+
+```text
+outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/judge_prompts_llm_judge_1.jsonl
+outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/judge_prompts_llm_judge_2.jsonl
+outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/judge_prompts_llm_judge_3.jsonl
+```
+
+三份文件都保留同一 rubric hash；末尾的归档指令只是操作元数据，不是评分标准。
+
 每一行的 `prompt` 字段必须原样发送给对应模型；不要自行改写 rubric、caption 顺序、
 `blind_id` 或输出 schema。每一行的 `image_path` 对应的真实图片必须作为图像输入上传，
 不能只把路径当成文字交给模型。
