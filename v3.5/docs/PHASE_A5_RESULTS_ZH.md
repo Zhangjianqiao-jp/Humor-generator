@@ -103,6 +103,41 @@ caption job 只生成候选和匿名 packet，不自动把任何 heuristic 分�
 `good/weak/bad` 及 grounding/humor/originality/specificity 维度，最后做镜像折叠、
 image-cluster bootstrap、配对检验和 Holm 校正。
 
+### Caption 生成与评测闭环（已完成生成，等待盲评）
+
+作业 `6712460` 已完成并通过逐条审计：
+
+- `internal_test`：97 个 image clusters；`official_hia_unseen_test`：24 个 clusters；
+- 条件：`text_homer`、`full_plan_text`（公平文本控制）、`a5_typed`（A5 receiver
+  cross-attention）；每个条件和图片使用相同的 10 个固定 seeds；
+- 生成记录：`3,630 = 121 × 3 × 10`，无空输出、重复 `(cluster, seed)` 或图片哈希
+  不一致；每个 system 的 unique-rate、长度、模板率已写入 `audit.json`；
+- Caption-judgement 规范化后系统覆盖为
+  `sft::text_homer`、`sft::full_plan_text`、`sft::a5_typed`；
+- 两个比较各生成 121 个图片单位的 A/B 镜像，共 `484` 个 Group-of-10 packet、
+  `242` 个 mirror pairs；packet blinding audit 通过（system leak=0，malformed
+  mirror=0）；
+- Caption-judgement 自身测试：`6 passed`。
+
+规范评测运行目录（生成物在 `.gitignore` 下）为：
+
+```text
+outputs/caption_judgement/a5_joint_group10_20260905/
+```
+
+其中 `generations.jsonl` 是 adapter 后的标准输入，`blind_packets.jsonl` 是公开给
+评审的文件，`private_mapping.jsonl` 和 `blind.secret` 只能留在可信机器；
+`judge_prompts.jsonl`、`judge-1.json`～`judge-3.json` 是独立评审接口模板，
+`audit.json`、`diversity.json` 和 `provenance.json` 是审计产物。`provenance.json`
+固定了 job id、Git commit、A5 config/checkpoint/trace-index SHA-256、所有输入输出
+哈希和评测状态。
+
+**状态边界：**生成和工程审计已完成，但 `judge-*.json` 仍是空白模板。必须收到至少
+三名独立评审（固定 provider/model/version/date、temperature=0、prompt hash）后，才
+能运行 aggregate 并报告 Group-of-10 win rate、absolute `good/weak/bad`、图片级
+bootstrap CI 和 seed 方差。当前不能把 heuristic 的 unique-rate/模板率或 A5 semantic
+gap 当作 humorous-caption improvement。
+
 ## 方法依据与证据边界
 
 - **BLIP-2**：冻结视觉/语言模型、先表示对齐再做冻结 LLM 下游生成，支持 bridge-only
@@ -124,8 +159,8 @@ image-cluster bootstrap、配对检验和 Holm 校正。
 
 ## 下一步判定
 
-1. 等待 `6712460` 完成并校验六个 generation JSONL 是否完整覆盖 `121 × 10`。
-2. 用 Caption-judgement 生成独立 judge prompt/rating templates；private mapping 不
+1. 已完成 `6712460` 并校验六个 generation JSONL 完整覆盖 `121 × 10`；
+2. 已用 Caption-judgement 生成独立 judge prompt/rating templates；private mapping 不
    发送给评审。
 3. 收到至少三份带 provider/model/version/prompt hash 的盲评后，才报告 good-caption
    rate、win rate、CI 和 seed/image-cluster 方差。
