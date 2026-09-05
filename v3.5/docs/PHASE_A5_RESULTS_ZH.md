@@ -132,6 +132,10 @@ outputs/caption_judgement/a5_joint_group10_20260905/
 固定了 job id、Git commit、A5 config/checkpoint/trace-index SHA-256、所有输入输出
 哈希和评测状态。
 
+三个模型的直接投喂说明见
+[`LLM_RATER_PROMPTS_GROUP10_ZH.md`](LLM_RATER_PROMPTS_GROUP10_ZH.md)；三者使用同一
+规范 rubric，仅使用不同 `rater_id`，避免评分标准成为额外变量。
+
 **状态边界：**生成和工程审计已完成，但 `judge-*.json` 仍是空白模板。必须收到至少
 三名独立评审（固定 provider/model/version/date、temperature=0、prompt hash）后，才
 能运行 aggregate 并报告 Group-of-10 win rate、absolute `good/weak/bad`、图片级
