@@ -103,7 +103,7 @@ caption job 只生成候选和匿名 packet，不自动把任何 heuristic 分�
 `good/weak/bad` 及 grounding/humor/originality/specificity 维度，最后做镜像折叠、
 image-cluster bootstrap、配对检验和 Holm 校正。
 
-### Caption 生成与评测闭环（已完成生成，等待盲评）
+### Caption 生成与评测闭环（盲评已完成）
 
 作业 `6712460` 已完成并通过逐条审计：
 
@@ -137,11 +137,12 @@ outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/
 [`LLM_RATER_PROMPTS_GROUP10_ZH.md`](LLM_RATER_PROMPTS_GROUP10_ZH.md)；三者使用同一
 规范 rubric，仅使用不同 `rater_id`，避免评分标准成为额外变量。
 
-**状态边界：**生成和工程审计已完成，但 `judge-*.json` 仍是空白模板。必须收到至少
-三名独立评审（固定 provider/model/version/date、temperature=0、prompt hash）后，才
-能运行 aggregate 并报告 Group-of-10 win rate、absolute `good/weak/bad`、图片级
-bootstrap CI 和 seed 方差。当前不能把 heuristic 的 unique-rate/模板率或 A5 semantic
-gap 当作 humorous-caption improvement。
+**盲评结果：**三份评分均覆盖 484/484 packet，并通过 provider/model/version/date、
+temperature=0 和 prompt hash 校验。聚合结果及逐项分析见
+[`A5_CAPTION_EVAL_RESULTS_ZH.md`](A5_CAPTION_EVAL_RESULTS_ZH.md)。A5 对 Text-HOMER 的
+Overall win rate=`0.2982`（95% CI `[0.2534, 0.3437]`，Holm `p=0.000040`），对
+full-plan text 为 `0.5131`（95% CI `[0.4663, 0.5613]`，Holm `p=1`）。因此 semantic
+gate 通过并不等于 humorous-caption 提升；在当前评测下不应启动 DPO。
 
 ## 方法依据与证据边界
 
@@ -164,10 +165,9 @@ gap 当作 humorous-caption improvement。
 
 ## 下一步判定
 
-1. 已完成 `6712460` 并校验六个 generation JSONL 完整覆盖 `121 × 10`；
-2. 已用 Caption-judgement 生成独立 judge prompt/rating templates；private mapping 不
-   发送给评审。
-3. 收到至少三份带 provider/model/version/prompt hash 的盲评后，才报告 good-caption
-   rate、win rate、CI 和 seed/image-cluster 方差。
-4. 若 caption 质量没有改善，结论应是“semantic causal gate 通过但下游 humor benefit
-   未证实”，而不是继续增大同一 bridge 或启动 DPO。
+1. 盲评与聚合已经完成；原始 `aggregate.json` 和 `REPORT.md` 位于上述 v1.1 运行目录。
+2. A5 对 Text-HOMER 的下游结果为负，对 full-plan text 仅持平；因此当前停止扩大
+   A5 训练，不启动 DPO。
+3. 下一轮若继续，只做 hybrid text-anchor + latent enrichment 和 caption-level
+   matched/shuffled functional audit；只有独立盲评的 Overall 与 absolute good rate
+   同时改善，才重新讨论 preference learning。

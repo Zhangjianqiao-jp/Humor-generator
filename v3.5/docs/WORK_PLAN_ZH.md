@@ -748,7 +748,7 @@ validator 通过，但 gate 为 `outer_semantic_inconclusive`；因此当前仍�
 → sealed outer semantic confirmation (job 6712454, outer_semantic_go)
 → Text-HOMER / full-plan-text / A5 latent caption generation (job 6712460, complete)
 → generation integrity + Caption-judgement audit (pass)
-→ Group-of-10 mirrored multi-rater evaluation (awaiting independent ratings)
+→ Group-of-10 mirrored multi-rater evaluation (complete; downstream A5 gain not supported)
 
 本轮 A5 的可引用结果、精确 gap/CI 和方法证据边界见
 [`PHASE_A5_RESULTS_ZH.md`](PHASE_A5_RESULTS_ZH.md)。A5 的语义 gate 只证明
@@ -757,7 +757,8 @@ win rate 或“更幽默”的结论。当前 Caption-judgement 运行目录为
 `outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/`，其中 3,630 条候选已通过
 `adapt/validate/audit`，484 个 packet（242 个镜像对）通过匿名性审计；prompt 已把
 真实图片输入、逐 packet 独立评审、temperature=0、禁止私密映射/密钥和 rating 文件
-归档责任写成硬性操作约束；
-`judge-1.json`～`judge-3.json` 仍为空白模板。收到至少三名独立评审后，才可运行
-aggregate/report；caption job 若未来需要重跑，必须使用新输出目录续跑，不覆盖已有记录。
+归档责任写成硬性操作约束；三份独立评分已完成并聚合到 `aggregate.json`/`REPORT.md`。
+A5 对 Text-HOMER 的 Overall win rate=`0.2982`，对 full-plan text=`0.5131` 且 CI
+跨越 0.5；详见 [`A5_CAPTION_EVAL_RESULTS_ZH.md`](A5_CAPTION_EVAL_RESULTS_ZH.md)。
+当前不启动 DPO；若继续，只做低成本 hybrid interface 修复和 caption-level causal audit。
 ```
