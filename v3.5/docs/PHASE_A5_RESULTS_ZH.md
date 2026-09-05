@@ -119,10 +119,11 @@ image-cluster bootstrap、配对检验和 Holm 校正。
   mirror=0）；
 - Caption-judgement 自身测试：`6 passed`。
 
-规范评测运行目录（生成物在 `.gitignore` 下）为：
+旧 rubric v1.0 目录仅作为未评分的历史 provenance 保留；正式评测使用已包含操作约束的
+rubric v1.1 运行目录（生成物在 `.gitignore` 下）：
 
 ```text
-outputs/caption_judgement/a5_joint_group10_20260905/
+outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/
 ```
 
 其中 `generations.jsonl` 是 adapter 后的标准输入，`blind_packets.jsonl` 是公开给

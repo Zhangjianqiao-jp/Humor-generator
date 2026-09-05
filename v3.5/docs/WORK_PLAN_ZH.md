@@ -754,8 +754,10 @@ validator 通过，但 gate 为 `outer_semantic_inconclusive`；因此当前仍�
 [`PHASE_A5_RESULTS_ZH.md`](PHASE_A5_RESULTS_ZH.md)。A5 的语义 gate 只证明
 channel-specific causal sensitivity；在盲评完成前，不得填写 good-caption rate、
 win rate 或“更幽默”的结论。当前 Caption-judgement 运行目录为
-`outputs/caption_judgement/a5_joint_group10_20260905/`，其中 3,630 条候选已通过
-`adapt/validate/audit`，484 个 packet（242 个镜像对）通过匿名性审计；
+`outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/`，其中 3,630 条候选已通过
+`adapt/validate/audit`，484 个 packet（242 个镜像对）通过匿名性审计；prompt 已把
+真实图片输入、逐 packet 独立评审、temperature=0、禁止私密映射/密钥和 rating 文件
+归档责任写成硬性操作约束；
 `judge-1.json`～`judge-3.json` 仍为空白模板。收到至少三名独立评审后，才可运行
 aggregate/report；caption job 若未来需要重跑，必须使用新输出目录续跑，不覆盖已有记录。
 ```

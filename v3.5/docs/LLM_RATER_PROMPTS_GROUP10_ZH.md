@@ -1,6 +1,6 @@
 # Group-of-10 三模型独立盲评 Prompt
 
-本文件用于当前 A5 caption 评测。三个模型必须分别、独立地处理同一份
+本文件用于当前 A5 caption 评测（rubric v1.1）。三个模型必须分别、独立地处理同一份
 `judge_prompts.jsonl`；不要把一个模型的判断提供给另一个模型。三份 prompt 的
 评分协议完全相同，只在最终 rating 文件中使用不同的 `rater_id`：
 
@@ -13,13 +13,13 @@ llm_judge_3
 这样可以把“评审模型差异”和“评分标准差异”分开。当前规范 prompt 的 SHA-256 为：
 
 ```text
-ef20e621e40798ec92599c22561767caa1e59aac04321298e553f9e0dd019217
+1ff0ed2508e7855cb2995557149b3115a8a09a608ec55c33951be9e2f690cfa4
 ```
 
 实际 packet-specific prompt 已由 Caption-judgement 固定生成，位于：
 
 ```text
-outputs/caption_judgement/a5_joint_group10_20260905/judge_prompts.jsonl
+outputs/caption_judgement/a5_joint_group10_20260905_rubric_v11/judge_prompts.jsonl
 ```
 
 每一行的 `prompt` 字段必须原样发送给对应模型；不要自行改写 rubric、caption 顺序、
@@ -93,4 +93,3 @@ provider/model/version_or_date，temperature 固定为 0，prompt_sha256 使用�
 
 完成后使用 Caption-judgement 的 `aggregate`；它会拒绝缺失 packet、错误 prompt hash、
 非零 temperature、错误维度或不完整的 good/weak/bad 标签。
-
