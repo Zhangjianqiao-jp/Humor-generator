@@ -43,6 +43,21 @@ setting is an appendix baseline, not mislabeled as the parameter/bandwidth-
 matched main comparison. Planner traces for the current route must be rebuilt
 with the full HOMER stage order; historical SFT traces cannot be reused.
 
+The current caption-stage bridge route is separate from the historical A5
+trainer.  Run `scripts/cache_pretrained_homer_context.py` after the
+adapter-free Planner trace gate: it replays official summary, retrieval,
+conflict/entity selection and seeded DFS path sampling from the raw cached
+Planner responses.  Then run `scripts/build_pretrained_bridge_dataset.py` and
+use `configs/pilot/cross_attention_caption_pretrained_public.yaml`.  This
+route uses the pinned public `##Caption`/`##Explanation` prompt for both the
+text teacher and latent student; the student receives the same description
+with the selected plan removed and the bridge memory injected.  The old
+`cross_attention_caption_pretrained.yaml`, `formal_bridge.py` legacy prompt,
+and `latent_bridge_v35` data are historical and cannot support a current HOMER
+claim.
+The complete contract, target policy, provenance fields and fail-closed order
+are documented in [`docs/HOMER_PUBLIC_BRIDGE_ROUTE_ZH.md`](docs/HOMER_PUBLIC_BRIDGE_ROUTE_ZH.md).
+
 The source-aware public-population inventory is the immutable
 [`manifests/homer_population_public_release_362.json`](manifests/homer_population_public_release_362.json)
 lineage manifest.  It is anchored to the public HIA dataset revision

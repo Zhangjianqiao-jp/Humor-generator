@@ -47,9 +47,21 @@ def main() -> None:
     args = parser.parse_args()
     python = str(ROOT / ".venv/bin/python")
     commands = [
-        [python, "-m", "py_compile", "scripts/cache_pretrained_homer_traces.py", "scripts/verify_pretrained_homer_traces.py"],
+        [
+            python, "-m", "py_compile",
+            "scripts/cache_pretrained_homer_traces.py",
+            "scripts/verify_pretrained_homer_traces.py",
+            "scripts/cache_pretrained_homer_context.py",
+            "scripts/build_pretrained_bridge_dataset.py",
+            "scripts/verify_pretrained_bridge_inputs.py",
+            "scripts/train_bridge.py",
+            "src/humor_generator_v35/training/public_bridge.py",
+            "src/humor_generator_v35/training/formal_bridge.py",
+            "src/humor_generator_v35/training/cross_attention_bridge.py",
+        ],
         [python, "scripts/homer_public_code_smoke.py"],
         [python, "scripts/verify_homer_public_release_362.py"],
+        [python, "-m", "pytest", "-q", "tests/test_public_bridge_route.py"],
         [python, "scripts/check_environment.py"],
         [python, "scripts/check_v35_isolation.py"],
         [python, "scripts/verify_frozen_artifacts.py"],

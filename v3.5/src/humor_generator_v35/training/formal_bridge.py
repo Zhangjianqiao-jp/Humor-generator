@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import random
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import torch
 from torch import nn
@@ -25,6 +25,14 @@ from .memory_safe import (
     caption_only_logits,
     inject_latent_slots,
     inject_position_ids,
+)
+from .public_bridge import (
+    PUBLIC_BRIDGE_PROMPT_TRACK,
+    PublicHomerContext,
+    public_latent_caption_messages,
+    public_text_caption_messages,
+    target_caption_text,
+    validate_row_context,
 )
 
 
@@ -297,6 +305,8 @@ class FrozenReceiverBridgeTask:
         trace_index: dict[str, dict[str, Any]],
         loss_config: dict[str, float],
         max_caption_tokens: int,
+        prompt_mode: str = "legacy",
+        context_index: Mapping[str, PublicHomerContext] | None = None,
     ) -> None:
         self.backend = backend
         self.bridge = bridge
@@ -304,6 +314,12 @@ class FrozenReceiverBridgeTask:
         self.trace_index = trace_index
         self.loss_config = loss_config
         self.max_caption_tokens = max_caption_tokens
+        self.prompt_mode = str(prompt_mode)
+        if self.prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
+            raise ValueError(f"unsupported bridge prompt_mode: {self.prompt_mode}")
+        self.context_index = dict(context_index or {})
+        if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK and not self.context_index:
+            raise ValueError("current HOMER bridge mode requires a non-empty context index")
         for parameter in backend.model.parameters():
             parameter.requires_grad_(False)
         if any(parameter.requires_grad for parameter in backend.model.parameters()):
@@ -332,6 +348,38 @@ class FrozenReceiverBridgeTask:
             )
             return self.bridge(joined)
         raise TypeError(f"unsupported bridge: {type(self.bridge).__name__}")
+
+    def _caption_prompts(
+        self, example: PreparedExample, states: dict[str, AlignedMessageStates]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+        """Return latent prompt, text-teacher prompt and identical target.
+
+        The public route keeps the official HOMER caption system prompt and
+        selected conflict/path block.  The latent student receives the same
+        request with that block removed; the bridge carries the cached
+        Planner plan instead of a second textual copy.
+        """
+        if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK:
+            cluster = str(example.row["cluster_id"])
+            context = self.context_index.get(cluster)
+            if context is None:
+                raise ValueError(f"missing current HOMER context for {cluster}")
+            validate_row_context(example.row, context)
+            target = target_caption_text(example.row)
+            return (
+                public_latent_caption_messages(context),
+                public_text_caption_messages(context),
+                target,
+            )
+        target = example.row["caption"]
+        return (
+            latent_messages(example.row["image"]),
+            full_plan_text_messages(
+                example.row["image"],
+                {name: states[name].semantics for name in TypedLatentBridge.channel_order},
+            ),
+            target,
+        )
 
     def _latent_logits(
         self,
@@ -364,11 +412,7 @@ class FrozenReceiverBridgeTask:
     def prepare(self, example: PreparedExample) -> tuple[Any, ...]:
         caption = example.row["caption"]
         matched_states = self._states(example.row["cluster_id"])
-        text_prompt = full_plan_text_messages(
-            example.row["image"],
-            {name: matched_states[name].semantics for name in TypedLatentBridge.channel_order},
-        )
-        latent_prompt = latent_messages(example.row["image"])
+        latent_prompt, text_prompt, caption = self._caption_prompts(example, matched_states)
         latent_prefix, latent_full, latent_targets = _prompt_and_full(
             self.backend, latent_prompt, caption
         )

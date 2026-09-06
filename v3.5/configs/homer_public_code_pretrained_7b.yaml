@@ -97,6 +97,8 @@ data:
   # Hidden-state traces are generated only after this population gate.  A
   # public-code baseline does not need cached traces; bridge training does.
   trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
+  bridge_context_index: data/cache/homer_pretrained_7b_homer_context/index.jsonl
+  bridge_training_manifest: data/processed/homer_pretrained_7b_bridge_362/manifest.json
   do_not_use_representative_rows_for_homer_claim: true
   canonical_365_allowlist_verified: false
   canonical_365_status: unresolved_no_public_machine_readable_allowlist
@@ -108,7 +110,6 @@ data:
     descriptions_manifest: manifests/homer_official_assets.json
     image_root: data/external/benchmarks/electronic_sheep/images/all_contest_images
   joke_corpus_manifest: manifests/homer_official_assets.json
-  bridge_training_manifest: null
   bridge_training_policy: pending_current_pretrained_trace_generation
 
 evaluation:

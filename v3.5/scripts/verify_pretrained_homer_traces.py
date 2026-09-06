@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import load_trace, read_jsonl, plan_from_record
+from humor_generator_v35.homer.contracts import parse_associations, parse_conflicts
 
 
 MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
@@ -34,6 +35,11 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def json_sha256(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def read_input_rows(dataset: Path) -> dict[str, dict[str, Any]]:
@@ -135,6 +141,25 @@ def verify(cache: Path, dataset: Path = DATASET) -> dict[str, Any]:
                 raise ValueError("plan contains fewer than two conflict pairs")
             if not plan.local_chains or not plan.global_chains:
                 raise ValueError("plan is missing local/global association chains")
+            # The parsed plan is not sufficient to replay the remaining
+            # public-code stages: summary, retrieval and selection consume the
+            # original Planner response strings.  Require those exact bytes
+            # in every current trace so a bridge run cannot silently fall back
+            # to the historical prompt/dataclass approximation.
+            planner_outputs = record.get("planner_outputs")
+            if not isinstance(planner_outputs, dict) or set(planner_outputs) != CHANNELS:
+                raise ValueError("planner_outputs must contain raw conflict/global/local responses")
+            if any(not isinstance(value, str) or not value.strip() for value in planner_outputs.values()):
+                raise ValueError("planner_outputs contains an empty/non-string response")
+            if record.get("planner_outputs_sha256") != json_sha256(planner_outputs):
+                raise ValueError("planner_outputs_sha256 does not match raw Planner responses")
+            parsed_conflicts = parse_conflicts(planner_outputs["conflict"])
+            parse_associations(planner_outputs["global"], view="global")
+            parse_associations(planner_outputs["local"], view="local")
+            if tuple(item.render() for item in parsed_conflicts) != tuple(
+                item.render() for item in plan.conflicts
+            ):
+                raise ValueError("parsed conflict plan does not match the raw conflict response")
             trace_value = str(record.get("trace_path", ""))
             trace_path = (ROOT / trace_value).resolve()
             if ROOT not in trace_path.parents:

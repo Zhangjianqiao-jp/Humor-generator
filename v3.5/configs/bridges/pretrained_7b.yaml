@@ -1,9 +1,16 @@
 experiment:
   name: pretrained_7b_bridge
   formal_training_enabled: false
+  route: homer_public_code_bridge
+  prompt_track: public_code_exact_caption_latent_plan_replacement_v1
   receiver: pretrained_qwen_7b
   model_route: pretrained_only
   trainable_components: [bridge]
+
+protocol:
+  bridge_prompt_track: public_code_exact_caption_latent_plan_replacement_v1
+  training_target_policy: source_caption_only_no_fabricated_explanation
+  caption_contract: ["##Caption", "##Explanation"]
 
 model:
   name: Qwen/Qwen2.5-VL-7B-Instruct
@@ -20,6 +27,17 @@ model:
   receiver_image: false
 
 baselines: [text_homer_public_code, statebridge, learned_latent, typed_learned_latent]
+
+data:
+  data_version: homer_pretrained_7b_public_release_362
+  dataset: data/processed/homer_pretrained_7b_bridge_362
+  population_manifest: manifests/homer_population_public_release_362.json
+  trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
+  context_index: data/cache/homer_pretrained_7b_homer_context/index.jsonl
+  # This training view is built only after 362/362 traces and contexts pass;
+  # final HOMER evaluation reads complete ranking CSVs instead.
+  caption_view_policy: public_release_source_rows_top3_for_bridge_training_only
+  target_policy: source_caption_only_no_fabricated_explanation
 
 bridge:
   sender_fields: [conflict, local, global]

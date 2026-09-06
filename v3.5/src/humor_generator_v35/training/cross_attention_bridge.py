@@ -22,6 +22,14 @@ from .formal_bridge import (
 )
 from .losses import sequence_log_probability, text_teacher_forward_kl, token_cross_entropy
 from .memory_safe import cache_text_teacher_logits, caption_only_logits
+from .public_bridge import (
+    PUBLIC_BRIDGE_PROMPT_TRACK,
+    PublicHomerContext,
+    public_latent_caption_messages,
+    public_text_caption_messages,
+    target_caption_text,
+    validate_row_context,
+)
 
 
 SEMANTIC_RECOVERY_INSTRUCTION = (
@@ -116,7 +124,9 @@ class ReceiverCrossAttentionTask:
     def __init__(self, backend: QwenBackend, bridge: ReceiverDrivenCrossAttentionBridge, *,
                  root: Path, trace_index: dict[str, dict[str, Any]],
                  loss_config: dict[str, float], max_target_tokens: int,
-                 stage: str, semantic_prompt_include_image: bool = True) -> None:
+                 stage: str, semantic_prompt_include_image: bool = True,
+                 prompt_mode: str = "legacy",
+                 context_index: Mapping[str, PublicHomerContext] | None = None) -> None:
         if stage not in {"semantic_reconstruction", "caption"}:
             raise ValueError("stage must be semantic_reconstruction or caption")
         self.backend = backend
@@ -127,6 +137,16 @@ class ReceiverCrossAttentionTask:
         self.max_target_tokens = max_target_tokens
         self.stage = stage
         self.semantic_prompt_include_image = bool(semantic_prompt_include_image)
+        self.prompt_mode = str(prompt_mode)
+        if self.prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
+            raise ValueError(f"unsupported bridge prompt_mode: {self.prompt_mode}")
+        self.context_index = dict(context_index or {})
+        if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK and not self.context_index:
+            raise ValueError("current HOMER bridge mode requires a non-empty context index")
+        if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK and stage != "caption":
+            raise ValueError(
+                "public HOMER caption bridge mode is separate from legacy semantic-recovery pilots"
+            )
         self.channel_visibility = str(loss_config.get("channel_visibility", "all"))
         if self.channel_visibility not in {"all", "target_only"}:
             raise ValueError("channel_visibility must be all or target_only")
@@ -331,11 +351,24 @@ class ReceiverCrossAttentionTask:
             name: states[name].semantics for name in TypedLatentBridge.channel_order
         }
         if self.stage == "caption":
-            messages = zero_prefix_caption_messages(example.row["image"])
-            target = example.row["caption"]
+            if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK:
+                context = self.context_index.get(str(example.row["cluster_id"]))
+                if context is None:
+                    raise ValueError(
+                        f"missing current HOMER context for {example.row['cluster_id']}"
+                    )
+                validate_row_context(example.row, context)
+                messages = public_latent_caption_messages(context)
+                target = target_caption_text(example.row)
+                teacher_messages = public_text_caption_messages(context)
+            else:
+                messages = zero_prefix_caption_messages(example.row["image"])
+                target = example.row["caption"]
+                teacher_messages = full_plan_text_messages(example.row["image"], semantics)
         else:
             messages = semantic_recovery_messages(example.row["image"])
             target = exact_typed_semantics(states)
+            teacher_messages = None
         _, full, targets = _prompt_and_full(self.backend, messages, target)
         if targets.shape[1] > self.max_target_tokens:
             raise RuntimeError(
@@ -346,7 +379,7 @@ class ReceiverCrossAttentionTask:
         teacher_logits = None
         if self.stage == "caption" and float(self.loss_config.get("text_teacher_forward_kl", 0)) > 0:
             _, teacher_full, teacher_targets = _prompt_and_full(
-                self.backend, full_plan_text_messages(example.row["image"], semantics), target
+                self.backend, teacher_messages, target
             )
             if not torch.equal(teacher_targets, targets):
                 raise RuntimeError("text and latent conditions tokenize target differently")

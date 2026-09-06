@@ -61,6 +61,11 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def json_sha256(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def repository_commit() -> str:
     """Require a committed v3.5 tree for formal trace provenance."""
     repo = ROOT.parent
@@ -360,6 +365,14 @@ def main() -> None:
                         },
                         "seed": seed,
                         "plan": plan,
+                        # Keep the exact raw public-code channel responses in
+                        # addition to the parsed plan.  The subsequent
+                        # summary/retrieval/selection cache replays the
+                        # remaining HOMER stages from these bytes; rebuilding
+                        # them from the parsed dataclass would silently lose
+                        # the official response boundary and punctuation.
+                        "planner_outputs": outputs,
+                        "planner_outputs_sha256": json_sha256(outputs),
                         "alignment": alignments,
                         "provenance": provenance,
                     }

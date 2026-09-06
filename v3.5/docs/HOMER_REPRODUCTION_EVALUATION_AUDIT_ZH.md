@@ -24,6 +24,29 @@
 当前路线不加载 `planner_sft` 或 `generator_sft`。旧 adapter 轨道只保留为历史 artifact
 审计，不能与新的 pretrained-only 结果混合。
 
+### 当前 bridge 路线迁移状态（2026-09-06）
+
+此前的 `formal_bridge.py`/`cross_attention_bridge.py` caption 分支默认使用历史
+`homer.prompts`、generic caption instruction 和 `latent_bridge_v35` trace，缺失官方
+summary/retrieval/selection/DFS context；那条路径不能命名为 HOMER + latent bridge。
+当前修复已在代码层隔离出唯一的 public route：
+
+```text
+scripts/cache_pretrained_homer_traces.py
+  -> scripts/cache_pretrained_homer_context.py
+  -> scripts/build_pretrained_bridge_dataset.py
+  -> scripts/verify_pretrained_bridge_inputs.py
+  -> scripts/train_bridge.py
+```
+
+`configs/pilot/cross_attention_caption_pretrained_public.yaml` 才是当前 caption
+bridge 配置。它使用 pinned `official_prompts.py` 的 `##Caption`/`##Explanation`
+system prompt 和两个 user blocks；text teacher 保留 selected conflict/entities/path，
+latent student 只移除 plan text 并由 bridge memory 替换。context index 还保存 summary、
+retrieval、selection 原始响应、DFS path、trace/output hash 以及 model/prompt/data
+provenance。当前尚未训练：必须等 adapter-free Planner trace 362/362 通过后才可建立
+context 和 bridge dataset；旧 A5 输出不能回填这些文件。
+
 当前实现与 HOMER 的**概念结构**相符（冲突脚本、local/global imagination、检索增强、随机选择一条联想路径），但在模型权重、API 调用序列、prompt 字符串、链长度、检索实现、数据人口、候选数量和评测器上均存在不可忽略的差异。因此：
 
 | 结论层级 | 当前状态 | 能否称为“100%复现” |
@@ -48,7 +71,7 @@
 |---|---|---|
 | 运行配置 | `configs/homer_text_reproduction.yaml` | 已改为 `claim_level: adapted_reproduction`；不再宣称 strict exact |
 | 当前 pretrained-only 配置 | `configs/homer_public_code_pretrained_7b.yaml` | Planner/Generator 无 adapter；只允许 bridge train |
-| 当前 pretrained-only bridge 配置 | `configs/bridges/pretrained_7b.yaml`、`configs/pilot/cross_attention_caption_pretrained.yaml` | 主路线的模型与 bridge 接口 |
+| 当前 pretrained-only bridge 配置 | `configs/pilot/cross_attention_caption_pretrained_public.yaml`、`configs/bridges/pretrained_7b.yaml` | public-code caption bridge；旧 `cross_attention_caption_pretrained.yaml` 仅历史审计 |
 | 官方 prompt 定义 | `src/humor_generator_v35/homer/official_prompts.py` | 固定 public-code prompt 文本与来源 commit |
 | 官方阶段管线 | `src/humor_generator_v35/homer/public_code_pipeline.py` | description/conflict/global/local/summary/selection/caption 阶段及调用 ledger |
 | Planner/Generator 基座 | `Qwen/Qwen2.5-VL-7B-Instruct`, revision `cc594898137f460bfe9f0759e9844b3ce807cfb5` | 本地固定替代模型；不是论文原始 Qwen-VL 权重 |
@@ -58,7 +81,7 @@
 | prompt 定义 | `src/humor_generator_v35/homer/prompts.py:11-82` | 当前实际字符串，不等于官方逐字 prompt |
 | 检索实现 | `src/humor_generator_v35/homer/retrieval.py` | TF-IDF/WordNet 适配器 |
 | 数据构建 | `src/humor_generator_v35/data/clustered.py:86-324` | 当前 source rows、cluster split 与清洗规则 |
-| 当前数据 manifest | `data/processed/latent_bridge_v35/manifest.json` | 记录 split、hash、跳过记录与污染策略 |
+| 当前数据 manifest | `manifests/homer_population_public_release_362.json`、生成后的 `data/processed/homer_pretrained_7b_bridge_362/manifest.json` | 362 public population 与 bridge training view 分开记录 |
 | 历史 Planner trace | `data/cache/planner_traces_homer_strict_v35/index.jsonl` | 666 条 trace，使用旧 SFT/旧 prompt；当前路线禁止复用 |
 | 历史 A5 bridge | `outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/best_bridge.pt` | 仅 bridge 可训练，但不属于当前 HOMER public-code route |
 | 历史生成入口 | `scripts/generate_formal_baseline.py:65-466` | 使用 `first_rows_by_cluster`；只用于解释旧结果，不可作为当前人口 |

@@ -1,0 +1,46 @@
+#!/bin/sh
+# Cache summary/retrieval/selection after the adapter-free Planner trace job.
+# Submit only after cache_pretrained_homer_traces has passed its 362/362 gate.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --cache data/cache/homer_pretrained_7b_planner_traces \
+  --output outputs/preflight/pretrained_homer_trace_validation_before_context.json
+python scripts/cache_pretrained_homer_context.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output data/cache/homer_pretrained_7b_homer_context \
+  --attempts 4 \
+  --seed 20260906 \
+  --temperature 1.0 \
+  --top-p 1.0
+python scripts/build_pretrained_bridge_dataset.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --context-index data/cache/homer_pretrained_7b_homer_context/index.jsonl \
+  --output data/processed/homer_pretrained_7b_bridge_362 \
+  --force
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config configs/pilot/cross_attention_caption_pretrained_public.yaml \
+  --output outputs/preflight/pretrained_bridge_input_gate_after_context.json
+test -s data/processed/homer_pretrained_7b_bridge_362/manifest.json

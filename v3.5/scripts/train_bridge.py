@@ -32,6 +32,11 @@ from humor_generator_v35.training.formal_bridge import (
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
 from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
+from humor_generator_v35.training.public_bridge import (
+    PUBLIC_BRIDGE_PROMPT_TRACK,
+    load_context_index,
+    validate_row_context,
+)
 
 
 def sha256(path: Path) -> str:
@@ -86,6 +91,27 @@ def main() -> None:
         raise ValueError("unsupported trainable bridge baseline")
     if not config["model"].get("frozen", False):
         raise ValueError("formal bridge experiments require a frozen receiver")
+
+    prompt_mode = str(config.get("protocol", {}).get("bridge_prompt_track", "legacy"))
+    if prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
+        raise ValueError(f"unsupported bridge_prompt_track: {prompt_mode}")
+    current_public_route = prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK
+    if current_public_route:
+        if config["experiment"].get("route") != "homer_public_code_bridge":
+            raise ValueError(
+                "the current HOMER bridge prompt track requires experiment.route=homer_public_code_bridge"
+            )
+        for key in ("adapter", "planner_adapter", "generator_adapter"):
+            if config["model"].get(key) is not None:
+                raise ValueError(f"current HOMER bridge route requires model.{key}=null")
+        dataset_value = str(config.get("data", {}).get("dataset", ""))
+        if "latent_bridge_v35" in dataset_value:
+            raise ValueError("historical latent_bridge_v35 data is forbidden on the current HOMER bridge route")
+        context_value = config.get("data", {}).get("context_index")
+        if not isinstance(context_value, str) or not context_value:
+            raise ValueError("current HOMER bridge route requires data.context_index")
+        if config["model"].get("model_manifest") != "manifests/local_qwen2_5_vl_7b.json":
+            raise ValueError("current HOMER bridge route requires the pinned local model manifest")
 
     torch.manual_seed(int(config["training"]["seed"]))
     adapter = config["model"].get("adapter")
@@ -164,10 +190,59 @@ def main() -> None:
         seed=seed, split="validation",
     )
     traces = load_trace_index(trace_path)
+    context_index = None
+    context_path = None
+    if current_public_route:
+        context_path = ROOT / str(config["data"]["context_index"])
+        context_index = load_context_index(context_path)
+        dataset_manifest = dataset / "manifest.json"
+        if not dataset_manifest.is_file():
+            raise RuntimeError(f"current HOMER bridge dataset manifest is missing: {dataset_manifest}")
+        dataset_payload = json.loads(dataset_manifest.read_text())
+        if dataset_payload.get("data_version") != "homer_pretrained_7b_public_release_362":
+            raise RuntimeError("current HOMER bridge dataset has the wrong data_version")
+        if dataset_payload.get("trace_index_sha256") != sha256(trace_path):
+            raise RuntimeError("current HOMER bridge dataset was built from another trace index")
+        if dataset_payload.get("context_index_sha256") != sha256(context_path):
+            raise RuntimeError("current HOMER bridge dataset was built from another context index")
+        context_manifest = context_path.parent / "manifest.json"
+        if not context_manifest.is_file():
+            raise RuntimeError(f"current HOMER context manifest is missing: {context_manifest}")
+        context_payload = json.loads(context_manifest.read_text())
+        if context_payload.get("status") != "pass" or context_payload.get("records_in_index") != 362:
+            raise RuntimeError("current HOMER context index is incomplete; bridge training is fail-closed")
+        if context_payload.get("trace_index_sha256") != sha256(trace_path):
+            raise RuntimeError("current HOMER context was built from another trace index")
+        if context_payload.get("trace_input_manifest_sha256") != sha256(
+            ROOT / str(config["data"].get("trace_input_manifest", ""))
+        ):
+            raise RuntimeError("current HOMER context was built from another trace input manifest")
+        if context_payload.get("homer_official_prompts_sha256") != sha256(
+            ROOT / "src/humor_generator_v35/homer/official_prompts.py"
+        ):
+            raise RuntimeError("current HOMER context was built from another official prompt source")
+        if context_payload.get("model_manifest_sha256") != sha256(
+            ROOT / "manifests/local_qwen2_5_vl_7b.json"
+        ):
+            raise RuntimeError("current HOMER context was built from another model manifest")
+        if len(context_index) != 362:
+            raise RuntimeError("current HOMER context index must contain 362 clusters")
+        for cluster, context in context_index.items():
+            trace = traces.get(cluster)
+            if trace is None:
+                raise RuntimeError(f"current HOMER context has no matching trace: {cluster}")
+            if context.trace_path != str(trace.get("trace_path")):
+                raise RuntimeError(f"current HOMER context trace path mismatch: {cluster}")
+            if context.trace_sha256 != str(trace.get("trace_sha256")):
+                raise RuntimeError(f"current HOMER context trace hash mismatch: {cluster}")
     required = {row["cluster_id"] for row in train_rows + validation_rows}
     missing = sorted(required - set(traces))
     if missing:
         raise RuntimeError(f"Planner traces missing for {len(missing)} clusters; first={missing[:5]}")
+    if current_public_route:
+        for row in train_rows + validation_rows:
+            context = context_index[str(row["cluster_id"])]
+            validate_row_context(row, context)
 
     semantic_channel_training = (
         baseline == "receiver_cross_attention"
@@ -201,6 +276,8 @@ def main() -> None:
             semantic_prompt_include_image=bool(
                 config["training"].get("semantic_prompt_include_image", True)
             ),
+            prompt_mode=prompt_mode,
+            context_index=context_index,
         )
         if str(config["loss"].get("alignment_teacher", "legacy_embedding_projection")) == (
             "receiver_contextual_final_hidden"
@@ -227,6 +304,8 @@ def main() -> None:
             trace_index=traces,
             loss_config=config["loss"],
             max_caption_tokens=int(config["training"]["max_caption_tokens"]),
+            prompt_mode=prompt_mode,
+            context_index=context_index,
         )
     optimizer = torch.optim.AdamW(
         bridge.parameters(),
@@ -289,6 +368,17 @@ def main() -> None:
         ),
         "semantic_prompt_include_image": config["training"].get(
             "semantic_prompt_include_image", True
+        ),
+        "bridge_prompt_track": prompt_mode,
+        "current_homer_public_route": current_public_route,
+        "context_index": None if context_path is None else str(context_path.relative_to(ROOT)),
+        "context_index_sha256": None if context_path is None else sha256(context_path),
+        "context_manifest_sha256": (
+            None if context_path is None else sha256(context_path.parent / "manifest.json")
+        ),
+        "homer_context_contract": (
+            "same_selected_conflict_entity_and_seeded_path_for_text_teacher_and_latent_student"
+            if current_public_route else None
         ),
         "initial_bridge_checkpoint": None if args.init_bridge is None else str(args.init_bridge.resolve()),
         "train_cluster_ids_sha256": hashlib.sha256(
