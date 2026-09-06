@@ -1,0 +1,144 @@
+experiment:
+  name: homer_public_code_pretrained_7b
+  route: qwen_pretrained_7b_only_bridge
+  stage: engineering_smoke_only
+  claim_level: adapted_public_protocol
+
+model:
+  name: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+  manifest: manifests/local_qwen2_5_vl_7b.json
+  planner_adapter: null
+  generator_adapter: null
+  planner_frozen: true
+  generator_frozen: true
+  bridge_trainable: true
+
+protocol:
+  official_repository: https://github.com/Shang-hub/HOMER-Official-Implementation
+  official_commit: d1334f295cc1a8f8f6dc67ba7e846c5939dddcec
+  prompt_module: src/humor_generator_v35/homer/official_prompts.py
+  prompt_track: public_code_exact_text
+  stage_order:
+    - extractor.description
+    - extractor.conflict
+    - imaginator.global
+    - imaginator.local
+    - imaginator.summary
+    - retrieval.offline
+    - generator.select_conflict
+    - generator.select_entities
+    - generator.caption
+  # The raw repository performs eight requests when description is generated;
+  # paper Appendix B.12 reports 2+3+2=7.  Both counts are recorded, neither is
+  # silently treated as the other.
+  paper_declared_call_budget: 7
+  raw_public_code_call_count_online: 8
+  raw_public_code_call_count_with_standard_description: 7
+  temperature: 1.0
+  max_tokens: 1000
+  association_successors: 3
+  successor_policy: public_code_fixed_3
+  successor_pilot:
+    candidates: [2, 3, 4, 5]
+    selection_split: validation_only
+    selection_images: 10
+    shared_seeds: [20260906, 20260907, 20260908]
+    primary_metrics: [valid_json_rate, caption_humor, image_grounding, token_cost]
+    keep_public_code_fixed_3_as_main_baseline: true
+  random_conflict_selection: true
+  random_entity_selection: true
+  random_path_selection: true
+  seeded_python_random: true
+  summary_required: true
+  retrieval_required: true
+  retrieval_implementation: official_code_compatible_tfidf_wordnet_entity_tree
+  caption_contract: ["##Caption", "##Explanation"]
+  omega:
+    enabled: true
+    default_enabled: false
+    variant_name: project_omega_grid_v1
+    source_basis:
+      - homer_paper_gtvh_resources
+      - homer_appendix_e_style_control
+      - homer_appendix_g_prompt_design
+    narrative_strategies:
+      - setup_punchline
+      - deadpan_observation
+      - question_answer
+      - dialogue_voice
+      - role_reversal
+      - exaggerated_consequence
+    linguistic_styles:
+      - plain_wit
+      - pun_wordplay
+      - idiom_twist
+      - sarcastic_understatement
+      - personification
+      - metaphorical_comparison
+    selection_policy: balanced_factorial_pre_registered
+    serialization: "Narrative strategy: <NS>. Linguistic style: <LA>."
+    note: >-
+      Omega is explicit in the paper formalism but not enumerated in the raw
+      public caption prompt. The vocabulary above is a project-defined,
+      versioned extension grounded in the paper's GTVH resources and examples;
+      it is not an official HOMER enumeration. Keep disabled for the
+      public-code baseline and enable only in the separately named omega
+      extension.
+
+data:
+  population_manifest: manifests/homer_population_v2.json
+  population_status: inventory_complete_benchmark_allowlist_still_required
+  population_key: [dataset, contest_number, image_sha256]
+  # These remain null until the real 365-contest allow-list, byte-level image
+  # audit, and source-aware rows have passed.  A formal run must not silently
+  # fall back to the superseded representative-row pilot.
+  population_rows: null
+  trace_index: null
+  do_not_use_representative_rows_for_homer_claim: true
+  official_humor_in_ai:
+    descriptions_manifest: manifests/homer_official_assets.json
+    ranking_root: data/external/benchmarks/humor_in_ai/ranking/source
+    image_root: data/external/benchmarks/humor_in_ai/cartoons/source
+  official_electronic_sheep:
+    descriptions_manifest: manifests/homer_official_assets.json
+    image_root: data/external/benchmarks/electronic_sheep/images/all_contest_images
+  joke_corpus_manifest: manifests/homer_official_assets.json
+  bridge_training_manifest: null
+  bridge_training_policy: pending_source_aware_population_gate
+
+evaluation:
+  official_assets_manifest: manifests/homer_official_assets.json
+  official_evaluator_contract:
+    hia_group_overall: GPT-4-Turbo_with_Hessel_descriptions
+    hia_group_best_pick: GPT-4o-vision_with_raw_images
+    homer_primary: GPT-5
+    evaluator_temperature: 0.0
+    hia_evaluator_records_observed: 385
+    hia_paper_contests_declared: 365
+    count_policy: keep_observed_and_paper_counts_separate
+    hia_original_benchmark:
+      available_contests_declared: 358
+      evaluator_holdout_contests: 91
+      candidates_per_image: 10
+      reference_groups: ["#1-10", "#200-209", "#1000-1009", "median"]
+      five_shot_prompt: true
+      note: >-
+        This is the NeurIPS HIA Group Overall/Best Pick protocol. It is not the
+        HOMER paper's GPT-5, five-candidate unbiased Pass@K protocol.
+  exact_comparable_track:
+    evaluator_model: gpt-5-chat-latest
+    evaluator_model_paper_label: GPT-5
+    canonical_evaluator_model: gpt-5-chat-latest
+    allow_evaluator_substitution: true
+    substitution_label_required: true
+    evaluator_temperature: 0.0
+    candidates_per_image: 5
+    pass_at_k: [1, 3, 5]
+    repetitions: 5
+  project_extension_track:
+    group_size: 10
+    mirrored_ab: true
+    independent_judges: 3
+    image_cluster_bootstrap: true
+  do_not_mix_tracks: true

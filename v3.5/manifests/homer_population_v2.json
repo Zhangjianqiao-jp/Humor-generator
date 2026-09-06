@@ -1,0 +1,101 @@
+{
+  "clusters_indexed": 949,
+  "data_version": "homer_pretrained_7b_v2",
+  "files": [
+    {
+      "bytes": 231771,
+      "path": "data/processed/homer_pretrained_7b_v2/internal_test.jsonl",
+      "rows": 327,
+      "sha256": "4ce0e39af5a22a7804c1e05b6dffc6de0c1cc590fe3ff2ccacc269554b8475bc",
+      "source_path": "data/processed/latent_bridge_v35/internal_test.jsonl"
+    },
+    {
+      "bytes": 57024,
+      "path": "data/processed/homer_pretrained_7b_v2/official_hia_seen_diagnostic.jsonl",
+      "rows": 69,
+      "sha256": "0dfcc070ac266e3ade80264718bdd370f89a8e2c0cef43634c7c88402ada26b9",
+      "source_path": "data/processed/latent_bridge_v35/official_hia_seen_diagnostic.jsonl"
+    },
+    {
+      "bytes": 59975,
+      "path": "data/processed/homer_pretrained_7b_v2/official_hia_unseen_test.jsonl",
+      "rows": 72,
+      "sha256": "07afb598b3822a7211a72b4ea0fce6399906f2846fc512a1d36dee7a2439787b",
+      "source_path": "data/processed/latent_bridge_v35/official_hia_unseen_test.jsonl"
+    },
+    {
+      "bytes": 35897,
+      "path": "data/processed/homer_pretrained_7b_v2/test_trace_inputs.jsonl",
+      "rows": 121,
+      "sha256": "caa4b32037e3e1c8e51b699279b7d52611100d924c84977b2aec3095db982bbe",
+      "source_path": "data/processed/latent_bridge_v35/test_trace_inputs.jsonl"
+    },
+    {
+      "bytes": 192033,
+      "path": "data/processed/homer_pretrained_7b_v2/trace_inputs.jsonl",
+      "rows": 666,
+      "sha256": "9dc7178757a00b3fc6aaa4e70835c9fa8c41462537941b73588f17342eb23cf3",
+      "source_path": "data/processed/latent_bridge_v35/trace_inputs.jsonl"
+    },
+    {
+      "bytes": 1563831,
+      "path": "data/processed/homer_pretrained_7b_v2/train.jsonl",
+      "rows": 2162,
+      "sha256": "de4c0fd14ad86a93d0c24ab2665da26d6ce865e235ab488c3d3c0186ee36643c",
+      "source_path": "data/processed/latent_bridge_v35/train.jsonl"
+    },
+    {
+      "bytes": 154532,
+      "path": "data/processed/homer_pretrained_7b_v2/validation.jsonl",
+      "rows": 216,
+      "sha256": "4331542ab87f3b9e92db2fc172623e7bbe5f33dca2aa8596f86b778414e3b3bc",
+      "source_path": "data/processed/latent_bridge_v35/validation.jsonl"
+    }
+  ],
+  "formal_route_gate": {
+    "population_rows": null,
+    "reason": "v2 fixes byte provenance but does not invent the unpublished allow-list",
+    "trace_index": null,
+    "verified_365_contest_allowlist": false
+  },
+  "image_byte_policy": "current_disk_bytes_canonical_for_v2",
+  "image_repairs": [
+    {
+      "image_paths": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/data/external/benchmarks/humor_in_ai/cartoons/source/878.jpg"
+      ],
+      "new_sha256": "b690e9d81a36d6a2cf5fd7a8bbf411ecd4c0f959afb6d97aba1f8f0f4af7ae0a",
+      "old_sha256": "c87ee5f587d420f095fc35dae6c46780c39d767ffd3662d7ce5ea1e4369e4e01",
+      "reason": "current_disk_bytes_are_canonical_for_v2; historical row hash differs",
+      "row_ids": [
+        "humor_in_ai:878:0",
+        "humor_in_ai:878:1",
+        "humor_in_ai:878:2"
+      ],
+      "rows_updated": 4,
+      "source_files": [
+        "data/processed/latent_bridge_v35/internal_test.jsonl",
+        "data/processed/latent_bridge_v35/test_trace_inputs.jsonl"
+      ]
+    }
+  ],
+  "manifest_sha256": "407d33f09e318d71b2fdda3aa5c5830885c513840193abf1f859c191292a91ad",
+  "population_key": [
+    "dataset",
+    "contest_number",
+    "image_sha256"
+  ],
+  "population_status": "inventory_complete_benchmark_allowlist_still_required",
+  "repair_policy": "copy_rows_and_repair_hash_only; no caption, description, split, or ordering edits",
+  "rows_total": 3633,
+  "schema_version": 2,
+  "source": {
+    "homer_commit": "d1334f295cc1a8f8f6dc67ba7e846c5939dddcec",
+    "homer_repository": "https://github.com/Shang-hub/HOMER-Official-Implementation",
+    "paper": "https://arxiv.org/html/2602.06423",
+    "parent_data_dir": "data/processed/latent_bridge_v35",
+    "parent_data_manifest_sha256": "c26c5999645d01089a937d0cb86e1982ccd4ea737f807fa698e398279a7197d8",
+    "parent_population_manifest": "manifests/homer_population_v1.json",
+    "parent_population_manifest_sha256": "b881b393e5808636acd8212e072d4abcadf103eb3efa5b08a072a66059066ac7"
+  }
+}
