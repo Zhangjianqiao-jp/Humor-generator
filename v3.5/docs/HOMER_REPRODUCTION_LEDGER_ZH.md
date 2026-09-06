@@ -1,33 +1,50 @@
-# HOMER 复现证据台账
+# HOMER 公开协议复现证据台账
 
 参考版本：Shang et al., ICLR 2026，arXiv:2602.06423v2（2026-08-02）；官方实现固定到 commit `d1334f295cc1a8f8f6dc67ba7e846c5939dddcec`。
 
-## 论文明确公开，已实现
+> 本台账记录的是公开协议与当前 v3.5 的对应关系，不是“100% 权重/调用/评测复现”声明。逐项差异（包括数据人口、prompt、调用数和 evaluator）见 [`HOMER_REPRODUCTION_EVALUATION_AUDIT_ZH.md`](HOMER_REPRODUCTION_EVALUATION_AUDIT_ZH.md)。
+>
+> 状态更新（2026-09-06）：上述历史 v2 完整性问题已通过新数据版本隔离解决。当前
+> adapted public-code 路线使用 `homer_pretrained_7b_public_release_362`，population/data
+> gate 已通过；canonical 365-contest 仍是未核验的独立论文级声明，当前 pretrained
+> hidden-state trace 尚未生成，因此 bridge gate 仍按 trace 状态阻塞。详见
+> [`HOMER_PUBLIC_RELEASE_362_ZH.md`](HOMER_PUBLIC_RELEASE_362_ZH.md)。
+
+## 论文/官方代码明确公开、当前 pretrained-only public-code route 的对应关系
 
 | 项目 | 论文设定 | v3.5 |
 |---|---|---|
 | 角色 | Extractor / Hierarchical Imaginator / Generator | 已分离 |
-| Conflict prompt | Appendix prompt 1 | 逐字保存 |
-| Local/Global prompt | Appendix prompt 2 | 逐字保存 |
-| Caption prompt | Appendix prompt 3 | 逐字保存并使用 system role |
+| Conflict prompt | 固定官方 `extractor.py` prompt | `official_prompts.py` 逐字固定；Qwen image/provider 序列化仍是后端适配 |
+| Local/Global prompt | 固定官方 `imaginator.py` prompt | `official_prompts.py` 逐字固定，user block 顺序保持 |
+| Summary prompt | 固定官方独立 summary 请求 | 当前 pipeline 强制执行并记录 `imaginator.summary` |
+| Selection prompts | 固定官方 `generator.py` 的 conflict/entity 两次请求 | 当前 pipeline 均执行；不再使用旧的单次 generator 缓存 |
+| Caption prompt | 固定官方 `generator.py` prompt | 保存并解析 `##Caption` + `##Explanation`；Ω 仅在显式扩展变体启用 |
 | Conflict 数量 | two or more | 严格 `>=2` |
-| Association | 每个 root 三个、逐步依赖 | 严格 JSON 与长度 3 |
+| Association | 论文写作层面逐步依赖、长度自适应；公开代码一次请求返回 3 successor | 主线复现公开代码的 `root + 3` 列表；不是三次 API 的递归复现 |
 | Local view | standard description | 已实现 |
 | Global view | image | 已实现 |
-| Deep imagination | first-order chains，经验均长约 4（含 root） | root + 3 steps |
-| Broad imagination | 对 backbone 每个节点检索 top-k jokes，候选词作为 leaf | 官方代码确认 `TfidfVectorizer(max_features=1000, stop_words=english, ngram_range=(1,3))`，并使用 NLTK tokenizer/POS/WordNet lemmatizer；环境中的精确 NLTK resource revision 仍需记录 |
+| Deep imagination | first-order chains，经验均长约 4（含 root） | root + 3 steps；不等于自适应长度 |
+| Broad imagination | 对 backbone 每个节点检索 top-k jokes，候选词作为 leaf | 当前 TF-IDF/WordNet 适配器；官方还包含 exact-substring、summary/merge 等步骤，不能称逐行等价 |
 | Pruning | H_rel + H_freq + H_div | 公式已实现 |
 | TSS | WordNet Wu-Palmer max | 已实现 NLTK adapter |
 | CO | lexical-neighborhood Jaccard dissimilarity | 已实现 |
 | Retrieval settings | k=5, delta=5 | 配置锁定 |
 | Caption sampling | temperature=1 | 配置锁定 |
-| Evaluation | n=5, pass@1/3/5, five trials | metric 与配置已实现 |
+| Evaluation | n=5, pass@1/3/5, five trials，GPT-5 primary | `gpt-5-chat-latest`、temperature 0 的 HOMER-comparable 轨道已锁定；当前 Group-of-10/多 judge 仍是 extension |
+
+HIA 原始 benchmark 的数字和评测器另有一套协议：论文从 358 个可用 contest 留出 91
+个；每图生成 10 条 caption，并与 `#1-10`、`#200-209`、`#1000-1009` 和 median 四组
+人类候选做 Group Overall/Best Pick。前者用 GPT-4-Turbo + Hessel description，后者用
+GPT-4o-vision + 原图。它不能替换 HOMER 论文的 365/679 人口、5 candidates、
+Pass@1/3/5、5 trials、GPT-5 主轨道。
 
 ### HOMER 是否保证 Generator 使用三类信息
 
 否。官方 `generator.py` 的实际做法是：先选两条 conflict scripts，再选两个关键实体，
 从 imagination tree 为每个实体随机取一条 path，最后把 description、selected conflict
-和 free-association paths 作为三个有标题的文本块交给 Generator。system prompt 明确要求
+和 free-association paths 作为三个有标题的 section（官方序列化为两个 user content
+blocks）交给 Generator。system prompt 明确要求
 聚焦 central incongruity 并自然结合 chain keywords，因此这是**显式文本条件与指令约束**。
 
 HOMER 没有对每条 caption 计算 description/conflict/path 的单独因果依赖，也没有
@@ -56,7 +73,7 @@ HOMER 官方仓库在固定 commit 中发布：
 | Humor in AI test | `data/datasets/humorbench/gpt4o_description/test.jsonl` | 47 | `b7d9ff114f684d77bcf923780ba59ca67f0346ce90d551b4f52e218156273e8c` |
 | Electronic Sheep | `data/datasets/electronic_sheep/description/description.jsonl` | 679 | `05f3c96a721c111f5d01fd6bc253f849e392db8b120e90817b26e30cd44b0597` |
 
-Humor in AI 三个文件与本项目 v2.5 已下载的 `gpt4o_description` 文件逐字节一致。其原始 benchmark 是 `yguooo/newyorker_caption_ranking`，数据卡标注 CC-BY-NC-4.0。Humor in AI 论文说明这些结构化描述由 GPT-4o 在固定 five-shot examples 下生成。
+Humor in AI 三个文件与官方固定 commit 中的 `gpt4o_description` 文件逐字节一致。其原始 benchmark 是 `yguooo/newyorker_caption_ranking`，数据卡标注 CC-BY-NC-4.0。Humor in AI 论文说明这些结构化描述由 GPT-4o 在固定 five-shot examples 下生成。
 
 重要污染说明：这 47 张官方 test 图片中，冻结的 Planner/Generator SFT adapters 已见过 23 张，只有 24 张可用于 adapter-unseen confirmatory evaluation。v3.5 将两部分分别保存为 `official_hia_unseen_test` 与 `official_hia_seen_diagnostic`；47 张均不参与 bridge fitting，但后 23 张不能用于无污染主张。
 
@@ -98,7 +115,7 @@ Electronic Sheep 的 679 条 `canny` 字段来自该 benchmark 的人工 MTurk `
 - text-teacher KL；
 - matched/shuffled semantic margin；
 - Base/SFT receiver 双桥实验；
-- latent communication 的 Group-of-10 主盲评（Group-of-3 仅作历史敏感性分析）。
+- latent communication 的 Group-of-10 主盲评（不把较小的 group 作为主结论）。
 
 这些实验只能在 HOMER 文本 baseline 门禁通过后启用，并必须以 extension/ablation 命名。
 

@@ -294,7 +294,15 @@ def main() -> None:
         raise RuntimeError(f"missing {len(missing)} sealed-{args.split} traces; first={missing[:5]}")
 
     retriever = build_retriever() if args.condition == "text_homer" else None
-    homer = HomerTextPipeline(backend, retriever=retriever, strict_reproduction=True) if retriever else None
+    homer = (
+        HomerTextPipeline(
+            backend,
+            retriever=retriever,
+            strict_reproduction=bool(config.get("protocol", {}).get("strict_reproduction", False)),
+        )
+        if retriever
+        else None
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     completed: set[tuple[str, int]] = set()
     if args.output.is_file():

@@ -40,8 +40,11 @@ def main() -> None:
     phase_ids = [item["id"] for item in phases]
     if len(phase_ids) != len(set(phase_ids)):
         raise ValueError("experiment phase IDs must be unique")
-    if project["trace_contract"]["required_clusters"] != 666:
-        raise ValueError("formal trace gate must remain 666 clusters")
+    trace_contract = project["trace_contract"]
+    if trace_contract.get("required_clusters") is not None:
+        raise ValueError("current trace gate must remain unknown until the population allow-list is materialized")
+    if trace_contract.get("historical_required_clusters") != 666:
+        raise ValueError("historical 666-cluster trace evidence must remain explicitly labelled")
     if project["evaluation"]["pilot"]["role"] != "screening_only":
         raise ValueError("Group-of-3 must not become a confirmatory endpoint")
     if project["evaluation"]["confirmatory"]["protocol"] != "mirrored_blind_group_of_10":

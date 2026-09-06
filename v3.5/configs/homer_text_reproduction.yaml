@@ -18,8 +18,13 @@ paper_evidence:
   description_provenance: manifests/homer_official_assets.json
 
 protocol:
-  strict_reproduction: true
-  reproduction_scope: homer_method_and_data_with_pinned_qwen2_5_substitution
+  # This tree reproduces the *publicly disclosed protocol* with an explicit
+  # local model substitution.  It is not weight- or call-level identity with
+  # the paper's run (the paper does not disclose an immutable Qwen-VL
+  # revision, and the public implementation uses gpt-4o API calls).
+  strict_reproduction: false
+  claim_level: adapted_reproduction
+  reproduction_scope: public_homer_protocol_with_pinned_qwen2_5_substitution
   standard_description_required: true
   conflict_pairs_min: 2
   association_chain_length: 3

@@ -54,7 +54,8 @@ def check(config_path: Path) -> dict[str, object]:
     for relative in (
         "src/humor_generator_v35/homer/official_prompts.py",
         "src/humor_generator_v35/homer/public_code_pipeline.py",
-        "manifests/homer_population_v2.json",
+        "manifests/homer_population_public_release_362.json",
+        "scripts/verify_homer_public_release_362.py",
         "scripts/verify_homer_evaluation_assets.py",
     ):
         if not (ROOT / relative).is_file():
@@ -91,19 +92,78 @@ def check(config_path: Path) -> dict[str, object]:
         if hia_benchmark.get(key) != expected:
             errors.append(f"HIA original benchmark contract mismatch for {key}")
     population_manifest = config.get("data", {}).get("population_manifest")
-    if population_manifest != "manifests/homer_population_v2.json":
-        errors.append("pretrained route must name the source-aware population manifest")
+    if population_manifest != "manifests/homer_population_public_release_362.json":
+        errors.append("pretrained route must name the pinned public-release population manifest")
+    population_manifest_payload: dict[str, object] = {}
+    if isinstance(population_manifest, str) and (ROOT / population_manifest).is_file():
+        population_manifest_payload = json.loads((ROOT / population_manifest).read_text())
+        if population_manifest_payload.get("population_status") != "verified_public_release_362":
+            errors.append("public-release population manifest status is not verified_public_release_362")
+        gate = population_manifest_payload.get("formal_route_gate", {})
+        if gate.get("verified_public_release_allowlist") is not True:
+            errors.append("public-release manifest does not verify its machine-readable allow-list")
+        if gate.get("verified_365_contest_allowlist") is not False:
+            errors.append("canonical 365 gate must remain explicitly false")
     data = config.get("data", {})
-    if data.get("population_status") != "verified_365_contest_allowlist":
+    if data.get("population_status") != "verified_public_release_362":
         data_errors.append(
-            "population_status is not verified_365_contest_allowlist; official allow-list is pending"
+            "population_status is not verified_public_release_362"
         )
-    for key in ("population_rows", "trace_index"):
+    for key in ("population_rows",):
         value = data.get(key)
         if not isinstance(value, str) or not value:
-            data_errors.append(f"data.{key} is not populated; formal route cannot fall back to historical rows")
+            data_errors.append(f"data.{key} is not populated; public-release route cannot fall back to historical rows")
         elif not (ROOT / value).is_file():
             data_errors.append(f"data.{key} does not exist: {value}")
+    trace_errors: list[str] = []
+    trace_value = data.get("trace_index")
+    if not isinstance(trace_value, str) or not trace_value:
+        trace_errors.append(
+            "data.trace_index is pending; public-code generation is allowed, bridge training is not"
+        )
+    else:
+        trace_path = ROOT / trace_value
+        if not trace_path.is_file():
+            trace_errors.append(f"data.trace_index does not exist: {trace_value}")
+        else:
+            trace_manifest_path = trace_path.parent / "manifest.json"
+            if not trace_manifest_path.is_file():
+                trace_errors.append(
+                    "pretrained trace manifest is missing; index cannot be trusted"
+                )
+            else:
+                try:
+                    trace_manifest = json.loads(trace_manifest_path.read_text())
+                except json.JSONDecodeError as exc:
+                    trace_errors.append(f"pretrained trace manifest is invalid JSON: {exc}")
+                else:
+                    expected_input = data.get("trace_input_manifest")
+                    expected_input_hash = (
+                        hashlib.sha256((ROOT / expected_input).read_bytes()).hexdigest()
+                        if isinstance(expected_input, str) and (ROOT / expected_input).is_file()
+                        else None
+                    )
+                    if trace_manifest.get("status") != "pass":
+                        trace_errors.append(
+                            "pretrained trace manifest is not complete (status != pass)"
+                        )
+                    if trace_manifest.get("records_in_index") != 362:
+                        trace_errors.append("pretrained trace index must contain 362 records")
+                    if trace_manifest.get("failure_records") != 0:
+                        trace_errors.append("pretrained trace cache reports generation failures")
+                    if trace_manifest.get("data_version") != "homer_pretrained_7b_public_release_362":
+                        trace_errors.append("pretrained trace data version mismatch")
+                    if trace_manifest.get("revision") != EXPECTED_REVISION:
+                        trace_errors.append("pretrained trace Planner revision mismatch")
+                    if trace_manifest.get("adapter") is not None:
+                        trace_errors.append("pretrained trace manifest must declare adapter=null")
+                    if expected_input_hash is None or trace_manifest.get(
+                        "trace_input_manifest_sha256"
+                    ) != expected_input_hash:
+                        trace_errors.append("pretrained trace input manifest hash mismatch")
+    trace_input = data.get("trace_input_manifest")
+    if not isinstance(trace_input, str) or not trace_input or not (ROOT / trace_input).is_file():
+        trace_errors.append("data.trace_input_manifest is missing; current pretrained traces cannot be generated")
     if data.get("bridge_training_manifest") is not None:
         value = str(data["bridge_training_manifest"])
         if "latent_bridge_v35" in value:
@@ -112,8 +172,14 @@ def check(config_path: Path) -> dict[str, object]:
         "status": "pass" if not errors else "fail",
         "config": str(config_path),
         "errors": errors,
+        # Population readiness is sufficient for the online public-code
+        # baseline.  Cached hidden-state traces are a separate bridge gate.
         "data_gate": "ready" if not data_errors else "blocked",
         "data_errors": data_errors,
+        "trace_gate": "ready" if not trace_errors else "blocked",
+        "trace_errors": trace_errors,
+        "bridge_data_gate": "ready" if not data_errors and not trace_errors else "blocked",
+        "population_manifest": population_manifest_payload,
         "evaluator": {
             "model": evaluator_model,
             "canonical_model": canonical_evaluator,
@@ -137,7 +203,10 @@ def main() -> None:
     args = parser.parse_args()
     report = check(args.config.resolve())
     print(json.dumps(report, indent=2))
-    if report["status"] != "pass" or (args.require_data_ready and report["data_gate"] != "ready"):
+    if report["status"] != "pass" or (
+        args.require_data_ready
+        and (report["data_gate"] != "ready" or report["trace_gate"] != "ready")
+    ):
         raise SystemExit(1)
 
 

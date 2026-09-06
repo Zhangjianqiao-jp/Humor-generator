@@ -26,15 +26,15 @@ architecture:
   planner:
     base: Qwen/Qwen2.5-VL-7B-Instruct
     revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
-    adapter: artifacts/checkpoints/planner_sft
+    adapter: null
     frozen: true
     outputs: [grounding_description, conflict_scripts, local_association, global_association]
   generator:
     base: Qwen/Qwen2.5-VL-7B-Instruct
     revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
-    adapter: artifacts/checkpoints/generator_sft
+    adapter: null
     frozen: true
-    receiver_primary: sft
+    receiver_primary: pretrained
     visual_token_budget: {min: 256, max: 1280, shared_across_all_conditions: true}
   bridge:
     only_trainable_component: true
@@ -46,8 +46,16 @@ architecture:
 
 data_contract:
   split_unit: NYCC_image_cluster
-  manifest: data/processed/latent_bridge_v35/manifest.json
-  manifest_sha256: c26c5999645d01089a937d0cb86e1982ccd4ea737f807fa698e398279a7197d8
+  current_population_manifest: manifests/homer_population_public_release_362.json
+  current_population_status: verified_public_release_362
+  current_population_key: [dataset, contest_number, image_sha256]
+  current_population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
+  current_trace_index: null
+  current_trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  historical_bridge_manifest: data/processed/latent_bridge_v35/manifest.json
+  manifest: null
+  manifest_sha256: null
+  historical_manifest_sha256: c26c5999645d01089a937d0cb86e1982ccd4ea737f807fa698e398279a7197d8
   splits:
     train: 602
     validation: 64
@@ -66,16 +74,27 @@ data_contract:
     image_clusters: 810
     planner_traces: 666
     policy: compile_and_cli_smoke_then_byte_schema_decode_tensor_provenance_audit
+  blockers:
+    - current_pretrained_trace_cache_not_generated
+    - canonical_365_allowlist_unresolved_for_canonical_claim_only
+  historical_manifest_policy: >-
+    The old latent_bridge_v35 manifest is retained only for provenance and
+    mechanism-pilot analysis; it is not a current population or training input.
 
 trace_contract:
-  index: data/cache/planner_traces_homer_strict_v35/index.jsonl
-  required_clusters: 666
+  index: null
+  historical_index: data/cache/planner_traces_homer_strict_v35/index.jsonl
+  current_route: pretrained_7b_homer_public_code
+  required_clusters: null
+  historical_required_clusters: 666
   required_schema: 3
   validation:
     - At least two explicit conflict pairs.
     - Every association is exactly root-to-step1-to-step2-to-step3.
     - Hidden states and replayed emitted tokens align without trimming or padding.
-    - Model revision, adapter, prompts, seed, generation and tensor hashes are recorded.
+    - Model revision, null adapter state, prompts, seed, generation and tensor hashes are recorded.
+    - Current traces must contain the complete public-code stage ledger; historical SFT traces are invalid.
+    - Current trace count is 362 once the verified public-release population is used.
   validator_repair:
     policy: validator-feedback-format-only-v1
     constraints:
@@ -183,7 +202,7 @@ experiment_plan:
       formal_elapse_seconds: 3600
     - id: A4
       name: channel_isolated_functional_semantic_pilot
-      status: corrected_formal_pilot_queued
+      status: complete_pilot_inconclusive
       config: configs/pilot/cross_attention_semantic_phase_a4.yaml
       smoke_job: jobs/cross_attention_phase_a4_smoke.pjm
       smoke_job_id: "6711052"
@@ -203,18 +222,24 @@ experiment_plan:
         semantic_prompt_include_image: false
         counterfactual_reconstruction_weight: 0.75
         objective: channel_isolated_v4
-      status_gate: formal_bridge_only_64_train_24_validation_queued_corrected_script
+      status_gate: complete_engineering_pass_semantic_pilot_inconclusive
+      result:
+        epochs_completed: 5
+        global_steps: 80
+        overall_gap: 0.0064997
+        channel_gaps: {conflict: 0.0088532, local: 0.0051597, global: 0.0054863}
+        caption_quality_evaluated: false
       scientific_claim_boundary: >-
         A4 is a causal-identifiability mechanism pilot. It is not a caption-quality
         claim until held-out caption generation and blinded evaluation pass.
     - id: L
       name: latent_text_caption_ablation
-      status: evidence_gated
+      status: locked_until_pretrained_trace_and_semantic_gate
       conditions: [text_homer, c_text_a_latent, c_latent_a_text, all_latent]
       design: {primary_images: 121, candidates_per_image: 10, group_size: 10}
     - id: C
       name: confirmatory_latent_training_and_test
-      status: locked_until_L_go
+      status: locked_until_pretrained_route_and_L_go
       design: {full_train_clusters: 602, validation_clusters: 64, seeds: 3, primary_test_images: 121}
     - id: PL
       name: legacy_preference_learning
@@ -231,6 +256,14 @@ evaluation:
     statistical_unit: image_cluster
     raters: multiple_independent
     uncertainty: hierarchical_image_rater_bootstrap_95ci
+  homer_comparable:
+    evaluator_paper_label: GPT-5
+    evaluator_model_id: gpt-5-chat-latest
+    evaluator_temperature: 0.0
+    candidates_per_image: 5
+    pass_at_k: [1, 3, 5]
+    repeated_trials: 5
+    status: protocol_locked_not_run
   required_metrics:
     - overall_win_rate
     - best_pick_win_rate
@@ -277,6 +310,9 @@ authoritative_references:
   - {id: humor_in_ai, venue: NeurIPS_2024, url: "https://proceedings.neurips.cc/paper_files/paper/2024/file/e297fb6cd1690ee5b39c5bb4c58ad801-Paper-Datasets_and_Benchmarks_Track.pdf"}
 
 canonical_docs:
+  - docs/HOMER_REPRODUCTION_EVALUATION_AUDIT_ZH.md
+  - docs/HOMER_ANNOTATION_RECONCILIATION_ZH.md
+  - docs/HOMER_PRETRAINED_7B_PROTOCOL_ZH.md
   - docs/WORK_PLAN_ZH.md
   - docs/METHOD_AUDIT_V35_ZH.md
   - docs/HOMER_REPRODUCTION_LEDGER_ZH.md
@@ -285,3 +321,4 @@ canonical_docs:
   - docs/EXPERIMENT_FAILURE_LOG_ZH.md
   - docs/GROUP3_JUDGE_PROMPT_ZH.md
   - docs/ENGINEERING_SMOKE_REPORT_ZH.md
+  - docs/HOMER_PUBLIC_RELEASE_362_ZH.md

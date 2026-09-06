@@ -1,8 +1,11 @@
-"""Verbatim public prompts from HOMER Appendix B, with role separation.
+"""Paper-aligned prompts for the v3.5 adapted HOMER track.
 
-Only whitespace is normalized.  The paper does not disclose a verbatim prompt
-for situation-description generation, so strict reproduction consumes the
-standard descriptions shipped with the benchmark instead of inventing one.
+These strings preserve the disclosed role semantics, but they are **not** a
+verbatim copy of the public repository prompts.  The paper does not disclose
+a complete immutable prompt bundle (and does not provide an immutable
+Qwen-VL revision), so the adapted track must not be labelled as exact
+reproduction.  The situation-description stage consumes the pinned benchmark
+descriptions rather than inventing a new prompt-only substitute.
 """
 from __future__ import annotations
 

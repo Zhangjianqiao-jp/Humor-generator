@@ -45,6 +45,9 @@ def main() -> None:
     python = str(ROOT / ".venv/bin/python")
     commands = [
         [python, "-m", "compileall", "-q", "src", "scripts", "tests"],
+        [python, "scripts/homer_public_code_smoke.py"],
+        [python, "scripts/check_pretrained_route.py", "--require-data-ready"],
+        [python, "scripts/verify_homer_evaluation_assets.py"],
         [python, "scripts/check_environment.py"],
         [python, "scripts/check_v35_isolation.py"],
         [python, "scripts/verify_frozen_artifacts.py"],

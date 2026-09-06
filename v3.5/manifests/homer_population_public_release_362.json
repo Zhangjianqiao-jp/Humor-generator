@@ -1,0 +1,103 @@
+{
+  "allowlist": "manifests/homer_public_release_362_allowlist.json",
+  "allowlist_contest_count": 362,
+  "allowlist_contest_ids_sha256": "02e6596e8745569fe944a4a1a846a355758fc11230398280c72d7bfc4b931c62",
+  "allowlist_sha256": "367e283ef1b454875a1bfe9c7a8eafb26f442b2ca8ec0a0c12279c4f31cba54d",
+  "data_version": "homer_pretrained_7b_public_release_362",
+  "files": [
+    {
+      "bytes": 79737,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/official_hia_unseen_test.jsonl",
+      "rows": 47,
+      "sha256": "220a316f26cf1c7df4801ce067242bf59bbcb27f454f507572b653bff376fdba"
+    },
+    {
+      "bytes": 616291,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl",
+      "rows": 362,
+      "sha256": "0dbcefe399af42adfdc1123b0d22db5078203d105c44471c98ad95f69fac4c6c"
+    },
+    {
+      "bytes": 909773,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/source_rows.jsonl",
+      "rows": 1086,
+      "sha256": "48756d2186ef3d1c264994561142325e8fa8f23ef9d4c8e4ad156a43dbf38587"
+    },
+    {
+      "bytes": 79737,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/test.jsonl",
+      "rows": 47,
+      "sha256": "220a316f26cf1c7df4801ce067242bf59bbcb27f454f507572b653bff376fdba"
+    },
+    {
+      "bytes": 341838,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl",
+      "rows": 362,
+      "sha256": "c51bb028b21169de190cdd7c1783eae7332e07979a14d0f96fc648a8d97d8372"
+    },
+    {
+      "bytes": 462036,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/train.jsonl",
+      "rows": 271,
+      "sha256": "c65599ecaf1b5417547a52242d3c81e51a427f4525fd831f57781712e25da965"
+    },
+    {
+      "bytes": 74518,
+      "path": "data/processed/homer_pretrained_7b_public_release_362/validation.jsonl",
+      "rows": 44,
+      "sha256": "9b87cbd7c2f8141fae99d28e224822d305651eabbd3a904c06a0e1688a6f7e80"
+    }
+  ],
+  "formal_route_gate": {
+    "canonical_365_status": "unresolved",
+    "population_rows": "data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl",
+    "reason": "The public machine-readable release is 362 contests; the paper-level 365 claim remains a separate unresolved population.",
+    "trace_index": null,
+    "trace_status": "pending_current_pretrained_planner_traces",
+    "verified_365_contest_allowlist": false,
+    "verified_public_release_allowlist": true,
+    "verified_public_release_count": 362
+  },
+  "image_byte_policy": "current_local_source_bytes; no upstream image bytes were edited",
+  "image_repairs_relative_to_parent": [],
+  "known_upstream_data_issues": {
+    "policy": "published bytes are retained and any known issue is provenance, not silently repaired content",
+    "reference": "https://github.com/nextml/caption-contest-data-api/issues/38"
+  },
+  "manifest_provenance": {
+    "description_file_hashes": {
+      "test": "b7d9ff114f684d77bcf923780ba59ca67f0346ce90d551b4f52e218156273e8c",
+      "train": "09151b799306b4dd2f6bbd5e67657cf988a4a5a96639fceba7625ad5cb8d9602",
+      "validation": "80d91d34dac4a00a0e976983329c94844ba05ec0372306bd80af1524815f7171"
+    },
+    "description_ids_digest": "02e6596e8745569fe944a4a1a846a355758fc11230398280c72d7bfc4b931c62"
+  },
+  "manifest_sha256": "589448e581839cab49db074e989091829437116d1f13a68194e36828f3b32af7",
+  "population_key": [
+    "dataset",
+    "contest_number",
+    "image_sha256"
+  ],
+  "population_rows": "data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl",
+  "population_status": "verified_public_release_362",
+  "rows_total": 362,
+  "schema_version": 1,
+  "source": {
+    "homer_commit": "d1334f295cc1a8f8f6dc67ba7e846c5939dddcec",
+    "homer_paper": "https://arxiv.org/html/2602.06423",
+    "homer_repository": "https://github.com/Shang-hub/HOMER-Official-Implementation",
+    "parent_data_version": "homer_pretrained_7b_v2",
+    "parent_manifest": "manifests/homer_population_v2.json",
+    "public_dataset": "https://huggingface.co/datasets/yguooo/newyorker_caption_ranking",
+    "public_dataset_revision": "1cd70477b6a99a473690a25a2fed359f75184c64"
+  },
+  "source_caption_rows": 1086,
+  "source_caption_rows_policy": "all three parent rows per allow-listed contest are retained in source_rows.jsonl",
+  "split_counts": {
+    "test": 47,
+    "train": 271,
+    "validation": 44
+  },
+  "trace_index": null,
+  "trace_input_manifest": "data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl"
+}

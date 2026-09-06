@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-04T17:49:55+09:00"
+observed_at: "2026-09-06T17:26:48+09:00"
 must_revalidate: true
 source_commit: e6763d6a2314fd2da7f1ee2ec9a1512710d7eb2f
 branch: latent
 
-current_phase: a4_channel_isolated_formal_pilot_queued_corrected_script
+current_phase: pretrained_7b_public_release_362_ready_trace_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -14,13 +14,28 @@ preference_learning:
     DPO/SimPO/IPO and preference-pair work belong to the superseded v2.5 plan;
     do not import, execute or submit those jobs in v3.5.
 trace_gate:
-  status: passed
-  available: 666
-  required: 666
+  status: historical_sft_trace_passed_current_pretrained_population_trace_pending
+  available: 0
+  required: 362
+  historical_available: 666
+  current_population_count: 362
   index_sha256: f4ffa1ef4a39e616ced0d94f1f6334da930d79c726873889aba05a30bfedfcef
   recovery_note: >-
     nycc_325 and nycc_775 succeeded on new raw generations; validator repair
-    was enabled but was not invoked in either final accepted trace.
+    was enabled but was not invoked in either final accepted trace. These traces
+    use the superseded SFT/legacy prompt route and are not valid inputs for the
+    current pretrained-only HOMER protocol.
+  current_route_index: null
+  current_route_required: source_aware_pretrained_7b_trace_rebuild_after_population_gate
+population_gate:
+  status: verified_public_release_362
+  manifest: manifests/homer_population_public_release_362.json
+  allowlist: manifests/homer_public_release_362_allowlist.json
+  rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
+  trace_inputs: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  split_counts: {train: 271, validation: 44, test: 47}
+  source_caption_rows: 1086
+  canonical_365_status: unresolved_no_public_machine_readable_allowlist
 
 latest_completed_review:
   job_id: "6695787"
@@ -143,14 +158,14 @@ latest_outer_attempt:
     traces 666/666 passed; no outer semantic or caption conclusion is allowed.
 
 a4_channel_isolated_repair:
-  status: corrected_formal_pilot_queued
+  status: complete_pilot_inconclusive
   config: configs/pilot/cross_attention_semantic_phase_a4.yaml
   job_script: jobs/cross_attention_phase_a4.pjm
   objective: channel_isolated_v4
   channel_visibility: target_only
   semantic_prompt_include_image: false
   counterfactual_reconstruction_weight: 0.75
-  formal_status: queued_corrected_script
+  formal_status: completed
   smoke_job_id: "6711052"
   smoke_output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
   smoke_validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
@@ -165,29 +180,55 @@ a4_channel_isolated_repair:
   formal_resource_group: c-batch
   formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
   formal_output: outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
-  scientific_training_started: false
+  scientific_training_started: true
+  epochs_completed: 5
+  global_steps: 80
+  semantic_gate_status: pilot_inconclusive
+  validation_final:
+    overall_gap: 0.0064997
+    conflict_gap: 0.0088532
+    local_gap: 0.0051597
+    global_gap: 0.0054863
+    note: >-
+      Point estimates are mechanism-pilot diagnostics, not caption quality;
+      conflict CI crosses zero and all channel gaps are below the preregistered
+      0.01 engineering threshold.
 
 current_gate:
-  name: phase_a4_channel_isolated_real_trace_smoke
-  status: formal_pilot_queued_corrected_script
-  job_id: "6711052"
-  config: configs/pilot/cross_attention_semantic_phase_a4.yaml
-  job_script: jobs/cross_attention_phase_a4_smoke.pjm
+  name: pretrained_7b_homer_population_and_protocol_gate
+  status: population_ready_trace_pending
+  job_id: null
+  config: configs/homer_public_code_pretrained_7b.yaml
+  job_script: null
   required_checks:
-    - exact Qwen revision and frozen 7B SFT adapter
-    - two stress-selected real traces with no semantic target truncation
-    - semantic recovery prompt contains no image shortcut
-    - target-only one-hot channel visibility for conflict/local/global
-    - donor-side counterfactual reconstruction path is finite and executed
-    - finite loss/gradient/update and policy trainable params equal zero
-    - results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/report.json passes validator
+    - exact pinned Qwen2.5-VL-7B revision with planner_adapter=null and generator_adapter=null
+    - official public-code prompt text, system shape and user block boundaries
+    - full description/conflict/global/local/summary/retrieval/selection/caption ledger
+    - source-aware public HIA population manifest (`public_release_362`) and its verified 362-ID allow-list
+    - canonical 365 allow-list remains a separate unresolved paper-level claim
+    - pretrained-only trace cache generated after the above gates
+    - zero-adapter Qwen online/replay smoke on representative images
   failed_attempt_id: "6711036"
   failed_attempt_status: terminated_by_monitoring_error_no_scientific_output
-  replacement_status: pass
-  formal_job_id: "6711109"
-  formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
-  on_pass: a4_bridge_only_64_train_24_validation_is_unlocked
-  on_failure: preserve_log_and_update_docs_before_any_retry
+  replacement_status: public_release_362_verified
+  on_pass: pretrained_trace_rebuild_and_bridge_pilot_is_unlocked
+  on_failure: preserve_asset_hashes_and_update_docs_before_any_retry
+
+latest_homer_protocol_audit:
+  observed_at: "2026-09-06"
+  status: adapted_pretrained_7b_not_100_percent_reproduction
+  prompt_and_message_shape: pinned_public_commit_text_and_block_boundaries_smoke_pass
+  stage_order: description_conflict_global_local_summary_retrieval_two_selection_caption
+  retrieval: official_code_compatible_tfidf_wordnet_entity_tree
+  model_route: qwen2_5_vl_7b_revision_cc5948_no_policy_adapters_bridge_only
+  evaluator_contract: gpt-5-chat-latest_temperature_0_pass_at_1_3_5_five_repeats
+  benchmark_contract: hia_original_gpt4_turbo_overall_gpt4o_vision_best_pick_separate
+  data_status: public_release_362_verified_canonical_365_unresolved_current_878_lineage_verified
+  formal_generation_status: not_started
+  claim_boundary: >-
+    Prompt/stage/retrieval interface is now auditable, but model weights,
+    benchmark population and evaluation runs are not identical to HOMER paper;
+    no 100-percent reproduction claim is permitted.
 
 resource_diagnosis:
   mig_formal_training: forbidden
@@ -216,7 +257,7 @@ native_full_gpu_fix:
 program_risk_audit:
   overall: medium_continue_with_evidence_gates
   report: docs/PROGRAM_RISK_ASSESSMENT_ZH.md
-  tests_passed: 86
+  tests_passed: all_locked_venv_tests_passed_2026-09-06
   tests_scope: full_locked_venv_suite_including_a4_channel_isolation_contracts
   full_suite_status: passed_2026-09-04
   formal_preflight: results/preflight/formal_preflight.json
@@ -236,72 +277,54 @@ program_risk_audit:
     - A4 semantic recovery disables the image shortcut and masks all non-target channels
     - A4 donor reconstruction requires a swapped channel to decode donor semantics
   highest_open_risk: >-
-    A4 formal 64/24 semantic pilot has not run; the real-trace engineering smoke
-    passed, while outer A3 baseline 6708118 remains a provenance-only failure.
+    The current pretrained-only route has no valid generated trace cache yet;
+    the historical 666 SFT traces cannot be reused. The public 362-contest
+    population is now verified; the paper-level 365 claim remains unresolved
+    but is not required for the adapted public-release route.
 
 immediate_gate:
-  action: monitor_6711109_corrected_a4_formal_pilot
-  prerequisite_job_id: "6707953"
-  prerequisite_status: a3_pilot_inconclusive_with_engineering_pass
-  smoke_job_id: "6711052"
-  superseded_smoke_job_id: "6711036"
-  resource_group: c-batch
-  allocation_policy: single_full_gpu_request
-  visible_cuda_devices: "0"
-  required_resource: one_full_gpu_native_allocator_cuda0
-  smoke_requested_elapse_seconds: 1200
-  scheduler_estimated_start: null
-  preflight: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/preflight.json
-  output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
-  script: scripts/real_trace_bridge_smoke.py
-  design:
-    clusters: 2
-    channels: [conflict, local, global]
-    statistical_unit: real_trace_engineering_smoke
-    donor_policy: existing_validated_hard_negative_map
-    caption_generation: false
+  action: generate_current_pretrained_homer_traces_after_population_gate
+  prerequisite_status: public_release_362_population_ready; current_route_reset_to_pretrained_only
+  current_route_config: configs/homer_public_code_pretrained_7b.yaml
+  population_manifest: manifests/homer_population_public_release_362.json
+  population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
+  trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  evaluator_manifest: manifests/homer_official_assets.json
+  required_resource: one_full_gpu_native_allocator_cuda0_only_after_data_gate
+  active_jobs: []
+  scientific_training: false
   success_requires:
-    - Clean tracked worktree and passing formal preflight.
-    - Keep checkpoint, Planner, Generator, prompt and trace hashes fixed.
-    - Exercise target-only one-hot masks without NaN in inactive attention arms.
-    - Exercise donor reconstruction and finite bridge update.
-  status: formal_pilot_queued_corrected_script
+    - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
+    - Keep the canonical 365 allow-list unresolved unless an authoritative source appears.
+    - Generate new pretrained-only traces; historical SFT traces are forbidden.
+    - Pass CPU public-code smoke, route check, official evaluator-asset check and full preflight.
+    - Run zero-adapter Qwen smoke before any bridge-only GPU pilot.
+  current_blockers:
+    - pretrained_trace_cache_not_generated
   resource_request_note: >-
-    GENKAI rejects node=1+gpu=1 and gpu=1+exec-policy=simplex. The corrected A4
-    formal script uses c-batch + gpu=1 without node=1 or exec-policy; CUDA_VISIBLE_DEVICES=0
-    keeps the process single-device and MIG remains forbidden.
-  validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
-  smoke_exit_code: 0
-  smoke_elapsed_seconds: 243
-  next_action: monitor_6711109_preflight_then_a4_gate
-  formal_job_id: "6711109"
-  formal_status: queued_corrected_script
-  formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
-  formal_elapse_seconds: 14400
-  queue_note: >-
-    The prior shared c-batch probes 6708041 and 6708044 and b-batch duplicate 6708042
-    were canceled. Node-exclusive smoke 6708113 passed immediately on b-batch;
-    formal outer job 6708118 stopped before forward because the tracked worktree was
-    dirty. A4 formal b-batch duplicate 6711070 and generic c-batch job 6711074 were
-    canceled before forward; 6711074 lacked the A4 method-specific semantic gate and
-    used a stale output contract. MIG and
-    interactive alternatives remain disallowed because of the recorded allocator incident
-    and prior batch rejection.
+    Do not submit a GPU job while any current_blocker remains. When unlocked, use
+    one full GPU with native allocator and CUDA_VISIBLE_DEVICES=0; MIG and duplicate
+    reservations remain forbidden by the recorded allocator incident.
+  historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
+  historical_a4_job_id: "6711109"
+  historical_a4_status: complete_pilot_inconclusive
 
 remaining_sequence_after_resource_gate:
-  - a4_bridge_only_64_train_24_validation
-  - a4_semantic_gate
-  - clean_commit_and_repeat_a3_outer_baseline
-  - outer_or_caption_only_after_a4_gate
+  - verify_public_release_362_allowlist_and_population
+  - regenerate_pretrained_7b_homer_traces
+  - zero_adapter_online_and_standard_replay_smoke
+  - bridge_only_mechanism_pilot
+  - held_out_caption_generation_and_homer_comparable_evaluation
 
 eta:
-  scheduler_wait: resolved_for_smoke
+  scheduler_wait: not_applicable_waiting_current_pretrained_trace_preflight
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
-  outer_semantic_confirmation: blocked_by_preflight_dirty_worktree
+  outer_semantic_confirmation: historical_provenance_failure
   a4_real_trace_smoke: completed_in_4m03s_job_6711052
-  a4_semantic_pilot: approximately_30_to_60_minutes_after_gpu_start
-  excluded: caption_generation_and_independent_blind_rating
+  a4_semantic_pilot: completed_approximately_30_to_60_minutes_after_gpu_start
+  pretrained_trace_and_full_population: pending_362_population_trace_generation
+  excluded: no_current_caption_generation_or_preference_learning
 
 next_agent_actions:
   - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
@@ -311,8 +334,12 @@ next_agent_actions:
   - Never issue pjdel while pjstat is transiently empty; inspect pjstat -H and .stats terminal fields first.
   - Do not treat the historical outer smoke 6708113 as an A4 gate; it used the A3 protocol.
   - Preserve outer job 6708118 as an engineering/provenance failure; do not interpret it as a latent result.
-  - Corrected A4 job 6711109 is queued; wait for its start and verify preflight before classifying any scientific result.
-  - Submit only jobs/cross_attention_phase_a4.pjm; verify target-only one-hot channel mass and donor reconstruction in its own semantic gate.
+  - A4 job 6711109 is complete with `pilot_inconclusive`; do not describe it as queued or as a caption result.
+  - Do not submit `jobs/cross_attention_phase_a4.pjm` again unless a separate repair is explicitly approved.
+  - Public 362 allow-list and image/ranking joins are verified; do not relabel them as canonical 365.
+  - Generate current-route traces from `data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl`.
+  - Use `scripts/generate_homer_public_code.py` only after its dataset is a source-aware full-population artifact; never pass the historical representative-row manifest silently.
+  - Run `scripts/homer_public_code_smoke.py`, `scripts/check_pretrained_route.py` and `scripts/verify_homer_evaluation_assets.py` before GPU allocation.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning unless the revised semantic gate passes.
 
@@ -320,10 +347,16 @@ automation:
   tmux_session: null
   state: null
   poll_seconds: null
-  behavior: manual_until_corrected_A4_formal_pilot_is_submitted
+  behavior: disabled_while_current_pretrained_trace_gate_is_blocked
 
 verification_commands:
   - pjstat
+  - .venv/bin/python scripts/homer_public_code_smoke.py
+  - .venv/bin/python scripts/check_pretrained_route.py
+  - .venv/bin/python scripts/verify_homer_evaluation_assets.py
+  - .venv/bin/python scripts/build_homer_population_manifest.py
+  - .venv/bin/python scripts/create_homer_public_release_362.py
+  - .venv/bin/python scripts/verify_homer_public_release_362.py
   - .venv/bin/python scripts/check_trace_completion.py
   - .venv/bin/python scripts/validate_phase_a3_smoke.py --config configs/pilot/cross_attention_semantic_phase_a3.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a3.json
   - .venv/bin/python scripts/validate_phase_a4_smoke.py --config configs/pilot/cross_attention_semantic_phase_a4.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/report.json

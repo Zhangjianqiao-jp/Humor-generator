@@ -5,6 +5,15 @@
     "commit_date": "2026-02-25T21:07:04+08:00",
     "license_status": "No LICENSE or COPYING file was present at the pinned commit; do not redistribute these assets."
   },
+  "source_code_hashes": {
+    "extractor.py": "710e68ab44a18b0cedc597c3c7c891d79faa59773c3e32057581fe5b947b4deb",
+    "imaginator.py": "bc0adb4067a2a8aeddb24c2638589c03fcf5255100f5b4809202156b3afe106",
+    "generator.py": "d56b13a1f74533d533a1f020524bf7d05adcd1eeeae3db4dbc453fbd773c7a",
+    "demo.py": "88ec1879eb1fef4ac1b06d68f876d6ce438059d579e62c7916c0021573650fe5",
+    "local_official_prompts.py": "3b3626c78f6fcbd37d318387b02a2f698ffdf63b483124fdc470d62931c12487",
+    "local_public_code_pipeline.py": "c056bdb9e6ec4d80cdc00082929cffdba89e1349ab20ebad7a8114352ba68ba8",
+    "local_homer_retrieval.py": "7e534019d4cf07d6160acfa65ec20f8590eb1617ea5b9c16aed22d34f0307320"
+  },
   "joke_corpus": {
     "upstream_path": "data/Our_joke_database/humor_rag_large_database.csv",
     "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/data/Our_joke_database/humor_rag_large_database.csv",
@@ -50,6 +59,48 @@
       "bytes": 109571,
       "records": 679,
       "provenance": "Human MTurk image_description selected from Electronic Sheep annotations; every released HOMER description exactly matches one of the three source annotations for its contest."
+    }
+  },
+  "evaluation_assets": {
+    "humor_in_ai": {
+      "upstream_path": "evalute_data/humorousAI/sample5gt.json",
+      "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/evaluation/humorousAI/sample5gt.json",
+      "sha256": "6da03f27c2fe431fcc399baadbc3897a355429b5cda4ce0f36a1f679be8a8106",
+      "bytes": 394064,
+      "records": 385,
+      "groups": ["1-9", "200-209", "1000-1009"],
+      "note": "The released evaluator file contains 385 contest entries (IDs 510 onward); this is not silently relabelled as the paper's 365-contest HIA population."
+    },
+    "electronic_sheep": {
+      "upstream_path": "evalute_data/electronic_sheep/sampled3_evaluate_data.json",
+      "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/evaluation/electronic_sheep/sampled3_evaluate_data.json",
+      "sha256": "73b447977c587e310934b9ff112cde835e2a7b7d96e98df5b842837bb5a5e9f1",
+      "bytes": 87563,
+      "records": 198,
+      "groups": ["group A", "group B"]
+    },
+    "evaluator_scripts": {
+      "humor_in_ai": {
+        "upstream_path": "evaluation/Final_evalution/humorAI/evaluator_humorAI.py",
+        "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/evaluation/humorousAI/evaluator_humorAI.py",
+        "sha256": "5971b4044efaab7bd5e9faf36d3bcad24484f69366a7ab1637ebe3b78bf0c7ca",
+        "bytes": 11386
+      },
+      "electronic_sheep": {
+        "upstream_path": "evaluation/Final_evalution/electronic/evaluator_electronic.py",
+        "local_path": "data/external/homer_official/d1334f295cc1a8f8f6dc67ba7e846c5939dddcec/evaluation/electronic_sheep/evaluator_electronic.py",
+        "sha256": "ddb4f34f47e978d7c58d46f4480b505ed8cf0ec546204a981d56cddb22936292",
+        "bytes": 11698
+      }
+    },
+    "model_contract": {
+      "hia_group_overall": "GPT-4-Turbo with Hessel descriptions",
+      "hia_group_best_pick": "GPT-4o-vision with raw cartoon images",
+      "homer_primary_humor_evaluator": "GPT-5",
+      "homer_primary_humor_evaluator_model_id": "gpt-5-chat-latest",
+      "homer_evaluator_temperature": 0.0,
+      "homer_candidates_per_image": 5,
+      "homer_repeated_trials": 5
     }
   },
   "upstream_dataset_revisions": {

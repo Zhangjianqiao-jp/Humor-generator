@@ -1,8 +1,8 @@
 experiment:
   name: homer_public_code_pretrained_7b
   route: qwen_pretrained_7b_only_bridge
-  stage: engineering_smoke_only
-  claim_level: adapted_public_protocol
+  stage: public_release_population_ready
+  claim_level: adapted_public_release_362
 
 model:
   name: Qwen/Qwen2.5-VL-7B-Instruct
@@ -87,15 +87,19 @@ protocol:
       extension.
 
 data:
-  population_manifest: manifests/homer_population_v2.json
-  population_status: inventory_complete_benchmark_allowlist_still_required
+  population_manifest: manifests/homer_population_public_release_362.json
+  population_status: verified_public_release_362
   population_key: [dataset, contest_number, image_sha256]
-  # These remain null until the real 365-contest allow-list, byte-level image
-  # audit, and source-aware rows have passed.  A formal run must not silently
-  # fall back to the superseded representative-row pilot.
-  population_rows: null
-  trace_index: null
+  # This is the exact machine-readable public release (271/44/47).  It is
+  # intentionally not relabelled as the paper's unresolved 365-contest claim.
+  population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
+  trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  # Hidden-state traces are generated only after this population gate.  A
+  # public-code baseline does not need cached traces; bridge training does.
+  trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   do_not_use_representative_rows_for_homer_claim: true
+  canonical_365_allowlist_verified: false
+  canonical_365_status: unresolved_no_public_machine_readable_allowlist
   official_humor_in_ai:
     descriptions_manifest: manifests/homer_official_assets.json
     ranking_root: data/external/benchmarks/humor_in_ai/ranking/source
@@ -105,7 +109,7 @@ data:
     image_root: data/external/benchmarks/electronic_sheep/images/all_contest_images
   joke_corpus_manifest: manifests/homer_official_assets.json
   bridge_training_manifest: null
-  bridge_training_policy: pending_source_aware_population_gate
+  bridge_training_policy: pending_current_pretrained_trace_generation
 
 evaluation:
   official_assets_manifest: manifests/homer_official_assets.json

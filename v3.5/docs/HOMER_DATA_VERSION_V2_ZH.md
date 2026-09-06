@@ -8,6 +8,11 @@
 `data/processed/latent_bridge_v35` 的 JSONL 输出，并只修复图像字节 hash 不一致的字段；
 caption、standard description、split、排序和 cluster 语义均不改写。
 
+> **当前状态（2026-09-06）**：v2 是父 lineage，`formal population gate: blocked` 只描述
+> 该历史版本，不能解读为当前路线仍被 878 阻塞。当前 adapted route 已切换到
+> `homer_pretrained_7b_public_release_362`（data gate ready）；v2 保留用于 provenance 对照，
+> 不再作为在线 population 或 bridge 输入。
+
 ## 版本文件
 
 - lineage manifest：`manifests/homer_population_v2.json`
@@ -43,14 +48,15 @@ image repair groups: 1
 formal population gate: blocked
 ```
 
-`blocked` 不是脚本失败，而是 fail-closed 结果：HIA 论文报告 365 contests，而本地发布
-物的 standard descriptions/evaluator population 仍有 362/385 的发布物差异。没有可核验的
-365-contest source-aware allow-list 时，不能把本地目录全集、numeric range 或历史
-representative rows 伪装成论文人口。因此 v2 已恢复字节 provenance，但尚未解锁正式
-Planner trace、Qwen baseline caption 或 bridge training。
+`blocked` 不是脚本失败，而是 fail-closed 结果：HIA 论文报告 365 contests，而公开
+standard-description release 实际可逐项核验的是 362 个。没有可核验的 365-contest
+source-aware allow-list 时，不能把本地目录全集、numeric range 或历史 representative
+rows 伪装成论文人口。因此 v2 保持为父 lineage，不再作为当前 online population；当前
+可复现的 adapted release 由
+`manifests/homer_population_public_release_362.json` 管理，详见
+`docs/HOMER_PUBLIC_RELEASE_362_ZH.md`。
 
-下一步只有在 allow-list、图片/排名/description join、trace index 都通过后，才按固定
-顺序运行：
+下一步按固定顺序运行：
 
 ```text
 pretrained Qwen2.5-VL-7B no-adapter Text-HOMER baseline

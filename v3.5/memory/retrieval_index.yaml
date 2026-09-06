@@ -11,11 +11,22 @@ topics:
       - docs/PROGRAM_RISK_ASSESSMENT_ZH.md
       - memory/project_memory.yaml
   homer_prompt_and_reproduction:
-    files: [docs/HOMER_REPRODUCTION_LEDGER_ZH.md, src/humor_generator_v35/homer/prompts.py]
+    files:
+      - docs/HOMER_REPRODUCTION_EVALUATION_AUDIT_ZH.md
+      - docs/HOMER_ANNOTATION_RECONCILIATION_ZH.md
+      - docs/HOMER_PRETRAINED_7B_PROTOCOL_ZH.md
+      - src/humor_generator_v35/homer/official_prompts.py
+      - src/humor_generator_v35/homer/public_code_pipeline.py
+      - src/humor_generator_v35/homer/retrieval.py
+      - configs/homer_public_code_pretrained_7b.yaml
   trace_provenance:
     files:
       - data/cache/planner_traces_homer_strict_v35/index.jsonl
       - scripts/check_trace_completion.py
+      - manifests/homer_population_public_release_362.json
+      - manifests/homer_public_release_362_allowlist.json
+      - scripts/build_homer_population_manifest.py
+      - scripts/check_pretrained_route.py
   bridge_training:
     files:
       - scripts/train_bridge.py
@@ -30,17 +41,31 @@ topics:
       - jobs/outer_semantic_confirmation.pjm
       - jobs/outer_semantic_confirmation_smoke.pjm
     note: >-
-      A3 replacement engineering smoke job 6706516 and formal bridge-only job 6707953 passed
-      engineering checks. A3 semantic gate is pilot_inconclusive; the next latent stage is the
-      40-cluster outer semantic confirmation. The three caption pilots remain locked until
-      the outer semantic gate passes.
+      A3 and A4 are historical mechanism pilots; A4 completed with
+      pilot_inconclusive and no caption result. The current pretrained-only route has a
+      verified 362-contest public population, but must regenerate current traces before any
+      GPU bridge job. Do not reuse historical SFT traces or submit the old outer evaluator.
   evaluation_and_blinding:
     files:
       - docs/GROUP3_JUDGE_PROMPT_ZH.md
       - jobs/pilot_validation_generation.pjm
       - configs/evaluation/group_evaluation.yaml
+      - manifests/homer_official_assets.json
+      - scripts/verify_homer_evaluation_assets.py
+      - scripts/homer_public_code_smoke.py
   material_history:
     files: [memory/episodes.jsonl]
   legacy_boundary:
     files: [README.md]
     note: v2.5_and_v3.0_are_non_executable_evidence_only
+  public_population:
+    files:
+      - docs/HOMER_PUBLIC_RELEASE_362_ZH.md
+      - manifests/homer_population_public_release_362.json
+      - manifests/homer_public_release_362_allowlist.json
+      - scripts/create_homer_public_release_362.py
+      - scripts/verify_homer_public_release_362.py
+      - data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+    note: >-
+      Exact public machine-readable HIA release: 362 contests (271/44/47),
+      distinct from the unresolved paper-level 365-contest claim.
