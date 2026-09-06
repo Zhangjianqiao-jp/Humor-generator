@@ -39,6 +39,7 @@ from humor_generator_v35.homer.retrieval import OfficialCodeRetrieval
 from humor_generator_v35.qwen_backend import QwenBackend
 from humor_generator_v35.training.public_bridge import (
     PUBLIC_BRIDGE_PROMPT_TRACK,
+    load_context_index,
     selected_path_text,
 )
 
@@ -303,6 +304,10 @@ def _existing(index_path: Path, *, trace_hash: str, input_hash: str) -> dict[str
     if not index_path.is_file():
         return {}
     result: dict[str, dict[str, Any]] = {}
+    # Validate the whole prior file before allowing resume.  Otherwise a
+    # malformed old record could be skipped and silently promoted to a
+    # complete current context manifest.
+    load_context_index(index_path)
     for item in read_jsonl(index_path):
         cluster = str(item.get("cluster_id", ""))
         if not cluster or cluster in result:
