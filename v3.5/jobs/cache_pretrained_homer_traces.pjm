@@ -4,7 +4,10 @@
 # do not add gpu=1 or exec-policy=simplex, and do not use MIG.
 #PJM -L rscgrp=b-batch
 #PJM -L node=1
-#PJM -L elapse=12:00:00
+# 362 contests × 3 Planner stages; historical 121-trace runs completed in
+# under three minutes after model load.  One hour is an intentional, measured
+# bound rather than a large queue reservation.
+#PJM -L elapse=01:00:00
 #PJM -j
 #PJM -S
 
