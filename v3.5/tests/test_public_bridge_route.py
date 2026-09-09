@@ -99,7 +99,7 @@ def test_current_context_replay_keeps_selection_and_path() -> None:
     ]
 
 
-def test_public_bridge_uses_official_system_and_replaces_only_plan_block() -> None:
+def test_public_bridge_uses_official_system_and_replaces_only_plan_block(tmp_path: Path) -> None:
     value = {
         "schema_version": 1,
         "data_version": "homer_pretrained_7b_public_release_362",
@@ -133,7 +133,9 @@ def test_public_bridge_uses_official_system_and_replaces_only_plan_block() -> No
         "context_prompt_track": PUBLIC_BRIDGE_PROMPT_TRACK,
         "provenance": {"git_commit": "0" * 40},
     }
-    path = Path("/tmp/public_bridge_context_test.jsonl")
+    # Use pytest's isolated temporary directory.  A fixed /tmp filename made
+    # the preflight flaky when another smoke/pytest process ran concurrently.
+    path = tmp_path / "public_bridge_context_test.jsonl"
     path.write_text(json.dumps(value) + "\n", encoding="utf-8")
     loaded = load_context_index(path)
     context = loaded["nycc_530"]
