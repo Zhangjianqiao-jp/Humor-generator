@@ -762,3 +762,18 @@ A5 对 Text-HOMER 的 Overall win rate=`0.2982`，对 full-plan text=`0.5131` �
 跨越 0.5；详见 [`A5_CAPTION_EVAL_RESULTS_ZH.md`](A5_CAPTION_EVAL_RESULTS_ZH.md)。
 当前不启动 DPO；若继续，只做低成本 hybrid interface 修复和 caption-level causal audit。
 ```
+
+### 15.2 预训练 Planner traces 续跑状态（2026-09-09）
+
+原 trace 作业 `6719504` 使用 `b-batch + node=1`，调度器自动分配了 4 个 GPU，
+但 `elapse=01:00:00` 到期（PJM code 11 / signal 24），并非 OOM 或方法错误。它
+保留了 341/362 个唯一 trace；缺失集合为 21 个 cluster（`nycc_563`、`nycc_748`、
+`nycc_762`、`nycc_877`–`nycc_889`、`nycc_891`–`nycc_895`）。统计文件显示最大显存
+使用约 5.8 GiB，说明之前的独占四 GPU 请求对推理任务过度申请。
+
+已在 clean commit `71f77ef` 增加 `jobs/cache_pretrained_homer_traces_repair_cgpu.pjm`：
+只请求 `c-batch + gpu=1`、30 分钟、`retry-round=1`，只续跑上述 21 个缺失 cluster；
+提交前 CPU preflight 已通过（`pretrained_homer_traces_repair_pre_submit_20260909.json`）。
+续跑作业 `6738841` 已于 2026-09-09 15:31:07 立即进入运行状态，并写入同一 append-only
+cache；必须等最终 `verify_pretrained_homer_traces.py` 报告 `362/362` 后，才允许
+生成 context、构建 bridge 数据或启动任何训练。
