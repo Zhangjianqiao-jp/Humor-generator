@@ -818,3 +818,9 @@ seed，分片不会改变确定性 seed schedule。分片完成并通过 merger�
 加载前加入 `check_cuda_resource.py`（要求恰好一张 native、至少 40 GiB 的设备）。新的
 提交必须先通过这个可见性门禁；缓存脚本会跳过已保留记录，不改变全局 seed schedule。
 该资源修正不改变 HOMER 数据、prompt、模型 revision 或科学协议。
+
+当前账号在 `c-batch` 的硬限制为同时运行 2 个 job、2 个 custom GPU、28 个 CPU core；
+因此三分片实际采用“两路并发 + 第三路自动接续”，而不是申请更多 GPU。2026-09-09
+重提交的两个作业在模型加载前均通过可见性门禁：`device_count=1`、设备为 H100 80GB、
+`CUDA_VISIBLE_DEVICES` 保持调度器值（未被脚本覆盖）。第 3 个作业保持 accepted/queued，
+不应因预测时间暂时较晚而重复提交；前两路释放资源后由 PJM 自动调度。
