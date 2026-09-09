@@ -1,0 +1,44 @@
+#!/bin/sh
+# Bounded retry for the sole remaining adapter-free public HOMER Planner trace.
+# This is intentionally a one-cluster continuation: successful append-only
+# records are never regenerated, and the strict token/state replay validator
+# remains unchanged.  Do not use this job for semantic repair or manual output.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=00:20:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+# The CPU-only preflight runs before model loading and records the committed
+# code/prompt/model/input hashes for this retry.
+python scripts/preflight_pretrained_homer_traces.py \
+  --output "outputs/preflight/pretrained_homer_traces_retry_nycc563_$(date +%Y%m%d_%H%M%S).json"
+python scripts/cache_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --output data/cache/homer_pretrained_7b_planner_traces \
+  --cluster-ids nycc_563 \
+  --attempts 32 \
+  --seed 20260906 \
+  --retry-round 2 \
+  --temperature 1.0 \
+  --top-p 1.0
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --cache data/cache/homer_pretrained_7b_planner_traces \
+  --output outputs/preflight/pretrained_homer_trace_validation_retry_nycc563.json
+test -s data/cache/homer_pretrained_7b_planner_traces/index.jsonl
