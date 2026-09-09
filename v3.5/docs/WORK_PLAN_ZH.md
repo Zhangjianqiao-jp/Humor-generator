@@ -824,3 +824,8 @@ seed，分片不会改变确定性 seed schedule。分片完成并通过 merger�
 重提交的两个作业在模型加载前均通过可见性门禁：`device_count=1`、设备为 H100 80GB、
 `CUDA_VISIBLE_DEVICES` 保持调度器值（未被脚本覆盖）。第 3 个作业保持 accepted/queued，
 不应因预测时间暂时较晚而重复提交；前两路释放资源后由 PJM 自动调度。
+
+其中 `6739766` 在模型加载前的并发 pytest 临时文件竞态门禁中退出，已由
+`test_public_bridge_route.py` 的 `tmp_path` 修复；它没有写入新的科学 context。修复后的
+预提交门禁 commit 为 `8e5173d`（status=pass），当前有效作业为 `6739767`（shard 1）、
+`6739768`（shard 2），`6739775`（shard 0，等待第二个运行槽位）。
