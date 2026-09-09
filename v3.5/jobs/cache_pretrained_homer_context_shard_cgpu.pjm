@@ -1,0 +1,101 @@
+#!/bin/sh
+# One shard of the adapter-free HOMER summary/retrieval/selection cache.
+# Submit three instances with -x SHARD_INDEX=0,1,2.  Each instance owns a
+# disjoint cluster set and one native GPU; no shard writes the canonical index.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+SHARD_INDEX="${SHARD_INDEX:?submit with -x SHARD_INDEX=0,1,2}"
+SHARD_COUNT="${SHARD_COUNT:-3}"
+case "$SHARD_INDEX" in *[!0-9]*|'') echo "invalid SHARD_INDEX=$SHARD_INDEX" >&2; exit 2;; esac
+case "$SHARD_COUNT" in *[!0-9]*|'') echo "invalid SHARD_COUNT=$SHARD_COUNT" >&2; exit 2;; esac
+if [ "$SHARD_COUNT" -lt 1 ] || [ "$SHARD_INDEX" -ge "$SHARD_COUNT" ]; then
+  echo "invalid shard range: index=$SHARD_INDEX count=$SHARD_COUNT" >&2
+  exit 2
+fi
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/preflight_pretrained_homer_traces.py \
+  --output "outputs/preflight/pretrained_homer_context_shard_${SHARD_INDEX}_$(date +%Y%m%d_%H%M%S).json"
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --cache data/cache/homer_pretrained_7b_planner_traces \
+  --output "outputs/preflight/pretrained_homer_trace_validation_shard_${SHARD_INDEX}.json"
+
+# Partition the remaining clusters deterministically while excluding the
+# recoverable partial run.  Round-robin assignment spreads variable prompt
+# lengths across the three GPUs; global row offsets inside the Python cache
+# script keep the seed schedule invariant to this filtering.
+CLUSTER_IDS="$(python - "$SHARD_INDEX" "$SHARD_COUNT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+shard = int(sys.argv[1])
+count = int(sys.argv[2])
+rows = [json.loads(line) for line in (
+    root / "data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl"
+).read_text().splitlines() if line.strip()]
+partial = root / "data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl"
+excluded = set()
+if partial.is_file():
+    excluded = {
+        json.loads(line)["cluster_id"]
+        for line in partial.read_text().splitlines() if line.strip()
+    }
+remaining = [row["cluster_id"] for row in rows if row["cluster_id"] not in excluded]
+chunks = [remaining[i::count] for i in range(count)]
+print(" ".join(chunks[shard]))
+PY
+)"
+if [ -z "$CLUSTER_IDS" ]; then
+  echo "empty cluster shard $SHARD_INDEX" >&2
+  exit 2
+fi
+set -- $CLUSTER_IDS
+OUTPUT="data/cache/homer_pretrained_7b_homer_context_shard_${SHARD_INDEX}"
+python scripts/cache_pretrained_homer_context.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output "$OUTPUT" \
+  --cluster-ids "$@" \
+  --attempts 4 \
+  --seed 20260906 \
+  --temperature 1.0 \
+  --top-p 1.0
+
+python - "$OUTPUT" "$CLUSTER_IDS" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+expected = sys.argv[2].split()
+records = [json.loads(line) for line in (out / "index.jsonl").read_text().splitlines() if line.strip()]
+failures = json.loads((out / "failures.json").read_text())
+ids = [record["cluster_id"] for record in records]
+if len(ids) != len(set(ids)) or set(ids) != set(expected) or failures:
+    raise SystemExit(
+        f"shard validation failed: expected={len(expected)} records={len(records)} "
+        f"failures={len(failures)}"
+    )
+print(json.dumps({"status": "pass", "shard_records": len(records), "output": str(out)}))
+PY

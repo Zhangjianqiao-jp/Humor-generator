@@ -354,7 +354,12 @@ def main() -> None:
     traces = _load_trace_records(trace_index)
     if set(rows) != set(traces):
         raise RuntimeError("current trace inputs and trace index have different cluster sets")
-    selected_rows = list(rows.values())
+    # Keep retry/shard seeds tied to the sealed global trace-input order.
+    # Without this map, filtering with --cluster-ids would renumber offsets
+    # and produce a different seed schedule from the single-process route.
+    all_rows = list(rows.values())
+    row_offsets = {str(row["cluster_id"]): offset for offset, row in enumerate(all_rows)}
+    selected_rows = all_rows
     if args.cluster_ids:
         requested = set(args.cluster_ids)
         unknown = sorted(requested - set(rows))
@@ -407,7 +412,7 @@ def main() -> None:
             last_error = ""
             for attempt in range(args.attempts):
                 try:
-                    seed = int(args.seed) + offset * args.attempts + attempt
+                    seed = int(args.seed) + row_offsets[cluster] * args.attempts + attempt
                     context = build_context_for_record(
                         backend, row, traces[cluster], retriever,
                         seed=seed, temperature=args.temperature, top_p=args.top_p,

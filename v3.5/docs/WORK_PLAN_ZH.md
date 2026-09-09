@@ -789,3 +789,20 @@ context smoke，再生成完整的 `summary/retrieval/selection` context，最�
 bridge-input validator；在这两项通过前不得启动 bridge 训练。`progress.json` 曾因单样本
 续跑没有触发“每十条写回”条件而暂时显示 360，已在后续提交中修复为每次运行结束必写回，
 以 `index.jsonl` 和独立 verifier 为权威结果。
+
+### 15.3 context cache 的速度修正（2026-09-09）
+
+真实 GPU smoke（1 cluster）通过，但完整单 GPU context 作业 `6739559` 的实测吞吐约
+为每分钟 0.5–1 条；在 4 小时 walltime 内无法可靠完成 362 条。因此该作业在生成 8
+条有效 context 后以 signal 15 取消，目录已原样隔离为
+`data/cache/homer_pretrained_7b_homer_context_partial_6739559`，不得删除或覆盖。
+
+后续不改变 HOMER 的三次调用协议（`summary → offline retrieval → select_conflict /
+select_entities → seeded path`），而是将剩余 354 个 cluster 按全局 trace-input 顺序
+轮转为 3 个各 118 条的分片，每个分片只请求 `c-batch + gpu=1`。新增
+`jobs/cache_pretrained_homer_context_shard_cgpu.pjm` 和
+`scripts/merge_pretrained_homer_context.py`：分片成功后必须由 merger 检查无重复/外部
+cluster、trace/context/input/prompt/model hash 和 schema，再按 sealed 顺序生成 canonical
+362-record context。`cache_pretrained_homer_context.py` 已改为使用全局 row offset 计算
+seed，分片不会改变确定性 seed schedule。分片完成并通过 merger、bridge-input validator
+前，仍不得启动 bridge 训练或 caption 评测。
