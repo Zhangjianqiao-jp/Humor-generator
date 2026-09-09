@@ -22,10 +22,47 @@ export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
+# Re-run the repository/data gate on the allocated node before loading the
+# model.  This also records the committed code and sealed-input hashes.
+python scripts/preflight_pretrained_homer_traces.py \
+  --output "outputs/preflight/pretrained_homer_context_pre_submit_$(date +%Y%m%d_%H%M%S).json"
+
 python scripts/verify_pretrained_homer_traces.py \
   --dataset data/processed/homer_pretrained_7b_public_release_362 \
   --cache data/cache/homer_pretrained_7b_planner_traces \
   --output outputs/preflight/pretrained_homer_trace_validation_before_context.json
+
+# Real one-cluster GPU smoke for the post-trace summary/retrieval/selection
+# stages.  It uses a separate immutable evidence directory and never writes
+# the canonical 362-record context index.
+SMOKE_OUTPUT=data/cache/homer_pretrained_7b_homer_context_gpu_smoke
+if [ -e "$SMOKE_OUTPUT" ]; then
+  echo "refusing to reuse existing context smoke output: $SMOKE_OUTPUT" >&2
+  exit 2
+fi
+python scripts/cache_pretrained_homer_context.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output "$SMOKE_OUTPUT" \
+  --max-clusters 1 \
+  --attempts 4 \
+  --seed 20260906 \
+  --temperature 1.0 \
+  --top-p 1.0
+.venv/bin/python - "$SMOKE_OUTPUT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+manifest = json.loads((out / "manifest.json").read_text())
+failures = json.loads((out / "failures.json").read_text())
+records = len((out / "index.jsonl").read_text().splitlines())
+if records != 1 or failures or manifest.get("failure_records") != 0:
+    raise SystemExit(f"context GPU smoke failed: records={records} failures={len(failures)}")
+print(json.dumps({"status": "pass", "records": records, "output": str(out)}))
+PY
+
 python scripts/cache_pretrained_homer_context.py \
   --dataset data/processed/homer_pretrained_7b_public_release_362 \
   --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \

@@ -783,8 +783,9 @@ A5 对 Text-HOMER 的 Overall win rate=`0.2982`，对 full-plan text=`0.5131` �
 `invalid=0`、`failure=0`。缓存保持 append-only；三组 Git commit provenance 均使用相同
 的模型 revision、官方 prompt hash、输入 manifest hash，故不丢失可追溯性。
 
-因此 **pretrained Planner trace gate 已通过**。下一步只能按顺序生成
-`cache_pretrained_homer_context.py` 的 summary/retrieval/selection context，再运行
+因此 **pretrained Planner trace gate 已通过**。下一步按顺序执行
+`jobs/cache_pretrained_homer_context.pjm`：先在同一 GPU 作业中运行 1-cluster 的真实
+context smoke，再生成完整的 `summary/retrieval/selection` context，最后运行
 bridge-input validator；在这两项通过前不得启动 bridge 训练。`progress.json` 曾因单样本
 续跑没有触发“每十条写回”条件而暂时显示 360，已在后续提交中修复为每次运行结束必写回，
 以 `index.jsonl` 和独立 verifier 为权威结果。
