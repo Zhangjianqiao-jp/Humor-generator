@@ -28,9 +28,15 @@ export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
 export PYTORCH_ALLOC_CONF=backend:native
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=0
+# c-batch + gpu=1 is a single native GPU allocation.  Genkai's scheduler
+# exposes that allocation directly; do not overwrite CUDA_VISIBLE_DEVICES=0
+# when several share jobs are placed on one node, or they can all target the
+# same physical device.  Fail closed below if the allocation is not isolated.
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/check_cuda_resource.py \
+  > "outputs/preflight/pretrained_homer_context_shard_${SHARD_INDEX}_cuda_$(date +%Y%m%d_%H%M%S).json"
 
 python scripts/preflight_pretrained_homer_traces.py \
   --output "outputs/preflight/pretrained_homer_context_shard_${SHARD_INDEX}_$(date +%Y%m%d_%H%M%S).json"

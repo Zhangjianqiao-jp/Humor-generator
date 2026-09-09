@@ -806,3 +806,15 @@ cluster、trace/context/input/prompt/model hash 和 schema，再按 sealed 顺�
 362-record context。`cache_pretrained_homer_context.py` 已改为使用全局 row offset 计算
 seed，分片不会改变确定性 seed schedule。分片完成并通过 merger、bridge-input validator
 前，仍不得启动 bridge 训练或 caption 评测。
+
+#### 15.3.1 并发 GPU 可见性修正（2026-09-09）
+
+复查三个并发 c-batch 分片后发现，旧脚本把 node-exclusive 路线使用的
+`CUDA_VISIBLE_DEVICES=0` 复制到了 shared `gpu=1` 路线。三个作业均位于同一节点时，这
+可能让进程都选择物理 ordinal 0，因而既不能证明使用了三个独立 GPU，也会降低吞吐。九州
+大学 Genkai 官方 GPU-sharing 指南明确说明：仅申请单 GPU 的资源组不需要手动设置
+`CUDA_VISIBLE_DEVICES`；只有多 GPU/sub-GPU 资源组才需要显式指定设备。因此已取消
+`6739599/6739600/6739601`，保留各自已写入的 12/9/13 条有效记录，移除硬编码并在模型
+加载前加入 `check_cuda_resource.py`（要求恰好一张 native、至少 40 GiB 的设备）。新的
+提交必须先通过这个可见性门禁；缓存脚本会跳过已保留记录，不改变全局 seed schedule。
+该资源修正不改变 HOMER 数据、prompt、模型 revision 或科学协议。
