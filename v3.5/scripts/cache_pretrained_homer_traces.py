@@ -315,6 +315,7 @@ def main() -> None:
         max_visual_tokens=1280,
     )
     failures: list[dict[str, Any]] = []
+    last_completed_cluster: str | None = next(reversed(existing), None)
     with index_path.open("a", encoding="utf-8") as index:
         for offset, row in enumerate(rows):
             cluster = str(row["cluster_id"])
@@ -379,6 +380,7 @@ def main() -> None:
                     index.write(json.dumps(record, ensure_ascii=False) + "\n")
                     index.flush()
                     existing[cluster] = record
+                    last_completed_cluster = cluster
                     if len(existing) % 10 == 0 or len(existing) == len(rows):
                         progress = {
                             "requested_in_this_run": len(rows),
@@ -401,6 +403,20 @@ def main() -> None:
                     "error": last_error,
                     "last_outputs": last_outputs,
                 })
+
+    # Always refresh progress after a run, including a one-cluster retry.
+    # The previous periodic-only write left progress.json at the old total
+    # when len(existing) was not a multiple of ten, even though index.jsonl
+    # and the final verifier were correct.
+    final_progress = {
+        "requested_in_this_run": len(rows),
+        "completed_total_in_index": len(existing),
+        "failed_in_this_run": len(failures),
+        "last_cluster": last_completed_cluster,
+    }
+    (output / "progress.json").write_text(
+        json.dumps(final_progress, ensure_ascii=False, indent=2) + "\n"
+    )
 
     (output / "failures.json").write_text(
         json.dumps(failures, ensure_ascii=False, indent=2) + "\n"

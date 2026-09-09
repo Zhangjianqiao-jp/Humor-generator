@@ -763,7 +763,7 @@ A5 对 Text-HOMER 的 Overall win rate=`0.2982`，对 full-plan text=`0.5131` �
 当前不启动 DPO；若继续，只做低成本 hybrid interface 修复和 caption-level causal audit。
 ```
 
-### 15.2 预训练 Planner traces 续跑状态（2026-09-09）
+### 15.2 预训练 Planner traces 续跑状态（2026-09-09，已完成）
 
 原 trace 作业 `6719504` 使用 `b-batch + node=1`，调度器自动分配了 4 个 GPU，
 但 `elapse=01:00:00` 到期（PJM code 11 / signal 24），并非 OOM 或方法错误。它
@@ -774,6 +774,17 @@ A5 对 Text-HOMER 的 Overall win rate=`0.2982`，对 full-plan text=`0.5131` �
 已在 clean commit `71f77ef` 增加 `jobs/cache_pretrained_homer_traces_repair_cgpu.pjm`：
 只请求 `c-batch + gpu=1`、30 分钟、`retry-round=1`，只续跑上述 21 个缺失 cluster；
 提交前 CPU preflight 已通过（`pretrained_homer_traces_repair_pre_submit_20260909.json`）。
-续跑作业 `6738841` 已于 2026-09-09 15:31:07 立即进入运行状态，并写入同一 append-only
-cache；必须等最终 `verify_pretrained_homer_traces.py` 报告 `362/362` 后，才允许
-生成 context、构建 bridge 数据或启动任何训练。
+续跑作业 `6738841` 于 2026-09-09 15:31:07 立即进入运行状态，成功补齐 20 条；唯一
+残留 `nycc_563` 的失败原因为生成文本无法逐 token replay。随后在 clean commit
+`0731f25` 提交 `jobs/cache_pretrained_homer_traces_retry_nycc563_cgpu.pjm`，仅请求
+`c-batch + gpu=1`、20 分钟、`retry-round=2`、32 次有界尝试；作业 `6738906` 于
+15:42:47 立即启动，15:45:06 以 exit code 0 完成。独立
+`verify_pretrained_homer_traces.py` 现已报告 `362/362`、`missing=0`、`extra=0`、
+`invalid=0`、`failure=0`。缓存保持 append-only；三组 Git commit provenance 均使用相同
+的模型 revision、官方 prompt hash、输入 manifest hash，故不丢失可追溯性。
+
+因此 **pretrained Planner trace gate 已通过**。下一步只能按顺序生成
+`cache_pretrained_homer_context.py` 的 summary/retrieval/selection context，再运行
+bridge-input validator；在这两项通过前不得启动 bridge 训练。`progress.json` 曾因单样本
+续跑没有触发“每十条写回”条件而暂时显示 360，已在后续提交中修复为每次运行结束必写回，
+以 `index.jsonl` 和独立 verifier 为权威结果。
