@@ -211,7 +211,7 @@ def test_current_pretrained_bridge_smoke_is_public_route_and_training_free() -> 
     assert "#PJM -L gpu=1" not in job
     assert "cross_attention_caption_pretrained_public.yaml" in job
     assert "--require-context-ready --require-bridge-data-ready" in job
-    assert "verify_pretrained_bridge_inputs.py" in job
+    assert "run_pretrained_bridge_preflight.py" in job
     assert "real_trace_bridge_smoke.py" in job
     assert "scientific_training" in job
     assert "train_bridge.py" not in job

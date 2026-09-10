@@ -113,7 +113,7 @@ trace_contract:
 current_state:
   observed_at: "2026-09-10T16:32:00+09:00"
   source_commit: 8dbfa95bdbda203230558f4ce228887809d128b2
-  phase: pretrained_7b_bridge_inputs_ready_cpu_smoke_passed
+  phase: pretrained_7b_real_trace_bridge_smoke_clean_resubmission_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -184,8 +184,10 @@ current_state:
     118/118.  The four-way strict post-check, shard disjointness check and
     context merge produced 362/362; the current bridge dataset was then built
     and independently verified.  CPU smoke and targeted regression tests pass.
-    The next gate is a <=2-example real-trace GPU engineering smoke; no formal
-    training or caption evaluation is authorized until that smoke passes.
+    The previous queued smoke 6753474 was canceled before execution because its
+    script preceded the final context-faithful preflight commit (V35-SCHED-019).
+    Submit one clean replacement only after the current commit is pushed; no
+    formal training or caption evaluation is authorized until its validator passes.
 
 conditions:
   text:

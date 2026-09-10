@@ -6,7 +6,7 @@ must_revalidate: true
 source_commit: 8dbfa95bdbda203230558f4ce228887809d128b2
 branch: latent
 
-current_phase: pretrained_7b_bridge_inputs_ready_cpu_smoke_passed
+current_phase: pretrained_7b_real_trace_bridge_smoke_clean_resubmission_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -522,7 +522,7 @@ program_risk_audit:
     claimed before the training and HOMER-comparable evaluation gates.
 
 immediate_gate:
-  action: run_current_pretrained_bridge_engineering_smoke
+  action: submit_current_pretrained_bridge_engineering_smoke_after_clean_commit
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -539,7 +539,7 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot.
   current_blockers:
-    - real_trace_gpu_engineering_smoke_not_yet_run
+    - clean_commit_and_smoke_resubmission_pending
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   resource_request_note: >-
     The next GPU request is one full native GPU for <=2-example real-trace

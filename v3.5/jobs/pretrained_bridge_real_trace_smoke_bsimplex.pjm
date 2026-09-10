@@ -29,18 +29,13 @@ export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 
-python scripts/check_environment.py > "$SMOKE_OUTPUT/environment.json"
-python scripts/check_v35_isolation.py > "$SMOKE_OUTPUT/isolation.json"
+python scripts/run_pretrained_bridge_preflight.py \
+  --output "$SMOKE_OUTPUT/cpu_preflight.json"
 python scripts/check_cuda_resource.py > "$SMOKE_OUTPUT/cuda_resource.json"
-python scripts/verify_homer_public_release_362.py > "$SMOKE_OUTPUT/population.json"
-python scripts/verify_homer_evaluation_assets.py > "$SMOKE_OUTPUT/evaluator_assets.json"
+cp results/preflight/pretrained_bridge_inputs_public.json "$SMOKE_OUTPUT/bridge_input_gate.json"
 python scripts/check_pretrained_route.py \
   --require-data-ready --require-context-ready --require-bridge-data-ready \
   > "$SMOKE_OUTPUT/route_gate.json"
-python scripts/verify_pretrained_bridge_inputs.py \
-  --config configs/pilot/cross_attention_caption_pretrained_public.yaml \
-  --output "$SMOKE_OUTPUT/bridge_input_gate.json"
-python scripts/homer_public_code_smoke.py > "$SMOKE_OUTPUT/public_code_smoke.json"
 python scripts/real_trace_bridge_smoke.py \
   --config configs/pilot/cross_attention_caption_pretrained_public.yaml \
   --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
