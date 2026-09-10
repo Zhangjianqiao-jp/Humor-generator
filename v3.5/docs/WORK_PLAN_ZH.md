@@ -894,3 +894,9 @@ scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以�
 `V35-SCHED-014`）。因此当前没有活动 repair job；后续只在只读审计同时证明
 `shared/true`/node-exclusive 合同可用且预计启动时间足够早时提交一个副本。空闲 GPU
 总量不能替代 per-node capability 和 start estimate 检查；禁止继续堆叠队列作业。
+
+随后以 `c-batch + gpu=1`、30 分钟上限提交单个 shard-0（`6749354`）验证共享路径；
+该节点虽然有 40 个空闲 GPU 单元，但两个节点 CPU 均已分配满，`pjstat -v` 预计
+09/11 10:00 才能启动。作业在模型启动前以 `c_batch_cpu_full_delayed` 删除，未产生
+科学输出（`V35-SCHED-015`）。因此当前仍是“等待同时具备 shared GPU 与 CPU 容量的
+授权槽位”，不是代码或数据失败；不得因 GPU 数字看似空闲而绕过 CPU/节点能力检查。
