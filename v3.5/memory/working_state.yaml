@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T20:24:45+09:00"
+observed_at: "2026-09-10T20:35:00+09:00"
 must_revalidate: true
 source_commit: 3a274c67210699214a7a4557910cb64c616e696d
 branch: latent
 
-current_phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_submission_pending
+current_phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_resubmission_pending_clean_commit
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -477,16 +477,16 @@ resource_diagnosis:
   current_policy: one_full_gpu_native_allocator_cuda0
   active_jobs: []
   last_readonly_resource_snapshot:
-    observed_at: "2026-09-10T20:13:00+09:00"
-    b_batch_nodes: {total: 35, free: 1, allocated: 34}
-    b_batch_gpu: {total: 980, free: 847, allocated: 133}
+    observed_at: "2026-09-10T20:30:11+09:00"
+    b_batch_nodes: {total: 35, free: 2, allocated: 33}
+    b_batch_gpu: {total: 980, free: 848, allocated: 132}
     c_batch_nodes: {total: 2, free: 0, allocated: 2}
     c_batch_gpu: {total: 56, free: 40, allocated: 16}
     b_batch_mig_nodes: {total: 2, free: 0, allocated: 2}
     b_inter_mig_nodes: {total: 2, free: 0, allocated: 2}
-    b_reserve_nodes: {total: 4, free: 1, allocated: 3, authorized: false}
-    a_batch_nodes: {total: 1020, free: 144, allocated: 876, gpu_route: false}
-    decision: replace_oversized_smoke_with_10_minute_b_batch_node1_request; keep_one_copy
+    b_reserve_nodes: {total: 4, free: 2, allocated: 2, authorized: false}
+    a_batch_nodes: {total: 1020, free: 149, allocated: 871, gpu_route: false}
+    decision: cancel_four_hour_formal_6754055; submit_one_90_minute_b_batch_node1_formal_after_clean_commit
   stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
   stale_session_policy: do_not_resume_or_submit
   last_smoke_rightsizing:
@@ -497,6 +497,16 @@ resource_diagnosis:
     replacement_script: jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm
     replacement_walltime: "00:10:00"
     replacement_status: completed_successfully
+  last_formal_rightsizing:
+    canceled_job: "6754055"
+    canceled_at: "2026-09-10T20:30:15+09:00"
+    requested_walltime: "04:00:00"
+    estimated_start: "2026-09-12T21:00:00+09:00"
+    reason: four_hour_request_overstates_271_cluster_128_token_view
+    timing_reference: cross_attention_phase_a5_csimplex.pjm.6712327_used_01:32:27
+    replacement_walltime: "01:30:00"
+    replacement_output: outputs/pilot/pretrained_public_bridge_formal_1h30_20260910
+    replacement_status: pending_clean_commit
   last_real_trace_smoke:
     job_id: "6754049"
     job_name: v35pubsmok10
@@ -558,7 +568,7 @@ program_risk_audit:
     claimed before the training and HOMER-comparable evaluation gates.
 
 immediate_gate:
-  action: submit_public_bridge_formal_job_after_smoke_pass
+  action: commit_and_submit_rightsized_public_bridge_formal_job
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -576,13 +586,16 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
   current_blockers:
-    - formal_bridge_job_not_started
+    - formal_bridge_job_rightsized_resubmission_pending
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   resource_request_note: >-
     The short b-batch node=1 smoke 6754049 passed on a native full-device
-    allocation. The next request may be exactly one formal bridge-only job using
-    the same b-batch node=1 route and the smallest justified 4-hour bound;
-    do not request MIG, duplicate reservations, or unvalidated alternatives.
+    allocation. The unstarted four-hour formal request 6754055 was canceled
+    because PJM estimated 2026-09-12 21:00. Historical 602-cluster/768-token
+    training used 1:32:27; the current 271-cluster/128-token view is therefore
+    submitted with a 01:30:00 bound after a clean commit. Keep exactly one
+    formal copy; do not request MIG, duplicate reservations, or unvalidated
+    alternatives.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive

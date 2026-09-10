@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T20:24:45+09:00"
+  observed_at: "2026-09-10T20:35:00+09:00"
   source_commit: 3a274c67210699214a7a4557910cb64c616e696d
-  phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_submission_pending
+  phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_resubmission_pending_clean_commit
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -157,6 +157,15 @@ current_state:
     policy_trainable_parameters: 0
     bridge_update_norm: 0.26272618770599365
     evidence: outputs/engineering_smoke/pretrained_public_real_trace_smoke_short_20260910
+  last_formal_scheduler_attempt:
+    job_id: "6754055"
+    status: canceled_before_execution
+    requested_walltime: "04:00:00"
+    estimated_start: "2026-09-12T21:00:00+09:00"
+    reason: walltime_overrequest_reduced_backfill
+    evidence: v35pubformal.6754055.stats
+    replacement_walltime: "01:30:00"
+    replacement_status: pending_clean_commit
   last_scheduler_attempt:
     job_id: "6751564"
     route: b-batch_node1_simplex

@@ -1092,3 +1092,13 @@ walltime 收紧为 `10 分钟`，并额外检查 `cpu_preflight`、`cuda_resourc
 `bridge_input_gate` 均为 `pass` 后才写入 `complete.json`。提交时仍只允许一份
 `b-batch + node=1`（不叠加 `gpu=1` 或 `exec-policy=simplex`），启动前再次读取 PJM
 预计时间；通过后才允许 bridge-only formal training。详见 `V35-SCHED-023`。
+
+#### 15.3.7 正式训练 walltime 纠偏（2026-09-10）
+
+正式 bridge 请求 `6754055` 曾使用 `b-batch + node=1`、4 小时上限，PJM 给出
+`2026-09-12 21:00` 的预计启动时间。作业在执行前撤回，保留 `v35pubformal.6754055.stats`；
+没有模型、CUDA、数据或科学输出。当前 public bridge training view 每 epoch 选择 271
+个 cluster、5 epoch、caption target 上限 128 token。历史约 602-cluster、768-token 的
+同类训练实际耗时 1:32:27，因此正式请求改为 `01:30:00`，并在新 clean commit 后只提交
+一个 fresh output directory。该变更只优化 scheduler backfill，不改变 HOMER prompt、
+362-contest sealed population、冻结两个 7B、bridge-only 训练或后续 caption 评测协议。

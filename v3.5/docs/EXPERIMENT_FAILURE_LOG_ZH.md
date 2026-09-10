@@ -288,3 +288,24 @@ checkpoint。该 partial 目录已移动为
 不得把 `a-batch` CPU 空闲、已分配节点上的 aggregate GPU slot 或 `b-inter` 交互组当作
 自动 batch 后备；MIG 仍因既有 allocator 错误禁用。当前只保留一份经过清洁 commit 门禁的
 `b-batch + node=1` smoke，提交前再次读取 PJM 预计启动时间。
+
+## V35-SCHED-023（2026-09-10）：engineering smoke walltime 过宽
+
+当前 public-route smoke `6753754` 使用 `b-batch + node=1`、1 小时上限，PJM 将其标记为
+`short-job=false`，预计启动为次日 04:00。它在执行前撤回，保留 `.stats`，没有模型加载、
+CUDA forward、数据写入或科学输出。历史同一路线真实 smoke 仅使用约 2 分钟，因此原请求
+与实际短作业规模不匹配。已改用完全相同协议、10 分钟上限的 `6754049`；该作业真实通过，
+并确认 CPU/CUDA/route/bridge-input 门禁、两个 7B policy 冻结以及 bridge 非零更新。
+
+## V35-SCHED-024（2026-09-10）：正式 bridge walltime 过宽
+
+正式 bridge 作业 `6754055` 使用 `b-batch + node=1`、4 小时上限，保持 QUE，PJM 预计
+启动时间为 `2026-09-12 21:00`。它在执行前被撤回；`v35pubformal.6754055.stats` 没有
+模型加载、CUDA forward、数据读取或 checkpoint，因此不构成模型、数据、CUDA 或 latent
+方法结果。
+
+当前 public bridge training view 每 epoch 只选择 271 个 image cluster，5 epoch，caption
+target 上限 128 token。历史同类 bridge 在约 602 个 cluster、较长 768-token semantic
+target 下实际耗时 1:32:27。故将正式脚本收紧为有实测依据的 `01:30:00`；清洁提交后只
+重新提交一个全新的 formal 输出目录。该变更只优化 scheduler backfill，不改变 HOMER
+prompt、sealed population、冻结两个 7B、bridge-only 训练或 caption 评测协议。

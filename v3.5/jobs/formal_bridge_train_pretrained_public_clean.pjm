@@ -7,7 +7,11 @@
 # exec-policy=simplex, or a MIG request to this job.
 #PJM -L rscgrp=b-batch
 #PJM -L node=1
-#PJM -L elapse=04:00:00
+# The current 271-cluster / 128-token bridge view is materially smaller than
+# the historical 602-cluster / 768-token run (01:32:27).  90 minutes is the
+# smallest measured bound that leaves room for model load and sealed gates;
+# do not widen it without a new timing measurement.
+#PJM -L elapse=01:30:00
 #PJM -j
 #PJM -S
 
