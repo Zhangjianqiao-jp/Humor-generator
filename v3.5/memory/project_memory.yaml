@@ -108,7 +108,7 @@ trace_contract:
 
 current_state:
   observed_at: "2026-09-10T15:09:42+09:00"
-  source_commit: 11dbb6a9cb84b6c89d39369e7a62f4e5cb620387
+  source_commit: 80eec6c327d997d3a303ba2bf67474e91e3f8356
   phase: pretrained_7b_context_validator_repair_waiting_gpu
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
