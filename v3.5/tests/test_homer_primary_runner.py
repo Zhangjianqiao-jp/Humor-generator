@@ -67,6 +67,32 @@ def test_runner_requires_key_before_request(tmp_path: Path, monkeypatch: pytest.
     assert not output.exists()
 
 
+def test_runner_zero_request_limit_does_not_claim_complete(tmp_path: Path) -> None:
+    prompt = "official prompt"
+    prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+    packets = tmp_path / "packets.jsonl"
+    provenance = tmp_path / "provenance.json"
+    output = tmp_path / "judgments.jsonl"
+    packets.write_text(json.dumps(_packet(prompt)) + "\n", encoding="utf-8")
+    provenance.write_text(json.dumps(_provenance(prompt_hash)) + "\n", encoding="utf-8")
+    args = type(
+        "Args",
+        (),
+        {
+            "provenance": provenance,
+            "packets": packets,
+            "output": output,
+            "max_requests": 0,
+            "max_workers": 1,
+            "delay_seconds": 0.0,
+            "max_retries": 1,
+            "retry_base_seconds": 0.0,
+        },
+    )()
+    assert run(args)["status"] == "partial"
+    assert not output.exists()
+
+
 def test_existing_judgments_are_provenance_checked(tmp_path: Path) -> None:
     path = tmp_path / "judgments.jsonl"
     path.write_text(

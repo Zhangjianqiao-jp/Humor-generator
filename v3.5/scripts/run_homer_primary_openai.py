@@ -165,13 +165,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     extra = set(existing) - packet_ids
     if extra:
         raise ValueError(f"existing judgments contain {len(extra)} packet IDs not present in public packets")
-    pending = [packet for packet in packets if packet["packet_id"] not in existing]
+    remaining = [packet for packet in packets if packet["packet_id"] not in existing]
+    if not remaining:
+        return {"status": "already_complete", "packets": len(packets), "judgments": len(existing), "output": str(output)}
     if args.max_requests is not None:
         if args.max_requests < 0:
             raise ValueError("--max-requests must be non-negative")
-        pending = pending[: args.max_requests]
-    if not pending:
-        return {"status": "already_complete", "packets": len(packets), "judgments": len(existing), "output": str(output)}
+        if args.max_requests == 0:
+            return {"status": "partial", "packets": len(packets), "judgments": len(existing), "new_judgments": 0, "output": str(output)}
+        pending = remaining[: args.max_requests]
+    else:
+        pending = remaining
 
     client = _client_from_environment()
     output.parent.mkdir(parents=True, exist_ok=True)
