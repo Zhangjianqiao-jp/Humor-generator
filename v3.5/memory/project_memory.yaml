@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T22:40:00+09:00"
+  observed_at: "2026-09-10T23:08:51+09:00"
   source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
-  phase: pretrained_7b_formal_bridge_complete_generation_gate_pending
+  phase: pretrained_7b_formal_bridge_complete_generation_smoke_passed_full_generation_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -131,6 +131,24 @@ current_state:
     manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
     rows: {train: 813, validation: 132, test: 141}
   active_jobs: []
+  last_comparison_generation_smoke:
+    job_id: "6754567"
+    name: v35pubgensmoke
+    route: b-batch_gpu1_shared
+    status: completed_successfully
+    started_at: "2026-09-10T23:06:03+09:00"
+    ended_at: "2026-09-10T23:08:48+09:00"
+    exit_code: 0
+    elapse_seconds: 166
+    host: genkai0002
+    device: NVIDIA_H100
+    records: 4
+    images: 2
+    conditions: [text_homer_context_replay, latent_bridge]
+    trials: 1
+    candidates_per_image: 1
+    scientific_training: false
+    evidence: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910
   last_formal_bridge:
     job_id: "6754067"
     name: v35pubform90

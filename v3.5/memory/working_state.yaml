@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T22:40:00+09:00"
+observed_at: "2026-09-10T23:08:51+09:00"
 must_revalidate: true
 source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
 branch: latent
 
-current_phase: pretrained_7b_formal_bridge_complete_generation_gate_pending
+current_phase: pretrained_7b_formal_bridge_complete_generation_smoke_passed_full_generation_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -463,7 +463,7 @@ latest_homer_protocol_audit:
   evaluator_contract: gpt-5-chat-latest_temperature_0_pass_at_1_3_5_five_repeats
   benchmark_contract: hia_original_gpt4_turbo_overall_gpt4o_vision_best_pick_separate
   data_status: public_release_362_verified_canonical_365_unresolved_current_878_lineage_verified
-  formal_generation_status: not_started
+  formal_generation_status: comparison_smoke_passed_full_generation_not_started
   claim_boundary: >-
     Prompt/stage/retrieval interface is now auditable, but model weights,
     benchmark population and evaluation runs are not identical to HOMER paper;
@@ -474,7 +474,7 @@ resource_diagnosis:
   reason: >-
     Both multi-slice and single-slice MIG formal paths previously triggered the same
     PyTorch/NVML allocator failure; passing a small MIG smoke did not predict formal stability.
-  current_policy: one_full_gpu_native_allocator_cuda0
+  current_policy: b_batch_shared_gpu1_native_allocator_scheduler_visible_cuda
   active_jobs: []
   last_readonly_resource_snapshot:
     observed_at: "2026-09-10T20:30:11+09:00"
@@ -529,6 +529,25 @@ resource_diagnosis:
     policy_trainable_parameters: 0
     bridge_update_norm: 0.26272618770599365
     evidence: outputs/engineering_smoke/pretrained_public_real_trace_smoke_short_20260910
+  last_comparison_generation_smoke:
+    job_id: "6754567"
+    job_name: v35pubgensmoke
+    route: b-batch_gpu1_shared
+    status: pass
+    scientific_training: false
+    started_at: "2026-09-10T23:06:03+09:00"
+    ended_at: "2026-09-10T23:08:48+09:00"
+    exit_code: 0
+    elapse_seconds: 166
+    host: genkai0002
+    device: NVIDIA_H100
+    records: 4
+    images: 2
+    conditions: [text_homer_context_replay, latent_bridge]
+    trials: 1
+    candidates_per_image: 1
+    evidence: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910
+    output_gate: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910/smoke_gate.json
 
 native_full_gpu_fix:
   scope: historical_p1_not_current
@@ -573,17 +592,17 @@ program_risk_audit:
     latent benefit is claimed before the HOMER-comparable caption evaluation.
 
 immediate_gate:
-  action: wait_for_compatible_gpu_start_then_submit_one_comparison_job
+  action: submit_one_full_comparison_job_using_validated_bgpu_shared_route
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
   population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
   trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
   evaluator_manifest: manifests/homer_official_assets.json
-  required_resource: one_full_gpu_native_allocator_cuda0_only_after_cpu_smoke
+  required_resource: b-batch_gpu1_shared_native_allocator_scheduler_visible_cuda_after_real_generation_smoke
   active_jobs: []
   scientific_training: true
-  smoke_status: passed_job_6754049
+  smoke_status: passed_job_6754567
   success_requires:
     - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
     - Keep the canonical 365 allow-list unresolved unless an authoritative source appears.
@@ -591,9 +610,7 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
   current_blockers:
-    - comparison_generation_not_started
-    - b_batch_node_exclusive_start_estimate_too_late
-    - c_batch_shared_cpu_unavailable
+    - full_comparison_generation_pending
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   automatic_continuation:
     task_id: v35-complete-followup-v2
@@ -615,7 +632,9 @@ immediate_gate:
     execution after PJM estimated 2026-09-13 09:00 with no free b-batch node.
     The c-batch shared read-only probe 6754523 was also canceled before
     execution after PJM estimated 2026-09-11 18:00 with CPU FREE=0 on both
-    c-batch nodes.
+    c-batch nodes.  A real b-batch shared gpu=1 comparison smoke 6754567 then
+    passed on genkai0002/H100 in 166 seconds; use that exact route for the sole
+    full generation attempt and do not override CUDA visibility.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
@@ -631,7 +650,7 @@ remaining_sequence_after_resource_gate:
   - publish_text_homer_vs_latent_comparison_report
 
 eta:
-  scheduler_wait: formal_bridge_complete_generation_job_not_started
+  scheduler_wait: formal_bridge_complete_generation_smoke_passed_full_generation_pending
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
   outer_semantic_confirmation: historical_provenance_failure
@@ -655,7 +674,8 @@ next_agent_actions:
   - Run `scripts/verify_pretrained_bridge_inputs.py` with both current bridge configs and retain its JSON evidence.
   - CPU `scripts/engineering_smoke.py`, targeted public-route tests, and the 2-example real-trace GPU smoke 6754049 pass.
   - Formal bridge job 6754067 completed successfully; retain its full-SHA post-job audit.
-  - Commit/push the reviewed generation-only fixes, then request exactly one current-route comparison generation job; no caption evaluation before its 2350-row gate passes.
+  - Commit/push the reviewed generation-only fixes, then request exactly one current-route comparison generation job using the validated b-batch shared gpu=1 route; no caption evaluation before its 2350-row gate passes.
+  - Preserve the successful real generation smoke 6754567 as an engineering gate; it is not a quality result and must not be pooled with the 2350-row scientific output.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning until bridge-only training and held-out HOMER evaluation are complete; preference learning remains disabled in v3.5.
 

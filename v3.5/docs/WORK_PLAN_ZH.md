@@ -1177,3 +1177,20 @@ bridge input gate 全部通过，训练为 5 epoch、340 global steps。validati
 最终为 `0.00210`，接近零，因此只说明优化稳定，不证明接收器因果使用 latent。下一条科学门禁是
 生成并验证 2,350 条 text/latent 对照记录；在此之前不运行 judge、不写入虚构评分，也不启动
 preference learning。
+
+#### 15.3.13 真实 caption 生成 smoke 终态（2026-09-10 23:08 JST）
+
+正式 bridge 已完成后，先用与正式生成完全相同的当前 public-HOMER route 做了最小真实
+生成 smoke。作业 `6754567`（`v35pubgensmoke`）采用 `b-batch + gpu=1` shared 资源，
+在 `genkai0002` 的 NVIDIA H100 上于 `23:06:03` 启动、`23:08:48` 结束，exit code 0，
+PJM elapsed 166 秒。它覆盖 2 张 official public-release test image、1 trial、1 candidate，
+分别运行 `text_homer_context_replay` 和 `latent_bridge`，共 4 条非空 caption；CUDA、route、
+bridge-input、模型 revision、context/trace hash 和 bridge checkpoint provenance 均通过，
+并明确标记为 `scientific_training=false`。
+
+该 smoke 仅证明共享 GPU 资源合同和端到端生成代码可运行，不能用于判断幽默质量或 latent
+收益，也不与正式 2,350 条结果合并。后续唯一允许的科学生成作业是同一 shared 合同下的
+47 张 test image × 5 trials × 5 candidates × 2 conditions；必须先通过严格完整键集合、
+图片 hash、seed、非空 caption 和 condition-specific checkpoint provenance gate，才进入
+Caption-judgement 与 HOMER Pass@1/3/5。当前状态仍为“正式 full generation pending”，
+未开始任何盲评或质量结论。

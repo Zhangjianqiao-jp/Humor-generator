@@ -409,3 +409,22 @@ pretrained comparison 回归测试、PJM shell 语法检查及 `git diff --check
 CPU、执行策略和 PJM `START_DATE`；没有完整可运行 placement 时，不创建未经 smoke 验证的
 c-batch generation 版本。该事件不是模型、数据或方法失败，证据保存在
 `v35cgpu5.6754523.stats`。
+
+## V35-SCHED-027（2026-09-10）：b-batch shared GPU 真实 caption 生成 smoke 通过
+
+在不改变模型、数据、HOMER prompt 或比较协议的前提下，首次使用已经验证的
+`b-batch + gpu=1` shared 路线提交真实端到端生成 smoke：作业 `6754567`（`v35pubgensmoke`）
+于 `23:06:03` 在 `genkai0002` 启动，`23:08:48` 结束，PJM elapsed 166 秒，退出码为 0，
+分配 1 个 GPU，执行策略为 `PJM_EXEC_POLICY=share`，设备为 NVIDIA H100。它运行了当前无
+adapter 的 Qwen2.5-VL-7B revision，在两个官方 public-release test image 上分别生成
+`text_homer_context_replay` 和 `latent_bridge` 各 1 条 caption；最终 smoke gate 为 4/4
+记录、非空 caption、checkpoint provenance 完整，且明确标记 `scientific_training=false`。
+
+这只是资源合同、模型加载、图片读取、上下文回放和 bridge 注入的工程验证，不是幽默质量
+或 latent 收益结论。证据在 `v35pubgensmoke.6754567.out/.stats` 和
+`outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910/`。
+
+该成功结果改变调度策略：正式生成使用同一 `b-batch + gpu=1` shared 配置，不再手动设置
+`CUDA_VISIBLE_DEVICES`，并且只提交一份。正式门禁仍必须严格通过 47 张图片 × 5 trials ×
+5 candidates × 2 conditions = 2350 条完整键集合、图片 hash、seed、两种 condition 的
+checkpoint provenance 检查后，才允许进入 Caption-judgement；smoke 本身不解锁科学结论。
