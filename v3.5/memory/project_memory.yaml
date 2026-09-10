@@ -495,8 +495,8 @@ evaluation:
       references_per_group: 5
       pairwise_requests: 35250
     packet_source_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
-    packet_code_commit: 275d5aa5e8b92ebcaaf6a08d3109e22946b7c0ec
-    packet_provenance_sha256: d6029994f8617c2f5cf78b3e606c8f653ac73cb2ed9c559ccb514bb3035a73f0
+    packet_code_commit: 98004c74448b50ace406c1fb5dc3431fd039e28e
+    packet_provenance_sha256: cdffde10730bc7298ac23d47f80765c396713716482ee6b16f77414de829be41
     judgment_status: not_started
     claim_boundary: >-
       No Pass@K, win rate, absolute good/weak/bad or latent quality claim is

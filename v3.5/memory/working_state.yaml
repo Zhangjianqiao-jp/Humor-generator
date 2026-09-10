@@ -687,8 +687,8 @@ evaluation_packets:
     references_per_group: 5
     pairwise_requests: 35250
     source_generations_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
-    provenance_code_commit: 275d5aa5e8b92ebcaaf6a08d3109e22946b7c0ec
-    provenance_sha256: d6029994f8617c2f5cf78b3e606c8f653ac73cb2ed9c559ccb514bb3035a73f0
+    provenance_code_commit: 98004c74448b50ace406c1fb5dc3431fd039e28e
+    provenance_sha256: cdffde10730bc7298ac23d47f80765c396713716482ee6b16f77414de829be41
   auxiliary:
     directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/group10_auxiliary
     protocol: project_group10_multi_rater_mirrored
