@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T20:15:00+09:00"
-  source_commit: 7edae5729eabe1d8bde25d6b188fe7d455a9b39f
-  phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
+  observed_at: "2026-09-10T20:24:45+09:00"
+  source_commit: 4ef53d9d1c98e622d06e3140be8bc8eae3cc1b45
+  phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_submission_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -138,9 +138,25 @@ current_state:
       - {job_id: "6753754", route: b-batch_node1_simplex, estimated_start: "2026-09-11T04:00:00+09:00", reason: oversized_one_hour_smoke_short_job_false}
     rejected_before_job_id:
       - {route: b-inter_gpu1_override, reason: node_and_gpu_options_conflict}
-    status: replacement_short_request_pending
-    next_route: b-batch_node1_simplex_short_10m
-    evidence: docs/EXPERIMENT_FAILURES.jsonl#V35-SCHED-023
+    status: passed_job_6754049
+    next_route: b-batch_node1_simplex_formal_bridge_only
+    evidence: outputs/engineering_smoke/pretrained_public_real_trace_smoke_short_20260910
+  last_real_trace_smoke:
+    job_id: "6754049"
+    status: pass
+    scientific_training: false
+    started_at: "2026-09-10T20:21:47+09:00"
+    ended_at: "2026-09-10T20:24:25+09:00"
+    exit_code: 0
+    elapse_seconds: 158
+    max_memory_mib: 6201.0
+    gpu_allocated: 4
+    simplex: true
+    prompt_track: public_code_exact_caption_latent_plan_replacement_v1
+    context_records: 362
+    policy_trainable_parameters: 0
+    bridge_update_norm: 0.26272618770599365
+    evidence: outputs/engineering_smoke/pretrained_public_real_trace_smoke_short_20260910
   last_scheduler_attempt:
     job_id: "6751564"
     route: b-batch_node1_simplex

@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T20:15:00+09:00"
+observed_at: "2026-09-10T20:24:45+09:00"
 must_revalidate: true
-source_commit: 7edae5729eabe1d8bde25d6b188fe7d455a9b39f
+source_commit: 4ef53d9d1c98e622d06e3140be8bc8eae3cc1b45
 branch: latent
 
-current_phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
+current_phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_submission_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -496,7 +496,24 @@ resource_diagnosis:
     evidence: v35pubsmok.6753754.stats
     replacement_script: jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm
     replacement_walltime: "00:10:00"
-    replacement_status: pending_submission_after_clean_commit
+    replacement_status: completed_successfully
+  last_real_trace_smoke:
+    job_id: "6754049"
+    job_name: v35pubsmok10
+    status: pass
+    scientific_training: false
+    started_at: "2026-09-10T20:21:47+09:00"
+    ended_at: "2026-09-10T20:24:25+09:00"
+    exit_code: 0
+    elapse_seconds: 158
+    max_memory_mib: 6201.0
+    gpu_allocated: 4
+    simplex: true
+    prompt_track: public_code_exact_caption_latent_plan_replacement_v1
+    context_records: 362
+    policy_trainable_parameters: 0
+    bridge_update_norm: 0.26272618770599365
+    evidence: outputs/engineering_smoke/pretrained_public_real_trace_smoke_short_20260910
 
 native_full_gpu_fix:
   scope: historical_p1_not_current
@@ -541,7 +558,7 @@ program_risk_audit:
     claimed before the training and HOMER-comparable evaluation gates.
 
 immediate_gate:
-  action: commit_resource_audit_and_submit_bbatch_node_smoke
+  action: submit_public_bridge_formal_job_after_smoke_pass
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -551,24 +568,21 @@ immediate_gate:
   required_resource: one_full_gpu_native_allocator_cuda0_only_after_cpu_smoke
   active_jobs: []
   scientific_training: false
+  smoke_status: passed_job_6754049
   success_requires:
     - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
     - Keep the canonical 365 allow-list unresolved unless an authoritative source appears.
     - Use the merged 362/362 adapter-free traces and post-trace HOMER context.
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
-    - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot.
+    - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
   current_blockers:
-    - resource_audit_documentation_commit_and_smoke_resubmission_pending
+    - formal_bridge_job_not_started
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   resource_request_note: >-
-    The next GPU request is one full native GPU for <=2-example real-trace
-    engineering smoke only. The 2026-09-10 audit found no schedulable b-batch
-    node, no GPU resource in a-batch, and no batch permission for the b-inter
-    fallback; do not use those routes. After the documentation commit, submit
-    exactly one b-batch node=1 job without gpu=1 or exec-policy=simplex. Do not
-    request MIG, duplicate reservations or formal training until the smoke
-    validator passes; the two 7B policies stay frozen and only the bridge may
-    update.
+    The short b-batch node=1 smoke 6754049 passed on a native full-device
+    allocation. The next request may be exactly one formal bridge-only job using
+    the same b-batch node=1 route and the smallest justified 4-hour bound;
+    do not request MIG, duplicate reservations, or unvalidated alternatives.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
@@ -607,8 +621,8 @@ next_agent_actions:
   - Public 362 allow-list and image/ranking joins are verified; do not relabel them as canonical 365.
   - "Use the sealed current route: `trace_index` 362/362, context index 362/362, bridge view 1086 rows; do not substitute historical traces."
   - Run `scripts/verify_pretrained_bridge_inputs.py` with both current bridge configs and retain its JSON evidence.
-  - CPU `scripts/engineering_smoke.py` and targeted public-route tests currently pass; next run is the <=2-example real-trace GPU smoke.
-  - Commit the resource audit/error records, then request one full native GPU only after a clean source commit; no MIG, duplicate reservation, formal training or caption evaluation before the smoke validator passes.
+  - CPU `scripts/engineering_smoke.py`, targeted public-route tests, and the 2-example real-trace GPU smoke 6754049 pass.
+  - Merge reviewed current-route formal/generation code, commit/push it, then request one formal bridge-only GPU job; no caption evaluation before its checkpoint gate passes.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning until bridge-only training and held-out HOMER evaluation are complete; preference learning remains disabled in v3.5.
 
@@ -616,7 +630,7 @@ automation:
   tmux_session: null
   state: null
   poll_seconds: null
-  behavior: disabled_until_real_trace_gpu_smoke_passes
+  behavior: scheduled_continuation_after_real_trace_gpu_smoke_passed
 
 verification_commands:
   - pjstat
