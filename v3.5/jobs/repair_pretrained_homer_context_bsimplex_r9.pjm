@@ -1,0 +1,79 @@
+#!/bin/sh
+# Bounded one-target validator-feedback repair on a b-batch simplex node.
+# Versioned r9 route: retains the r8 route unchanged for provenance.
+# The process is restricted to CUDA device 0; preflight must confirm one
+# visible device. Do not submit a duplicate while another repair is queued.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=00:30:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+REPAIR_SHARD="${REPAIR_SHARD:?submit with -x REPAIR_SHARD=0,1,2}"
+case "$REPAIR_SHARD" in 0|1|2) ;; *) echo "invalid REPAIR_SHARD=$REPAIR_SHARD" >&2; exit 2 ;; esac
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+STAMP="$(date +%Y%m%d_%H%M%S)"
+python scripts/check_cuda_resource.py \
+  > "outputs/preflight/pretrained_homer_context_repair_bsimplex_r9_${REPAIR_SHARD}_cuda_${STAMP}.json"
+python scripts/check_pretrained_route.py --require-data-ready \
+  > "outputs/preflight/pretrained_homer_context_repair_bsimplex_r9_${REPAIR_SHARD}_route_${STAMP}.json"
+python scripts/verify_homer_public_release_362.py \
+  > "outputs/preflight/pretrained_homer_context_repair_bsimplex_r9_${REPAIR_SHARD}_population_${STAMP}.json"
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --cache data/cache/homer_pretrained_7b_planner_traces \
+  --output "outputs/preflight/pretrained_homer_context_repair_bsimplex_r9_${REPAIR_SHARD}_trace_${STAMP}.json"
+
+python scripts/cache_pretrained_homer_context.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output "data/cache/homer_pretrained_7b_homer_context_shard_${REPAIR_SHARD}" \
+  --repair-manifest manifests/pretrained_homer_context_repair_20260910_r9.json \
+  --repair-shard "$REPAIR_SHARD" \
+  --enable-validator-repair \
+  --repair-attempts 2 \
+  --attempts 2 \
+  --retry-round 8 \
+  --seed 20260906 \
+  --temperature 1.0 \
+  --top-p 1.0
+
+python - "$REPAIR_SHARD" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+shard = int(sys.argv[1])
+manifest = json.loads((root / "manifests/pretrained_homer_context_repair_20260910_r9.json").read_text())
+targets = {item["cluster_id"] for item in manifest["targets"] if item["source_shard"] == shard}
+rows = [json.loads(line) for line in (root / "data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl").read_text().splitlines() if line.strip()]
+partial = root / "data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl"
+excluded = {json.loads(line)["cluster_id"] for line in partial.read_text().splitlines() if line.strip()} if partial.is_file() else set()
+remaining = [row["cluster_id"] for row in rows if row["cluster_id"] not in excluded]
+expected = set(remaining[shard::3])
+if not targets.issubset(expected):
+    raise SystemExit(f"repair targets outside shard assignment: {sorted(targets - expected)}")
+out = root / f"data/cache/homer_pretrained_7b_homer_context_shard_{shard}"
+records = [json.loads(line) for line in (out / "index.jsonl").read_text().splitlines() if line.strip()]
+failures = json.loads((out / "failures.json").read_text())
+ids = {item["cluster_id"] for item in records}
+if ids != expected or len(records) != len(expected) or failures:
+    raise SystemExit(f"repair shard incomplete: expected={len(expected)} records={len(records)} failures={len(failures)}")
+print(json.dumps({"status": "pass", "shard": shard, "records": len(records), "repaired_targets": len(targets)}))
+PY

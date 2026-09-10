@@ -1003,3 +1003,10 @@ retry-round=6。模型、GPU 和数据门禁均无异常，bridge/caption 继续
 资源策略复核：b-batch simplex `6750513` 的预计启动为当日 `15:50`；c-batch 探测作业
 `6750522` 的预计启动为次日 `09/11 10:00`，因此已在执行前取消 c-batch，仅保留 b-batch
 这一份副本（`V35-SCHED-017`）。
+
+`6750513` 于 `15:44:16` 结束，模型/数据门禁均通过，但 `nycc_678` 的
+validator-feedback 仍返回三项候选，违反“严格保留两个实体”的 reference-only 合约，
+因此 shard-2 仍为 `117/118`；事件记录为 `V35-ENG-029`。当前 failure ledger 已变化，
+已建立不可变的 r9 manifest（精确 hash 与错误串、retry-round=8），并完成本地脚本编译与
+manifest gate。只允许提交 `jobs/repair_pretrained_homer_context_bsimplex_r9.pjm` 的一份
+b-batch simplex 副本；成功前不得合并 context、训练 bridge、生成 caption 或运行评测。

@@ -107,7 +107,7 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T15:41:10+09:00"
+  observed_at: "2026-09-10T15:50:00+09:00"
   source_commit: dcb3968f770c30e2620d00af7957459a512412db
   phase: pretrained_7b_context_validator_repair_queued
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
@@ -118,27 +118,27 @@ current_state:
     residual_failures: 1
     partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
     shards: {shard_0: "118/118", shard_1: "118/118", shard_2: "117/118"}
-    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r8.json
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r9.json
     superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r7.json
     repair_policy: validator-feedback-format-only-v1
   bridge_gate: blocked_context_not_complete
-  active_jobs: ["6750513"]
+  active_jobs: ["6750588"]
   last_scheduler_attempt:
-    job_id: "6750513"
+    job_id: "6750588"
     route: b-batch_node1_simplex
     status: queued
-    submitted_at: "2026-09-10T15:36:28+09:00"
-    estimated_start: "2026-09-10T15:50:00+09:00"
+    submitted_at: "2026-09-10T15:48:56+09:00"
+    estimated_start: "2026-09-10T15:48:00+09:00"
     started_at: null
     ended_at: null
     exit_code: null
     records: null
     residual_failures: 1
     repaired_targets: null
-    retry_round: 7
+    retry_round: 8
     targets: [nycc_678]
     reason: fastest_authorized_b_batch_simplex_start
-    evidence: v3.5/repair_pretrained_homer_context_bsimplex_short.pjm.6750513.{out,stats}
+    evidence: v3.5/repair_pretrained_homer_context_bsimplex_r9.pjm.6750588.{out,stats}
     next_job: null
   last_repair_result:
     status: manifest_versioned_after_residual_retry
@@ -151,10 +151,11 @@ current_state:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-026
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-027
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-028
+      - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-029
     success_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-024
     residual_context_records: 361/362 (partial=8, shard-0=118/118, shard-1=118/118, shard-2=117/118)
-    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r8.json
-    next_action: wait_for_6750513_then_strict_postcheck
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r9.json
+    next_action: wait_for_6750588_then_strict_postcheck
   next_action: >-
     Parser fix, versioned manifests, and shard-0 repair are complete. Shard-1 jobs
     6749861 and 6750288 left the same strict selector residual because 6750288
@@ -165,10 +166,11 @@ current_state:
     reference-only validator rejected duplicate `giraffe` entities. Job 6750455
     then exposed a shared truncated-fence parser defect and left the same target
     at 361/362. Job 6750482 was rejected before model load because r7 transcribed
-    the failure string incorrectly. r8 contains the exact current hash and
-    retry-round=7; job 6750513 is the sole queued simplex copy (the later
-    c-batch probe 6750522 was canceled before execution); require its strict
-    post-check, then 362/362 context merge before bridge/caption work.
+    the failure string incorrectly. r9 contains the exact current hash and
+    retry-round=8; job 6750588 is the sole queued simplex copy using r9 (the
+    earlier r8 job 6750513 failed only on nycc_678; the later c-batch probe
+    6750522 was canceled before execution); require its strict post-check, then
+    362/362 context merge before bridge/caption work.
 
 conditions:
   text:
