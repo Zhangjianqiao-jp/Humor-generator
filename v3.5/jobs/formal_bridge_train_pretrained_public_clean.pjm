@@ -33,6 +33,7 @@ CONFIG=configs/pilot/cross_attention_caption_pretrained_public.yaml
 DATA=data/processed/homer_pretrained_7b_public_release_362
 CACHE=data/cache/homer_pretrained_7b_planner_traces
 
+python scripts/check_cuda_resource.py > "$BRIDGE_OUTPUT/cuda_resource.json"
 python scripts/check_pretrained_route.py \
   --require-data-ready --require-context-ready --require-bridge-data-ready \
   > "$BRIDGE_OUTPUT/route_gate.json"
@@ -64,7 +65,10 @@ config = Path(sys.argv[2])
 route = json.loads((out / "route_gate.json").read_text())
 trace = json.loads((out / "trace_gate.json").read_text())
 bridge = json.loads((out / "bridge_input_gate.json").read_text())
+cuda = json.loads((out / "cuda_resource.json").read_text())
 smoke = json.loads((out / "real_trace_bridge_smoke.json").read_text())
+if cuda.get("status") != "pass":
+    raise SystemExit(f"CUDA resource gate did not pass: {cuda}")
 if route.get("status") != "pass":
     raise SystemExit("current public route gate did not pass")
 if trace.get("status") != "pass" or trace.get("records") != 362:

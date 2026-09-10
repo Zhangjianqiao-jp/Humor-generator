@@ -30,6 +30,7 @@ export NLTK_DATA="$PWD/artifacts/nltk_data"
 CONFIG=configs/pilot/cross_attention_caption_pretrained_public.yaml
 DATA=data/processed/homer_pretrained_7b_public_release_362
 
+python scripts/check_cuda_resource.py > "$GEN_OUTPUT/cuda_resource.json"
 python scripts/check_pretrained_route.py \
   --require-data-ready --require-context-ready --require-bridge-data-ready \
   > "$GEN_OUTPUT/route_gate.json"
