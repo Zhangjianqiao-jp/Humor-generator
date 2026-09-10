@@ -309,3 +309,77 @@ target 上限 128 token。历史同类 bridge 在约 602 个 cluster、较长 76
 target 下实际耗时 1:32:27。故将正式脚本收紧为有实测依据的 `01:30:00`；清洁提交后只
 重新提交一个全新的 formal 输出目录。该变更只优化 scheduler backfill，不改变 HOMER
 prompt、sealed population、冻结两个 7B、bridge-only 训练或 caption 评测协议。
+## V35-ENG-033（2026-09-10）：public comparison 的 split 字段接口错误
+
+正式训练尚未启动时的静态审计发现，sealed public population 的行使用
+`homer_description_split`，而当前 caption comparison generator 曾强制要求不存在的
+`split` 字段。若不修复，bridge 完成后生成作业会在模型加载前失败；没有产生任何 caption
+或科学结果。
+
+已在 `scripts/generate_pretrained_bridge_comparison.py` 中将该字段仅在内存中规范化为
+`split`，并对与目标 split 不一致的行直接拒绝；未修改 sealed dataset。新增回归测试覆盖
+全部 47 个 test row，并重新执行图片文件与 SHA-256 校验，结果通过。该修复必须在正式
+comparison job 提交前提交并推送；在此之前不得把生成阶段称为已完成。
+
+## V35-ENG-034（2026-09-10）：记忆 provenance 使用短 SHA 导致回归测试失败
+
+全量 CPU 回归测试发现 `tests/test_project_memory.py` 失败：当前
+`memory/working_state.yaml` 与 `memory/project_memory.yaml` 的队列快照使用了短 SHA
+`2477f4e`，而 `scripts/validate_project_memory.py` 明确要求 40 位 Git commit。测试结果为
+114 项通过、1 项失败；没有启动 GPU、模型 forward、数据修改或科学训练。
+
+根因是记忆快照的可读缩写被误当作不可变 provenance。已将当前队列快照中的
+`source_commit` 统一改为完整的
+`2477f4e461dc4477928a9b8cf3e9cbb4a54120ea`，并重新通过 memory/public-route/generation
+相关测试、JSONL 解析和 Python 编译检查。该修复暂不提交，直到正式作业 `6754067` 终止，
+以保持其提交时的 source pin 与运行时记录一致；这不是模型或方法失败。
+
+## V35-ENG-035（2026-09-10）：生成阶段可恢复输出的完整性门禁过弱
+
+静态审计发现，caption comparison generator 原先只把已有文件中的
+`(image_id, generation_seed)` 放入集合，未验证 `system_id`、split、图片 hash、trial/
+candidate 映射，也未拒绝物理重复行。若输出目录残留旧文件，可能在不生成全部候选的情况下
+错误跳过记录；本次没有消费任何错误科学输出，也没有启动模型或 GPU。
+
+根因是把“集合键存在”误当成完整 provenance。已新增 `load_completed_keys` 和
+`assert_complete_keys`：每一行必须匹配当前 sealed population、当前 condition、图片 hash 和
+精确 HOMER seed schedule，重复或缺失都会 fail-closed；新增重复/不完整输出回归测试，相关
+测试和编译均通过。该修复必须在 generation job 提交前 commit/push；它是工程门禁，不是
+caption 质量结论。
+
+## V35-ENG-036（2026-09-10）：生成作业的总数门禁不足以证明完整覆盖
+
+进一步静态检查发现，generation job 原先的最终检查只验证总数 `2350` 和两个
+`system_id`，没有验证 47 张图片、5 个 trial、5 个 candidate 的完整笛卡尔积，也没有验证
+每行图片 hash、seed/trial 映射和两种 condition 的各自数量。若残留文件存在，重复键可能在
+总数不变时掩盖缺失候选；本次没有启动生成作业，也没有消费科学输出。
+
+已加强 `jobs/generate_pretrained_bridge_comparison_bsimplex.pjm` 的 inline validator：读取
+sealed test population，要求准确的 47×5×5×2 键集合、seed
+`20260910 + trial*100 + candidate`、每 condition 1175 行、图片 hash 一致、caption 非空，
+并检查 text/latent 的 checkpoint provenance。shell 语法、目标测试和 `git diff --check`
+均通过。该修复必须与 generation loader 一起在正式生成前提交并推送。
+
+## V35-ENG-037（2026-09-10）：正式提交记录使用短 SHA
+
+provenance 复核发现，正式作业输出目录中的不可变提交记录
+`submission.json` 保存的是短 SHA `2477f4e`，而项目契约要求 40 位 commit。该缩写当前可
+唯一解析为 `2477f4e461dc4477928a9b8cf3e9cbb4a54120ea`；作业 `6754067` 已经排队，因此不
+篡改原始调度证据，也不因这一记录格式问题取消作业。
+
+作业终止后必须检查运行时 `git_commit` 与该完整 SHA 完全一致，并生成一份链接原始
+`submission.json` 的 post-job provenance audit；此后所有新提交记录一律写入
+`git rev-parse HEAD` 的完整值。该问题不涉及模型、数据、GPU 或科学结果。
+
+## V35-ENG-038（2026-09-10）：记忆 YAML 缩进回归
+
+在一次正式作业提交前的窄范围复核中，错误的无操作补丁曾将
+`memory/working_state.yaml` 的 `active_jobs` 临时移到 `immediate_gate` 外部，使项目记忆
+结构不符合契约。该回归发生在工程文件编辑阶段；没有触碰调度器、模型、GPU、数据集、权重
+或科学输出。
+
+根因是补丁上下文遗漏了嵌套 YAML 键所需的两个空格。已恢复为
+`immediate_gate.active_jobs: ["6754067"]`，并用 PyYAML 解析两份记忆文件，运行项目记忆和
+pretrained comparison 回归测试、PJM shell 语法检查及 `git diff --check`，全部通过。
+后续每次记忆/ provenance 修改后都必须立即做结构解析和针对性测试；该问题是工程回归，
+不是 latent 方法、数据质量或训练结果。

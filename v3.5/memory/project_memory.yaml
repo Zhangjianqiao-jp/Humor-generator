@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T20:35:00+09:00"
-  source_commit: 372cbb2
-  phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_resubmission_pending_clean_commit
+  observed_at: "2026-09-10T22:40:00+09:00"
+  source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
+  phase: pretrained_7b_formal_bridge_complete_generation_gate_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -131,6 +131,29 @@ current_state:
     manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
     rows: {train: 813, validation: 132, test: 141}
   active_jobs: []
+  last_formal_bridge:
+    job_id: "6754067"
+    name: v35pubform90
+    route: b-batch_node1_native_full_gpu
+    status: completed_successfully
+    started_at: "2026-09-10T22:20:49+09:00"
+    ended_at: "2026-09-10T22:34:02+09:00"
+    exit_code: 0
+    elapse_seconds: 793
+    host: genkai0002
+    device: NVIDIA_H100
+    max_memory_mib: 6131.8
+    output: outputs/pilot/pretrained_public_bridge_formal_1h30_20260910
+    source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
+    runtime_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
+    epochs: 5
+    global_steps: 340
+    policy_trainable_parameters: 0
+    bridge_trainable_parameters: 6949572
+    validation_best_total: 3.8378183390154983
+    validation_caption_nll: 3.0430871212121215
+    validation_matched_minus_shuffled_logp: 0.002099510395165646
+    provenance_audit: docs/FORMAL_BRIDGE_POST_JOB_AUDIT_20260910.md
   smoke_resource_audit:
     canceled_before_execution:
       - {job_id: "6753645", route: b-batch_node1_simplex, estimated_start: "2026-09-11T02:00:00+09:00", reason: b_batch_node_free_zero}
@@ -164,8 +187,20 @@ current_state:
     estimated_start: "2026-09-12T21:00:00+09:00"
     reason: walltime_overrequest_reduced_backfill
     evidence: v35pubformal.6754055.stats
+    replacement_job_id: "6754067"
+    replacement_status: completed_successfully
+    replacement_started_at: "2026-09-10T22:20:49+09:00"
+    replacement_ended_at: "2026-09-10T22:34:02+09:00"
     replacement_walltime: "01:30:00"
-    replacement_status: pending_clean_commit
+    replacement_estimated_start: "2026-09-11T04:00:00+09:00"
+  automatic_continuation:
+    task_id: v35-complete-followup-v2
+    timer: auto-research-v35-complete-followup-v2.timer
+    generation_output: outputs/pilot/pretrained_public_bridge_comparison_20260910
+    generation_gate: generation_gate.json
+    required_records: 2350
+    required_per_condition: 1175
+    bounded_retries: 6
   last_scheduler_attempt:
     job_id: "6751564"
     route: b-batch_node1_simplex

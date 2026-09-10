@@ -1,6 +1,6 @@
 # 当前 HOMER public-code + latent bridge 路线（v3.5）
 
-更新时间：2026-09-06
+更新时间：2026-09-10
 
 本文只描述当前的 **adapter-free Qwen2.5-VL-7B + bridge-only** 路线。历史
 `latent_bridge_v35`、A4/A5 trace、SFT adapter 和旧 caption trainer 不得作为当前
@@ -109,8 +109,10 @@ source_caption_only_no_fabricated_explanation
 在第 2 步失败时，不得运行第 3 步；在第 5 步失败时，不得加载模型训练。任何
 `latent_bridge_v35` 字符串、旧 adapter、旧 trace 或 context/hash 不一致都会被拒绝。
 
-当前排队的 job 只负责第 1 步；在它生成并通过 362/362 trace gate 之前，context 和 bridge
-训练不会自动开始。
+当前正式作业 `6754067` 不再生成 trace，而是消费已经通过 362/362 trace/context gate 的
+sealed artifacts，仅负责 bridge-only scientific training。该作业已正常完成并生成完整
+checkpoint；因此现在只允许进入严格的 caption generation gate。不得把 near-zero
+matched/shuffled gap 当作 latent 因果使用证据，必须等待 test caption 与 HOMER 评测结果。
 
 ## 6. 结果命名边界
 

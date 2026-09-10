@@ -54,29 +54,87 @@ python scripts/generate_pretrained_bridge_comparison.py \
 
 cat "$GEN_OUTPUT/text_homer_context_replay.jsonl" \
     "$GEN_OUTPUT/latent_bridge.jsonl" > "$GEN_OUTPUT/generations.jsonl"
-python - "$GEN_OUTPUT/generations.jsonl" "$BRIDGE_CHECKPOINT" <<'PY'
+python - "$GEN_OUTPUT/generations.jsonl" "$BRIDGE_CHECKPOINT" "$DATA/test.jsonl" <<'PY'
 import json
+import hashlib
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 checkpoint = str(Path(sys.argv[2]).resolve())
+population_path = Path(sys.argv[3])
 rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-if len(rows) != 47 * 5 * 5 * 2:
-    raise SystemExit(f"expected 2350 current test generations, got {len(rows)}")
+population = [json.loads(line) for line in population_path.read_text().splitlines() if line.strip()]
+expected_images = {str(row["cluster_id"]): str(row["image_sha256"]) for row in population}
+if len(expected_images) != 47:
+    raise SystemExit(f"expected 47 unique test images, got {len(expected_images)}")
+if len(rows) != len(expected_images) * 5 * 5 * 2:
+    raise SystemExit(f"expected {len(expected_images) * 5 * 5 * 2} current test generations, got {len(rows)}")
 systems = {row.get("system_id") for row in rows}
 if systems != {"text_homer_context_replay", "latent_bridge"}:
     raise SystemExit(f"unexpected comparison systems: {systems}")
+keys = set()
+counts = {system: 0 for system in systems}
 for row in rows:
     if row.get("split") != "test":
         raise SystemExit("comparison contains a non-test row")
-    if row.get("system_id") == "latent_bridge" and row.get("checkpoint_sha256") is None:
+    system = row.get("system_id")
+    image = str(row.get("image_id"))
+    if image not in expected_images:
+        raise SystemExit(f"comparison contains unknown image {image}")
+    if str(row.get("image_sha256")) != expected_images[image]:
+        raise SystemExit(f"image hash mismatch for {image}")
+    trial = row.get("trial")
+    candidate = row.get("candidate_index")
+    if row.get("candidate_count") != 5 or not isinstance(trial, int) or not 0 <= trial < 5:
+        raise SystemExit(f"invalid trial/candidate_count for {image}: {row}")
+    if not isinstance(candidate, int) or not 0 <= candidate < 5:
+        raise SystemExit(f"invalid candidate index for {image}: {row}")
+    expected_seed = 20260910 + trial * 100 + candidate
+    if row.get("generation_seed") != expected_seed:
+        raise SystemExit(f"seed/trial mismatch for {image}: {row}")
+    key = (system, image, trial, candidate)
+    if key in keys:
+        raise SystemExit(f"duplicate generation key: {key}")
+    keys.add(key)
+    counts[system] += 1
+    if not isinstance(row.get("caption"), str) or not row["caption"].strip():
+        raise SystemExit(f"empty caption for {key}")
+    if system == "latent_bridge" and row.get("checkpoint_sha256") is None:
         raise SystemExit("latent row is missing checkpoint provenance")
+    if system == "text_homer_context_replay" and row.get("checkpoint_sha256") is not None:
+        raise SystemExit("text row unexpectedly carries a bridge checkpoint")
+expected_keys = {
+    (system, image, trial, candidate)
+    for system in systems
+    for image in expected_images
+    for trial in range(5)
+    for candidate in range(5)
+}
+if keys != expected_keys:
+    raise SystemExit(f"generation key set mismatch: got={len(keys)} expected={len(expected_keys)}")
+if counts != {system: len(expected_images) * 5 * 5 for system in systems}:
+    raise SystemExit(f"per-condition counts mismatch: {counts}")
 print(json.dumps({
     "status": "pass",
     "records": len(rows),
     "systems": sorted(systems),
+    "per_condition": counts,
     "checkpoint": checkpoint,
     "judge": "not_run",
 }, sort_keys=True))
+gate = {
+    "status": "complete",
+    "records": len(rows),
+    "expected_images": len(expected_images),
+    "trials": 5,
+    "candidates_per_image": 5,
+    "per_condition": counts,
+    "generations_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    "checkpoint": checkpoint,
+    "judge": "not_run",
+}
+(path.parent / "generation_gate.json").write_text(
+    json.dumps(gate, indent=2, sort_keys=True) + "\n"
+)
 PY

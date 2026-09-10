@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T20:35:00+09:00"
+observed_at: "2026-09-10T22:40:00+09:00"
 must_revalidate: true
-source_commit: 372cbb2
+source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
 branch: latent
 
-current_phase: pretrained_7b_real_trace_bridge_smoke_passed_formal_resubmission_pending_clean_commit
+current_phase: pretrained_7b_formal_bridge_complete_generation_gate_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -506,7 +506,12 @@ resource_diagnosis:
     timing_reference: cross_attention_phase_a5_csimplex.pjm.6712327_used_01:32:27
     replacement_walltime: "01:30:00"
     replacement_output: outputs/pilot/pretrained_public_bridge_formal_1h30_20260910
-    replacement_status: pending_clean_commit
+    replacement_job: "6754067"
+    replacement_submitted_at: "2026-09-10T20:41:09+09:00"
+    replacement_estimated_start: "2026-09-11T04:00:00+09:00"
+    replacement_status: completed_successfully
+    replacement_started_at: "2026-09-10T22:20:49+09:00"
+    replacement_ended_at: "2026-09-10T22:34:02+09:00"
   last_real_trace_smoke:
     job_id: "6754049"
     job_name: v35pubsmok10
@@ -562,13 +567,13 @@ program_risk_audit:
     - A4 semantic recovery disables the image shortcut and masks all non-target channels
     - A4 donor reconstruction requires a swapped channel to decode donor semantics
   highest_open_risk: >-
-    The current public-release route is data-complete, but bridge training has
-    not started. The remaining risk is execution stability and whether a
-    bridge-only update improves held-out caption quality; no latent benefit is
-    claimed before the training and HOMER-comparable evaluation gates.
+    The current public-release route and bridge-only training are complete.
+    The remaining risk is whether the trained bridge improves held-out caption
+    quality and whether receiver-side causal channel use is measurable; no
+    latent benefit is claimed before the HOMER-comparable caption evaluation.
 
 immediate_gate:
-  action: commit_and_submit_rightsized_public_bridge_formal_job
+  action: commit_push_generation_fixes_then_submit_one_comparison_job
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -577,7 +582,7 @@ immediate_gate:
   evaluator_manifest: manifests/homer_official_assets.json
   required_resource: one_full_gpu_native_allocator_cuda0_only_after_cpu_smoke
   active_jobs: []
-  scientific_training: false
+  scientific_training: true
   smoke_status: passed_job_6754049
   success_requires:
     - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
@@ -586,33 +591,41 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
   current_blockers:
-    - formal_bridge_job_rightsized_resubmission_pending
+    - comparison_generation_not_started
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
+  automatic_continuation:
+    task_id: v35-complete-followup-v2
+    timer: auto-research-v35-complete-followup-v2.timer
+    generation_output: outputs/pilot/pretrained_public_bridge_comparison_20260910
+    generation_gate: generation_gate.json
+    required_records: 2350
+    required_per_condition: 1175
+    bounded_retries: 6
   resource_request_note: >-
     The short b-batch node=1 smoke 6754049 passed on a native full-device
     allocation. The unstarted four-hour formal request 6754055 was canceled
     because PJM estimated 2026-09-12 21:00. Historical 602-cluster/768-token
     training used 1:32:27; the current 271-cluster/128-token view is therefore
-    submitted with a 01:30:00 bound after a clean commit. Keep exactly one
-    formal copy; do not request MIG, duplicate reservations, or unvalidated
-    alternatives.
+    submitted as job 6754067 with a 01:30:00 bound after a clean commit; it
+    completed on genkai0002 in 00:13:13 with exit code 0. Keep exactly one
+    formal/comparison copy; do not request MIG, duplicate reservations, or
+    unvalidated alternatives.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
 
 remaining_sequence_after_resource_gate:
-  - verify_public_release_362_allowlist_and_population
-  - verify_current_pretrained_homer_traces
-  - repair_and_merge_pretrained_homer_context
-  - build_and_verify_current_bridge_training_view
-  - cpu_preflight_and_targeted_tests
-  - real_trace_gpu_engineering_smoke
-  - zero_adapter_online_and_standard_replay_smoke
-  - bridge_only_mechanism_pilot
-  - held_out_caption_generation_and_homer_comparable_evaluation
+  - post_job_full_sha_provenance_audit
+  - commit_and_push_generation_gate_fixes
+  - submit_one_current_route_comparison_generation_job
+  - require_generation_gate_47x5x5x2
+  - build_and_audit_blinded_caption_packets
+  - obtain_non_fabricated_independent_judgments
+  - compute_homer_pass_at_1_3_5_and_auxiliary_statistics
+  - publish_text_homer_vs_latent_comparison_report
 
 eta:
-  scheduler_wait: pending_compatible_bbatch_node
+  scheduler_wait: formal_bridge_complete_generation_job_not_started
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
   outer_semantic_confirmation: historical_provenance_failure
@@ -635,7 +648,8 @@ next_agent_actions:
   - "Use the sealed current route: `trace_index` 362/362, context index 362/362, bridge view 1086 rows; do not substitute historical traces."
   - Run `scripts/verify_pretrained_bridge_inputs.py` with both current bridge configs and retain its JSON evidence.
   - CPU `scripts/engineering_smoke.py`, targeted public-route tests, and the 2-example real-trace GPU smoke 6754049 pass.
-  - Merge reviewed current-route formal/generation code, commit/push it, then request one formal bridge-only GPU job; no caption evaluation before its checkpoint gate passes.
+  - Formal bridge job 6754067 completed successfully; retain its full-SHA post-job audit.
+  - Commit/push the reviewed generation-only fixes, then request exactly one current-route comparison generation job; no caption evaluation before its 2350-row gate passes.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning until bridge-only training and held-out HOMER evaluation are complete; preference learning remains disabled in v3.5.
 

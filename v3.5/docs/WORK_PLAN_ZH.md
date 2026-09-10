@@ -1102,3 +1102,78 @@ walltime 收紧为 `10 分钟`，并额外检查 `cpu_preflight`、`cuda_resourc
 同类训练实际耗时 1:32:27，因此正式请求改为 `01:30:00`，并在新 clean commit 后只提交
 一个 fresh output directory。该变更只优化 scheduler backfill，不改变 HOMER prompt、
 362-contest sealed population、冻结两个 7B、bridge-only 训练或后续 caption 评测协议。
+
+#### 15.3.8 当前正式作业与生成前门禁（2026-09-10）
+
+正式作业 `6754067`（`v35pubform90`）已从 source commit
+`2477f4e461dc4477928a9b8cf3e9cbb4a54120ea` 提交到 `b-batch + node=1`，walltime 为
+`01:30:00`。它于 `22:20:49` 在 `genkai0002` 的 NVIDIA H100 上启动，`22:34:02` 正常
+结束，exit code 为 0，实际耗时 `00:13:13`，峰值主机内存 `6131.8 MiB`。输出目录已生成
+`complete.json`、5 个 epoch checkpoint、`best_bridge.pt`、metrics、运行时 manifest 和
+全部 gate；这是唯一有效的当前 formal bridge copy。禁止为同一实验再提交 b-inter、a-batch、
+MIG 或重复 b-batch 作业。
+
+等待期间全量 CPU 回归曾发现两个工程问题，均已在启动后续阶段前修复并记录：
+
+1. `V35-ENG-034`：记忆快照短 SHA 违反 40 位 provenance 契约；已改为完整 commit，
+   memory/project-memory/public-route/generation 测试全绿。
+2. `V35-ENG-035`：生成器可恢复输出未拒绝重复、错条件和 seed/trial 错配；已加入严格
+   `load_completed_keys`/`assert_complete_keys`，要求 sealed population × HOMER seed schedule
+   的完整键集合，相关回归测试通过。
+
+3. `V35-ENG-036`：生成作业的旧总数检查不足以证明完整覆盖；已增加 47×5×5×2 键集合、
+   hash、seed、每条件数量和非空 caption 的 fail-closed validator。
+4. `V35-ENG-037`：已提交作业的原始 `submission.json` 保留短 SHA；其完整 SHA 可唯一解析，
+   作业终止后必须做 post-job provenance audit，原始证据不得篡改。
+5. `V35-ENG-038`：记忆 YAML 缩进回归已修复；两份 YAML、memory validator、全量测试和
+   PJM 语法检查均重新通过。
+
+`6754067` 已进入终止态，且运行时 full SHA 与提交 source 唯一解析到同一 commit。现在先
+提交并推送上述 generation-only 修复，再运行 47 张 test 图片、5 candidates × 5 trials 的
+Text-HOMER/latent 对照（共 2,350 条记录），最后进入独立的 HOMER Pass@1/3/5 与辅助盲评
+轨道。正式 bridge 的 near-zero matched/shuffled gap 只表示尚未证明因果 channel use，不能
+替代 caption 评测，也不能提前宣称 latent 有效或无效。
+
+#### 15.3.9 工程复核结果（2026-09-10 22:40 JST）
+
+针对 V35-ENG-038 的修复已完成二次验证：两份 YAML 记忆文件通过解析，
+`scripts/validate_project_memory.py` 返回 `status: pass`，全量 pytest 为
+`118 passed`，生成作业 PJM shell 语法检查和 `git diff --check` 均通过。正式作业
+正式作业 `6754067` 的 scheduler stats 显示启动、结束和 exit code 0；输出中的
+`formal_pre_training_gate.json`、`trace_gate.json`、`bridge_input_gate.json` 和
+`run_manifest.json` 均通过，且 `policy_trainable_parameters=0`、bridge trainable 参数为
+`6,949,572`。全量 pytest、memory YAML、public-route/bridge-input gate、PJM shell 语法和
+`git diff --check` 均通过。当前尚未生成任何 test caption，故不存在质量结论；正式作业完成后
+才允许提交 generation-only 修复并开启严格的 47×5×5×2 生成门禁。
+
+#### 15.3.10 评测资产预检（2026-09-10 21:22 JST）
+
+`scripts/verify_homer_evaluation_assets.py` 已在当前工作树返回 `status=pass`：本地
+HOMER prompt、public-code pipeline、retrieval 源码 hash 均匹配；评测契约固定为
+GPT-5（`gpt-5-chat-latest`）、evaluator temperature 0、每图 5 candidates、5 trials。
+该检查只验证评测资产和协议，未读取或生成任何 test caption，不能替代正式 bridge 结果。
+
+#### 15.3.11 自动闭环门禁加强（2026-09-10 21:26 JST）
+
+自动续跑原先只检查 formal bridge `complete.json`，可能在 comparison generation 仍排队
+时提前把任务标记为完成。现已将 comparison 作业的最终校验写入
+`generation_gate.json`，并把自动任务的 completion check 扩展为严格要求：`status=complete`、
+47 张图片、5 trials、5 candidates、两种 condition 各 1,175 条（总计 2,350 条）。自动
+提示同时固定输出目录 `outputs/pilot/pretrained_public_bridge_comparison_20260910`，并要求
+监控实际 generation PJM 句柄。任务 JSON 合约校验、PJM shell 语法和 comparison 回归测试
+均通过；该变更不触碰已排队 formal 作业。
+
+自动任务的有界重试由 4 次增至 6 次，新增间隔只用于处理 formal/generation 作业继续
+排队的情况；每次 continuation 仍必须先检查真实 PJM 句柄，禁止重复提交。该调整在原
+48 小时 deadline 内，不改变模型、数据、训练或评测协议，也不会在无状态变化时输出日志。
+
+#### 15.3.12 Formal bridge 终态审计（2026-09-10 22:40 JST）
+
+正式运行 provenance 已单独记录在 `docs/FORMAL_BRIDGE_POST_JOB_AUDIT_20260910.md`。训练
+消费的是 adapter-free Qwen2.5-VL-7B public-release-362 route：Planner/Generator 均冻结，
+只更新 receiver-driven cross-attention bridge；362/362 planner trace、362/362 context 和
+bridge input gate 全部通过，训练为 5 epoch、340 global steps。validation total 从 `3.9764`
+降到 `3.8378`，caption NLL 从 `3.1889` 降到 `3.0431`；matched-minus-shuffled log-probability
+最终为 `0.00210`，接近零，因此只说明优化稳定，不证明接收器因果使用 latent。下一条科学门禁是
+生成并验证 2,350 条 text/latent 对照记录；在此之前不运行 judge、不写入虚构评分，也不启动
+preference learning。

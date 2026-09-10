@@ -86,6 +86,87 @@ def generation_schedule(
     return schedule
 
 
+def load_completed_keys(
+    path: Path,
+    *,
+    condition: str,
+    rows: Iterable[dict[str, Any]],
+    schedule: Iterable[dict[str, int]],
+    split: str,
+) -> set[tuple[str, int]]:
+    """Validate resumable output before allowing records to be skipped.
+
+    A partially written generation file is an execution artifact, not an
+    authority.  Every existing row must belong to this exact condition,
+    population and seed schedule, and keys must be unique.  This prevents a
+    stale file from silently causing a missing or cross-condition comparison.
+    """
+    if not path.is_file():
+        return set()
+    population = {str(row["cluster_id"]): row for row in rows}
+    schedule = list(schedule)
+    schedule_by_seed = {
+        int(item["generation_seed"]): (int(item["trial"]), int(item["candidate_index"]))
+        for item in schedule
+    }
+    completed: set[tuple[str, int]] = set()
+    for line_number, item in enumerate(read_jsonl(path), 1):
+        required = {
+            "system_id", "image_id", "image_sha256", "split", "generation_seed",
+            "trial", "candidate_index", "candidate_count",
+        }
+        missing = sorted(required - set(item))
+        if missing:
+            raise ValueError(f"existing generation row {path}:{line_number} missing {missing}")
+        if str(item["system_id"]) != condition:
+            raise ValueError(
+                f"existing generation row {path}:{line_number} belongs to condition "
+                f"{item['system_id']!r}, expected {condition!r}"
+            )
+        cluster = str(item["image_id"])
+        if cluster not in population:
+            raise ValueError(f"existing generation row {path}:{line_number} has unknown image {cluster}")
+        if str(item["split"]) != split:
+            raise ValueError(f"existing generation row {path}:{line_number} has wrong split")
+        if str(item["image_sha256"]) != str(population[cluster]["image_sha256"]):
+            raise ValueError(f"existing generation row {path}:{line_number} has image hash mismatch")
+        seed = int(item["generation_seed"])
+        expected_trial_candidate = schedule_by_seed.get(seed)
+        if expected_trial_candidate is None:
+            raise ValueError(f"existing generation row {path}:{line_number} has unknown seed {seed}")
+        trial, candidate_index = expected_trial_candidate
+        if (int(item["trial"]), int(item["candidate_index"])) != (trial, candidate_index):
+            raise ValueError(f"existing generation row {path}:{line_number} has seed/trial mismatch")
+        expected_candidate_count = len({int(x["candidate_index"]) for x in schedule})
+        if int(item["candidate_count"]) != expected_candidate_count:
+            raise ValueError(f"existing generation row {path}:{line_number} has wrong candidate_count")
+        key = (cluster, seed)
+        if key in completed:
+            raise ValueError(f"duplicate existing generation key at {path}:{line_number}: {key}")
+        completed.add(key)
+    return completed
+
+
+def assert_complete_keys(
+    completed: set[tuple[str, int]],
+    *,
+    rows: Iterable[dict[str, Any]],
+    schedule: Iterable[dict[str, int]],
+) -> None:
+    expected = {
+        (str(row["cluster_id"]), int(item["generation_seed"]))
+        for row in rows
+        for item in schedule
+    }
+    if completed != expected:
+        missing = sorted(expected - completed)[:5]
+        extra = sorted(completed - expected)[:5]
+        raise RuntimeError(
+            f"generation key set is incomplete: got={len(completed)} expected={len(expected)} "
+            f"missing={missing} extra={extra}"
+        )
+
+
 def resolve_path(value: str | Path) -> Path:
     path = Path(str(value))
     return path if path.is_absolute() else (ROOT / path).resolve()
@@ -97,13 +178,23 @@ def load_population(path: Path, split: str) -> list[dict[str, Any]]:
         raise ValueError(f"empty public population split: {path / (split + '.jsonl')}")
     required = {
         "row_id", "cluster_id", "dataset", "contest_number", "image", "image_sha256",
-        "standard_description", "split",
+        "standard_description",
     }
     missing = sorted(required - set(rows[0]))
     if missing:
         raise ValueError(f"population rows missing fields: {missing}")
     seen: set[str] = set()
     for row in rows:
+        # The sealed public population stores the HOMER split as
+        # ``homer_description_split``; ``split`` is a generation-view field
+        # and is not present in the upstream population rows.  Normalize the
+        # alias here rather than requiring a mutable data rewrite.
+        declared_split = str(row.get("split", row.get("homer_description_split", "")))
+        if declared_split != split:
+            raise ValueError(
+                f"population row {row.get('row_id')} has split={declared_split!r}, expected {split!r}"
+            )
+        row["split"] = declared_split
         cluster = str(row["cluster_id"])
         if cluster in seen:
             raise ValueError(f"population split has duplicate cluster: {cluster}")
@@ -283,10 +374,13 @@ def main() -> None:
         base_seed=args.base_seed, trial_stride=args.trial_stride,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    completed: set[tuple[str, int]] = set()
-    if args.output.is_file():
-        for item in read_jsonl(args.output):
-            completed.add((str(item["image_id"]), int(item["generation_seed"])))
+    completed = load_completed_keys(
+        args.output,
+        condition=args.condition,
+        rows=rows,
+        schedule=schedule,
+        split=args.split,
+    )
     total = len(rows) * len(schedule)
     written = len(completed)
     with args.output.open("a", encoding="utf-8") as handle:
@@ -361,6 +455,7 @@ def main() -> None:
                 written += 1
                 print(json.dumps({"completed": written, "total": total, "cluster_id": cluster, "seed": seed}), flush=True)
 
+    assert_complete_keys(completed, rows=rows, schedule=schedule)
     manifest = {
         "schema_version": 1,
         "status": "complete",
