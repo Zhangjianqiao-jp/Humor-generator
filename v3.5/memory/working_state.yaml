@@ -28,7 +28,7 @@ trace_gate:
   current_route_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   current_route_required: complete_post_trace_homer_context_before_bridge
 
-context_gate:
+  context_gate:
   status: blocked_pending_bounded_repair
   available: 350
   required: 362
@@ -88,6 +88,20 @@ context_gate:
       records: "117/118"
       residual_failures: 1
       reason: selector_concept_not_uniquely_repairable
+    - job_id: "6750287"
+      shard: 1
+      status: canceled_before_execution
+      route: b-batch_shared_gpu1
+      estimated_start: "2026-09-12T21:00:00+09:00"
+      reason: faster_start_not_available
+    - job_id: "6750288"
+      shard: 1
+      status: queued
+      route: b-batch_node1_simplex
+      submitted_at: "2026-09-10T14:29:00+09:00"
+      estimated_start: "2026-09-10T15:00:00+09:00"
+      exit_code: null
+      reason: fastest_available_bounded_retry
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
     b-batch node=1 is allowed only as a last-resort simplex fallback when a
@@ -109,7 +123,9 @@ context_gate:
     non-uniquely-repairable selector concept (V35-ENG-022).  The remaining
     bounded scope is shard-1 (1) plus shard-2 (7), with 350/362 records before
     the next retry.  Manifest r3 pins the current eight failure rows and hashes;
-    no semantic hand-mapping is allowed.
+    no semantic hand-mapping is allowed.  Shared job 6750287 was canceled before
+    execution because its start estimate was 09/12; simplex retry 6750288 is
+    currently queued for the earliest observed 09/10 15:00 slot.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json

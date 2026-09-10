@@ -956,3 +956,8 @@ shard-2=`111/118`）。由于每次作业都会刷新 `failures.json`，r2 的�
 repair entrypoint 已切换到 r3。下一步只允许按资源策略提交 shard-1 的单条 retry，随后
 再提交 shard-2；三 shard 精确达到 `118/118` 且 `failures.json=[]` 前，strict merger、
 bridge 训练、caption 生成和科学评测继续保持 fail-closed。
+
+`6750287` 的 r3 shared-GPU 副本经提交后预计到 `09/12 21:00`，在模型启动前按最快启动
+策略取消（`V35-SCHED-016`）；b-batch 的 aggregate GPU FREE 数不能替代 shared 节点的
+实际 backfill 能力。随后提交唯一的 simplex 后备 `6750288`（b-batch、node=1、CUDA 0、
+30 分钟，预计 `09/10 15:00`），只处理 shard-1 的 `nycc_821`，不得与其他副本并行。
