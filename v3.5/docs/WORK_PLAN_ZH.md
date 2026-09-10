@@ -881,7 +881,8 @@ scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以�
 门禁。shared 作业显式声明 `#PJM -P exec-policy=share`，并在提交后用 `pjstat` 核对
 预计启动时间；任何被排到未来时段的重复副本均在模型加载前取消并记录。
 
-随后只读检查发现 `b-reserve` 有 1 个空闲节点（100/112 GPU units free），故当前最快
-候选为 `jobs/repair_pretrained_homer_context_breserve.pjm` 的单节点独占 wrapper；它
-复用同一修复脚本，不改变数据/模型/seed。该组若提交权限或调度策略不满足，作业应在
-preflight 前失败，不能再并行提交其他副本。
+随后只读检查发现 `b-reserve` 有 1 个空闲节点（100/112 GPU units free），但提交立即被
+`GENKAI2009` 拒绝：该组必须提供外部 reservation ID，本账户当前没有该授权。因此
+`jobs/repair_pretrained_homer_context_breserve.pjm` 只作为 guarded fallback 保存，不得
+再次尝试或伪造 reservation ID；在 b-batch/c-batch 给出可运行的授权 GPU 前，不提交新的
+重复副本。
