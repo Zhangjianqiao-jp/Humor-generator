@@ -157,11 +157,25 @@ def validate_checkpoint(checkpoint: Path) -> dict[str, Any]:
     completion_payload = json.loads(completion.read_text(encoding="utf-8"))
     if completion_payload.get("status") != "complete":
         raise ValueError(f"bridge completion gate is not complete: {completion_payload}")
+    run_payload = json.loads(run_manifest.read_text(encoding="utf-8"))
+    if run_payload.get("current_homer_public_route") is not True:
+        raise ValueError("checkpoint was not trained on the current HOMER public route")
+    if run_payload.get("policy_trainable_parameters") != 0:
+        raise ValueError("checkpoint does not prove a frozen Planner/Generator policy")
+    if run_payload.get("baseline") not in {None, "receiver_cross_attention"}:
+        raise ValueError("checkpoint baseline is not receiver_cross_attention")
     return {
         "path": str(checkpoint.resolve()),
         "sha256": sha256(checkpoint),
         "completion_sha256": sha256(completion),
         "run_manifest_sha256": sha256(run_manifest),
+        "run_manifest": {
+            "git_commit": run_payload.get("git_commit"),
+            "current_homer_public_route": run_payload.get("current_homer_public_route"),
+            "policy_trainable_parameters": run_payload.get("policy_trainable_parameters"),
+            "train_clusters": run_payload.get("train_clusters"),
+            "validation_clusters": run_payload.get("validation_clusters"),
+        },
     }
 
 
