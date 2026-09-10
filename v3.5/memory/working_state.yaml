@@ -213,9 +213,11 @@ context_gate:
       retry_round: 10
       attempts: 16
       reason: r11_manifest_unknown_version_allowlist
-    - job_id: pending_r11_compatibility_fix
+    - job_id: "6751564"
       shard: 2
-      status: ready_to_submit_after_commit
+      status: queued
+      submitted_at: "2026-09-10T16:16:09+09:00"
+      estimated_start: "2026-09-10T16:16:00+09:00"
       targets: [nycc_678]
       route: b-batch_node1_simplex
       retry_round: 10
