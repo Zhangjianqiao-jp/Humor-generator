@@ -2,7 +2,7 @@
 
 > 本轮完整的算法/协议审计见 [`docs/ALGORITHM_AUDIT_V35_ZH.md`](ALGORITHM_AUDIT_V35_ZH.md)，方法—证据—引用逐项台账见 [`docs/METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md)。文中所有“已实现/已运行”均须能回溯到代码、配置和 artifact；历史 A3/A4/A5 结果只作失败记录，不能冒充当前主线结果。当前主线是 **adapter-free 预训练 Qwen2.5-VL-7B 的 HOMER public-code route + bridge-only latent communication**；v2.5/DPO 与旧 latent 数据均不在可执行范围。
 
-## 当前执行状态（2026-09-11）
+## 当前执行状态（2026-09-11，评测包已就绪）
 
 当前 public-release route 的四个门禁均已通过：
 
@@ -29,7 +29,7 @@ held-out caption generation complete (job 6754609; 2350 rows)
 当前下一步顺序不可跳过：
 
 ```text
-HOMER primary evaluator packets/records
+HOMER primary evaluator packets/records（已生成 packet，等待判断）
 → 获得真实 GPT-5 judge results（不能伪造）
 → Pass@1/3/5（5 candidates, 5 trials）
 → Group-of-10/multi-judge/cluster bootstrap 作为辅助分析
@@ -40,6 +40,35 @@ HOMER primary evaluator packets/records
 旧 v2.5/v3.0 trainer。bridge 训练配置必须使用
 `configs/pilot/cross_attention_caption_pretrained_public.yaml`（当前 public-caption
 replacement track）并通过 `scripts/verify_pretrained_bridge_inputs.py`。
+
+## 15.3.15 HOMER 主评测包终态（2026-09-11 00:46 JST）
+
+完整 held-out 生成已通过门禁后，已按 pinned HOMER public evaluator 生成两类评测包，
+并将 packet-builder/aggregator/test 推送到 `origin/latent` 的提交
+`275d5aa5e8b92ebcaaf6a08d3109e22946b7c0ec`。主评测包位于
+`outputs/caption_judgement/pretrained_bridge_comparison_20260911/homer_primary/`：
+
+```text
+conditions: latent_bridge, text_homer_context_replay
+images: 47
+trials: 5
+candidates/image/trial: 5
+official reference groups: 3 × 5 captions
+pairwise requests: 35,250
+judgments required: 35,250
+status: complete_packets_external_judgment_pending
+```
+
+`scripts/build_homer_primary_packets.py` 从 pinned 官方 evaluator 源码抽取 system prompt，
+公开 packet 只包含匿名 packet_id、官方 system/user prompt 和 A/B response contract；模型
+条件保存在权限受限的 private mapping 中。`scripts/aggregate_homer_primary_judgments.py`
+严格拒绝缺失、重复、额外或非 A/B 的判断，并要求每个 image×trial×reference 有完整五个
+candidate，随后输出 Caption-judgement 可直接计算官方无偏 Pass@1/3/5 的 records。
+
+当前没有任何 judgment 被写入，因此不报告 Pass@K、win rate 或 latent 质量结论。辅助
+Group-of-10 包仍是独立扩展轨道（94 个镜像 packet、三个空白 judge 模板），不能与 HOMER
+主评测混合。外部 evaluator 完成后，先聚合主 packet，再运行 `caption-judge homer-pass-at-k`，
+最后单独聚合辅助盲评。
 
 ## 0A. A3 gap 诊断后的 A4 修订（2026-09-04）
 

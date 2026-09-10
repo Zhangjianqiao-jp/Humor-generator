@@ -1,9 +1,9 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-11T00:25:00+09:00"
+observed_at: "2026-09-11T00:46:00+09:00"
 must_revalidate: true
-source_commit: 16e887ad3420e8f6318976e6b5f1f180508cccf4
+source_commit: 275d5aa5e8b92ebcaaf6a08d3109e22946b7c0ec
 branch: latent
 
 current_phase: pretrained_7b_formal_bridge_and_full_generation_complete_evaluation_pending
@@ -454,7 +454,7 @@ current_gate:
   on_failure: preserve_asset_hashes_and_update_docs_before_any_retry
 
 latest_homer_protocol_audit:
-  observed_at: "2026-09-06"
+  observed_at: "2026-09-11"
   status: adapted_pretrained_7b_not_100_percent_reproduction
   prompt_and_message_shape: pinned_public_commit_text_and_block_boundaries_smoke_pass
   stage_order: description_conflict_global_local_summary_retrieval_two_selection_caption
@@ -463,7 +463,7 @@ latest_homer_protocol_audit:
   evaluator_contract: gpt-5-chat-latest_temperature_0_pass_at_1_3_5_five_repeats
   benchmark_contract: hia_original_gpt4_turbo_overall_gpt4o_vision_best_pick_separate
   data_status: public_release_362_verified_canonical_365_unresolved_current_878_lineage_verified
-  formal_generation_status: complete_2350_records_evaluation_pending
+  formal_generation_status: complete_2350_records_packets_ready_external_evaluation_pending
   claim_boundary: >-
     Prompt/stage/retrieval interface is now auditable, but model weights,
     benchmark population and evaluation runs are not identical to HOMER paper;
@@ -616,7 +616,7 @@ program_risk_audit:
     latent benefit is claimed before the HOMER-comparable caption evaluation.
 
 immediate_gate:
-  action: build_homer_primary_and_auxiliary_blind_evaluation_packets
+  action: obtain_external_homer_primary_judgments_and_auxiliary_ratings
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -672,8 +672,33 @@ remaining_sequence_after_resource_gate:
   - compute_homer_pass_at_1_3_5_and_auxiliary_statistics
   - publish_text_homer_vs_latent_comparison_report
 
+evaluation_packets:
+  status: ready_external_judgment_pending
+  primary:
+    directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/homer_primary
+    protocol: homer_official_humorAI_pairwise_reference
+    public_prompts: homer_primary_prompts.jsonl
+    private_mapping: homer_primary_private_mapping.jsonl
+    images: 47
+    conditions: [latent_bridge, text_homer_context_replay]
+    trials: 5
+    candidates_per_image: 5
+    reference_groups: ["1-9", "200-209", "1000-1009"]
+    references_per_group: 5
+    pairwise_requests: 35250
+    source_generations_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
+    provenance_code_commit: 275d5aa5e8b92ebcaaf6a08d3109e22946b7c0ec
+    provenance_sha256: d6029994f8617c2f5cf78b3e606c8f653ac73cb2ed9c559ccb514bb3035a73f0
+  auxiliary:
+    directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/group10_auxiliary
+    protocol: project_group10_multi_rater_mirrored
+    packets: 94
+    images: 47
+    judges_required: 3
+  prohibition: no_quality_claim_before_complete_external_judgments
+
 eta:
-  scheduler_wait: full_generation_terminal_evaluation_pending
+  scheduler_wait: external_homer_judgment_pending_no_gpu_job
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
   outer_semantic_confirmation: historical_provenance_failure
@@ -700,7 +725,7 @@ next_agent_actions:
   - Full comparison generation job 6754609 completed successfully; retain its terminal stats and exact 2350-row gate.
   - Preserve the successful real generation smoke 6754567 as an engineering gate; it is not a quality result and must not be pooled with the 2350-row scientific output.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
-  - Normalized generations passed Caption-judgement schema/image validation; build blind packets and obtain external HOMER-compatible judge results next. Preference learning remains disabled in v3.5.
+  - Normalized generations passed Caption-judgement schema/image validation; primary and auxiliary blind packets are now built and audited. Obtain external HOMER-compatible judge results next, then aggregate. Preference learning remains disabled in v3.5.
 
 automation:
   tmux_session: null
