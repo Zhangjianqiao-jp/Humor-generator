@@ -70,6 +70,7 @@ SUPPORTED_REPAIR_MANIFEST_VERSIONS = {
     "pretrained-homer-context-repair-20260910-r7",
     "pretrained-homer-context-repair-20260910-r8",
     "pretrained-homer-context-repair-20260910-r9",
+    "pretrained-homer-context-repair-20260910-r10",
     REPAIR_MANIFEST_VERSION,
 }
 

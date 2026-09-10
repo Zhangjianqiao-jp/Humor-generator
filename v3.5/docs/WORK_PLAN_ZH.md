@@ -1018,3 +1018,8 @@ b-batch simplex 副本；成功前不得合并 context、训练 bridge、生成 
 `imaginator.summary` 的最多 16 次新 seed 重放，再进入未修改的 retrieval/selection/path。
 这是最后一轮有界上游恢复；若仍失败，停止重试并报告数据/协议阻塞，不得手工添加实体或放宽
 HOMER validator。
+
+`6750890` 曾在 r10 文件尚未提交时启动，已在模型加载阶段取消，未产生 context 或修改
+failure ledger；该 provenance 工程事件记为 `V35-ENG-031`。今后提交顺序固定为：本地
+manifest/脚本 gate → clean Git commit → source-commit 固定 → 确认无未提交改动 → PJM。
+因此 r11 是同一有界上游重放的唯一干净副本，完成后才允许继续 strict merge。
