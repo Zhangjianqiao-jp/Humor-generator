@@ -1,9 +1,9 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T18:02:00+09:00"
+observed_at: "2026-09-10T18:06:00+09:00"
 must_revalidate: true
-source_commit: 6e68fc27b052a771e2233d2a76318cd321bda19b
+source_commit: 9b9f40cc34ada9ab711475cedb8bff230712bb57
 branch: latent
 
 current_phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
