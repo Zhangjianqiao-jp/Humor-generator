@@ -164,6 +164,15 @@ current_state:
     canceled_at: "2026-09-10T22:51:55+09:00"
     output: outputs/pilot/pretrained_public_bridge_comparison_20260910
     evidence: v35pubgen.6754510.stats
+  last_resource_probe:
+    job_id: "6754523"
+    name: v35cgpu5
+    route: c-batch_gpu1_shared_read_only
+    status: canceled_before_execution_shared_cpu_unavailable
+    submitted_at: "2026-09-10T22:55:00+09:00"
+    estimated_start: "2026-09-11T18:00:00+09:00"
+    canceled_at: "2026-09-10T22:55:52+09:00"
+    evidence: v35cgpu5.6754523.stats
   smoke_resource_audit:
     canceled_before_execution:
       - {job_id: "6753645", route: b-batch_node1_simplex, estimated_start: "2026-09-11T02:00:00+09:00", reason: b_batch_node_free_zero}

@@ -397,3 +397,15 @@ pretrained comparison 回归测试、PJM shell 语法检查及 `git diff --check
 `b-batch + node=1`；若考虑 `c-batch + gpu=1`，必须确认 shared GPU 与 CPU 同时可用并先完成
 该资源合同的 smoke。MIG、CPU-only `a-batch` 和交互组不作为后备。详见
 `v35pubgen.6754510.stats`。
+
+## V35-SCHED-026（2026-09-10）：c-batch shared GPU 也没有可运行 CPU
+
+为验证唯一可能的非独占路线，提交了只读的 `c-batch + gpu=1`、5 分钟可见性 smoke
+`6754523`。PJM 预计启动时间为 `2026-09-11 18:00`，因此在执行前撤回；stats 显示
+`LAST STATE=QUE`、无 start、无模型和无科学输出。`pjshowrsc --rscgrp c-batch -v 3` 同时显示
+两个节点 CPU 均为 `FREE=0`；其中一个虽有 shared slot，却没有可调度 CPU。
+
+这证明 shared GPU slot 不能单独作为“可立即运行”的依据。后续资源门禁必须同时检查 GPU、
+CPU、执行策略和 PJM `START_DATE`；没有完整可运行 placement 时，不创建未经 smoke 验证的
+c-batch generation 版本。该事件不是模型、数据或方法失败，证据保存在
+`v35cgpu5.6754523.stats`。

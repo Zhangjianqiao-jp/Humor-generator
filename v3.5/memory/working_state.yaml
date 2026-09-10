@@ -593,6 +593,7 @@ immediate_gate:
   current_blockers:
     - comparison_generation_not_started
     - b_batch_node_exclusive_start_estimate_too_late
+    - c_batch_shared_cpu_unavailable
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   automatic_continuation:
     task_id: v35-complete-followup-v2
@@ -612,6 +613,9 @@ immediate_gate:
     formal/comparison copy; do not request MIG, duplicate reservations, or
     unvalidated alternatives. Comparison attempt 6754510 was canceled before
     execution after PJM estimated 2026-09-13 09:00 with no free b-batch node.
+    The c-batch shared read-only probe 6754523 was also canceled before
+    execution after PJM estimated 2026-09-11 18:00 with CPU FREE=0 on both
+    c-batch nodes.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
