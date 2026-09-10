@@ -484,6 +484,15 @@ resource_diagnosis:
       output: outputs/engineering_smoke/pretrained_public_real_trace_20260910_170314
       source_commit: a8377ad2fd7d415bc266dadabdae6305e610c066
       scientific_training: false
+  last_readonly_resource_snapshot:
+    observed_at: "2026-09-10T17:06:16+09:00"
+    b_batch_nodes: {total: 35, free: 0, allocated: 35}
+    c_batch_nodes: {total: 2, free: 0, allocated: 2}
+    b_batch_mig_nodes: {total: 2, free: 0, allocated: 2}
+    b_inter_mig_nodes: {total: 2, free: 0, allocated: 2}
+    b_reserve_nodes: {total: 4, free: 0, allocated: 4, authorized: false}
+    a_batch_nodes: {total: 1020, free: 137, allocated: 883, gpu_route: false}
+    decision: retain_6753520; no_authorized_earlier_gpu_route
   stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
   stale_session_policy: do_not_resume_or_submit
 
