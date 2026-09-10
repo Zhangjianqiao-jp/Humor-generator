@@ -829,3 +829,27 @@ seed，分片不会改变确定性 seed schedule。分片完成并通过 merger�
 `test_public_bridge_route.py` 的 `tmp_path` 修复；它没有写入新的科学 context。修复后的
 预提交门禁 commit 为 `8e5173d`（status=pass），当前有效作业为 `6739767`（shard 1）、
 `6739768`（shard 2），`6739775`（shard 0，等待第二个运行槽位）。
+
+#### 15.3.2 分片完成后的严格校验失败（2026-09-10）
+
+三个分片作业均正常加载同一 adapter-free `Qwen2.5-VL-7B-Instruct`
+（revision `cc594898...cfb5`），CUDA 门禁通过，且没有 OOM/NVML/资源错误；但作业的
+最终 shard validator 按设计以 exit code 2 退出，因为 13 条输入无法形成合法的 HOMER
+context。当前有效记录为：shard 0=`117/118`（1 failure）、shard 1=`113/118`
+（5 failures）、shard 2=`111/118`（7 failures），加上已隔离 partial 作业的 8 条，
+合计 `349/362`，canonical context 尚未生成。
+
+失败均是 Planner 生成内容经过严格解析后的 schema/语义一致性错误，不是数据缺失：
+`nycc_700` 的实体数不足两项；`nycc_575/815/579/717/892` 的 summary 不是 JSON
+object；`nycc_655/613/622` 的 summary value 不是非空字符串列表；`nycc_668/678/723`
+选择了不在 summary key 中的实体；`nycc_821` 选择了重复实体。原始分片
+`index.jsonl`、`failures.json`、作业输出和 stats 全部保留，不得手工改写或把这些行
+当成成功数据。
+
+该结果表明当前 context 生成器已有严格 fail-closed 门禁，但还缺少统一的
+validator-feedback repair。下一步只允许：保留原始 JSON，向同一 Planner 回传原始输出和
+具体校验错误，仅要求 schema/引用修复且禁止新增或人工改写语义；修复输出必须带原始输出
+hash、错误 hash、模型/prompt/seed/commit provenance，并只重试这 13 个 cluster。修复重跑
+通过 `failures.json=[]` 且三 shard 的精确 118 条校验后，才可运行 strict merger；在此之前
+禁止 bridge 训练、caption 生成和任何科学结论。详细事件见
+`docs/EXPERIMENT_FAILURES.jsonl` 的 `V35-ENG-017`。
