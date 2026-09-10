@@ -6,7 +6,7 @@ must_revalidate: true
 source_commit: 791b8c82169b69fdca6c938935efc6c5af23f56b
 branch: latent
 
-current_phase: pretrained_7b_context_validator_repair_waiting_gpu
+current_phase: pretrained_7b_context_validator_repair_running
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -130,13 +130,15 @@ context_gate:
       max_memory_mib: 6366.5
       retry_round: 3
       reason: two_ambiguous_selector_references
-    - job_id: "pending"
+    - job_id: "6750419"
       shard: 2
-      status: ready_to_submit_after_commit
+      status: running
+      submitted_at: "2026-09-10T15:04:48+09:00"
+      started_at: "2026-09-10T15:05:09+09:00"
       targets: [nycc_579, nycc_678]
       route: b-batch_node1_simplex
       retry_round: 4
-      reason: r4_manifest_scoped_residuals
+      reason: r5_manifest_scoped_residuals
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
     b-batch node=1 is allowed only as a last-resort simplex fallback when a

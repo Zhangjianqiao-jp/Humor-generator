@@ -981,3 +981,8 @@ bridge/caption 评测。
 详见 `V35-ENG-025`。已建立 r5 manifest，仅锁定这 2 条，并将下一轮提升为
 `retry-round=4`；不得放宽 lossless validator 或手工改写实体，只有两条均通过才运行
 strict merger。
+
+`6750419` 已于 `15:05:09` 在 b-batch simplex 节点启动，使用 r5、retry-round=4，
+仅处理 `nycc_579` 与 `nycc_678`。该作业是当前唯一活动副本；完成后先执行严格 shard
+post-check，再决定是否合并 362 条 context。作业运行期间不得启动 bridge、caption 或
+任何 v2.5/DPO 流程。
