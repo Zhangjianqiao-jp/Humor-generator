@@ -999,3 +999,7 @@ retry-round=6。模型、GPU 和数据门禁均无异常，bridge/caption 继续
 `6750482` 于 `15:28:34` 在模型加载前因 r7 manifest 的 `previous_error` 与当前
 `failures.json` 不逐字一致而退出（`V35-ENG-028`）；无模型权重加载、无数据写入。
 已保留 r7 证据并创建精确匹配的 r8，下一轮为 retry-round=7，仅处理 `nycc_678`。
+
+资源策略复核：b-batch simplex `6750513` 的预计启动为当日 `15:50`；c-batch 探测作业
+`6750522` 的预计启动为次日 `09/11 10:00`，因此已在执行前取消 c-batch，仅保留 b-batch
+这一份副本（`V35-SCHED-017`）。

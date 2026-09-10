@@ -1,0 +1,136 @@
+{
+  "status": "pass",
+  "scientific_training": false,
+  "real_planner_traces": true,
+  "clusters": [
+    "nycc_888",
+    "nycc_325"
+  ],
+  "selection": "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples",
+  "communication_interface": "receiver_driven_full_state_cross_attention_no_soft_prefix",
+  "samples": [
+    {
+      "cluster": "nycc_888",
+      "row_id": "humor_in_ai:888:0",
+      "image_size": [
+        4750,
+        4494
+      ],
+      "raw_image_pixels": 21346500,
+      "full_latent_tokens": 208,
+      "hard_negative_cluster": "nycc_820",
+      "encode_diagnostics": {
+        "sequence_tokens": 1501,
+        "visual_tokens": 1224,
+        "image_grid_thw": [
+          [
+            1,
+            68,
+            72
+          ]
+        ],
+        "min_visual_tokens": 256,
+        "max_visual_tokens": 1280
+      },
+      "loss": {
+        "total": 1.42226243019104,
+        "caption_nll": 1.0234375,
+        "teacher_kl": 0.0,
+        "shuffled_margin": 0.7976499199867249,
+        "matched_logp": -1.0215106010437012,
+        "shuffled_logp": -1.0224000215530396,
+        "matched_minus_shuffled_logp": 0.0008894205093383789,
+        "fraction_gap_gt_0": 1.0,
+        "fraction_gap_gt_margin": 0.0,
+        "mean_gate": 0.0996680036187172,
+        "mean_attention_entropy": 4.123065948486328,
+        "mean_relative_update_norm": 0.0034448342048563063,
+        "mean_channel_weight_conflict": 0.32567425072193146,
+        "mean_channel_weight_local": 0.3255622163414955,
+        "mean_channel_weight_global": 0.3487635627388954
+      },
+      "peak_allocated_bytes": 11904896512,
+      "peak_reserved_bytes": 12100567040
+    },
+    {
+      "cluster": "nycc_325",
+      "row_id": "electronic_sheep:325:0",
+      "image_size": [
+        432,
+        290
+      ],
+      "raw_image_pixels": 125280,
+      "full_latent_tokens": 731,
+      "hard_negative_cluster": "nycc_396",
+      "encode_diagnostics": {
+        "sequence_tokens": 1080,
+        "visual_tokens": 280,
+        "image_grid_thw": [
+          [
+            1,
+            28,
+            40
+          ]
+        ],
+        "min_visual_tokens": 256,
+        "max_visual_tokens": 1280
+      },
+      "loss": {
+        "total": 0.9065117835998535,
+        "caption_nll": 0.5078125,
+        "teacher_kl": 0.0,
+        "shuffled_margin": 0.7973986268043518,
+        "matched_logp": -0.50765061378479,
+        "shuffled_logp": -0.5089973211288452,
+        "matched_minus_shuffled_logp": 0.0013467073440551758,
+        "fraction_gap_gt_0": 1.0,
+        "fraction_gap_gt_margin": 0.0,
+        "mean_gate": 0.0996680036187172,
+        "mean_attention_entropy": 3.952811300754547,
+        "mean_relative_update_norm": 0.003265645354986191,
+        "mean_channel_weight_conflict": 0.3299068361520767,
+        "mean_channel_weight_local": 0.33363690227270126,
+        "mean_channel_weight_global": 0.3364562392234802
+      },
+      "peak_allocated_bytes": 11820905984,
+      "peak_reserved_bytes": 12117344256
+    }
+  ],
+  "hard_negative_diagnostics": {
+    "mean_description_tfidf_similarity": 0.12650168751885038,
+    "same_source_fraction": 1.0,
+    "pairs": 64.0
+  },
+  "policy_trainable_parameters": 0,
+  "bridge_trainable_parameters": 2820804,
+  "gradient_checkpointing": true,
+  "use_cache": false,
+  "min_visual_tokens": 256,
+  "max_visual_tokens": 1280,
+  "gradient_norm": 2.224698305130005,
+  "update_norm": 0.16495700180530548,
+  "last_loss": {
+    "total": 0.9065117835998535,
+    "caption_nll": 0.5078125,
+    "teacher_kl": 0.0,
+    "shuffled_margin": 0.7973986268043518,
+    "matched_logp": -0.50765061378479,
+    "shuffled_logp": -0.5089973211288452,
+    "matched_minus_shuffled_logp": 0.0013467073440551758,
+    "fraction_gap_gt_0": 1.0,
+    "fraction_gap_gt_margin": 0.0,
+    "mean_gate": 0.0996680036187172,
+    "mean_attention_entropy": 3.952811300754547,
+    "mean_relative_update_norm": 0.003265645354986191,
+    "mean_channel_weight_conflict": 0.3299068361520767,
+    "mean_channel_weight_local": 0.33363690227270126,
+    "mean_channel_weight_global": 0.3364562392234802
+  },
+  "contrastive_loss": {
+    "info_nce": 0.7612083554267883,
+    "info_nce_retrieval_at_1": 0.5,
+    "variance_floor": 0.8933480381965637
+  },
+  "peak_allocated_bytes": 11820905984,
+  "peak_reserved_bytes": 12117344256
+}

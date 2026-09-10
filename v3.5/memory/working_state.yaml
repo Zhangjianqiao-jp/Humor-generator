@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T15:28:34+09:00"
+observed_at: "2026-09-10T15:41:10+09:00"
 must_revalidate: true
 source_commit: 96a71a503ae3b8a2ec64905467c14ab03f208a9b
 branch: latent
 
-current_phase: pretrained_7b_context_validator_repair_waiting_gpu
+current_phase: pretrained_7b_context_validator_repair_queued
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -158,13 +158,15 @@ context_gate:
       route: b-batch_node1_simplex
       retry_round: 6
       reason: r7_manifest_error_string_mismatch
-    - job_id: "pending"
+    - job_id: "6750513"
       shard: 2
-      status: ready_to_submit_after_commit
+      status: queued
+      submitted_at: "2026-09-10T15:36:28+09:00"
+      estimated_start: "2026-09-10T15:50:00+09:00"
       targets: [nycc_678]
       route: b-batch_node1_simplex
       retry_round: 7
-      reason: r8_manifest_scoped_residual
+      reason: fastest_authorized_b_batch_simplex_start
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
     b-batch node=1 is allowed only as a last-resort simplex fallback when a
@@ -190,8 +192,10 @@ context_gate:
     was 09/12.  Independent retry-round 2 job 6750308 resolved nycc_821; r4
     retry-round 3 resolved five shard-2 targets, retry-round 4 resolved nycc_579,
     retry-round 5 exposed the shared truncated-fence parser defect, and job
-    6750482 rejected the r7 error-string mismatch before model load. The next
-    action is one retry-round 7 job for nycc_678 with r8, then strict merge.
+    6750482 rejected the r7 error-string mismatch before model load. Job 6750513
+    is the sole queued retry-round 7 simplex copy using r8 (the later c-batch
+    probe 6750522 was canceled before execution); next action is strict post-check
+    and merge after it exits.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json
