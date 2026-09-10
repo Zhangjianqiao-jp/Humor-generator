@@ -1,0 +1,79 @@
+#!/bin/sh
+# Current public-release HOMER + latent bridge engineering smoke only.
+# This job does not train or evaluate caption quality.  It exercises two real
+# adapter-free Planner traces through the current sealed HOMER context and
+# performs one bridge update with the receiver frozen.
+# b-batch node=1 is the fastest authorized full-device fallback observed in the
+# resource audit.  Do not add gpu=1, exec-policy=simplex or a MIG request.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+SMOKE_OUTPUT="${SMOKE_OUTPUT:?submit with -x SMOKE_OUTPUT=...}"
+mkdir -p "$SMOKE_OUTPUT"
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/check_environment.py > "$SMOKE_OUTPUT/environment.json"
+python scripts/check_v35_isolation.py > "$SMOKE_OUTPUT/isolation.json"
+python scripts/check_cuda_resource.py > "$SMOKE_OUTPUT/cuda_resource.json"
+python scripts/verify_homer_public_release_362.py > "$SMOKE_OUTPUT/population.json"
+python scripts/verify_homer_evaluation_assets.py > "$SMOKE_OUTPUT/evaluator_assets.json"
+python scripts/check_pretrained_route.py \
+  --require-data-ready --require-context-ready --require-bridge-data-ready \
+  > "$SMOKE_OUTPUT/route_gate.json"
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config configs/pilot/cross_attention_caption_pretrained_public.yaml \
+  --output "$SMOKE_OUTPUT/bridge_input_gate.json"
+python scripts/homer_public_code_smoke.py > "$SMOKE_OUTPUT/public_code_smoke.json"
+python scripts/real_trace_bridge_smoke.py \
+  --config configs/pilot/cross_attention_caption_pretrained_public.yaml \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output "$SMOKE_OUTPUT/real_trace_bridge_smoke.json"
+
+python - "$SMOKE_OUTPUT/real_trace_bridge_smoke.json" \
+  "$SMOKE_OUTPUT/bridge_input_gate.json" <<'PY'
+import json
+import sys
+
+smoke = json.load(open(sys.argv[1]))
+gate = json.load(open(sys.argv[2]))
+if smoke.get("status") != "pass" or smoke.get("scientific_training") is not False:
+    raise SystemExit(f"invalid engineering smoke status: {smoke}")
+if smoke.get("bridge_prompt_track") != "public_code_exact_caption_latent_plan_replacement_v1":
+    raise SystemExit("smoke did not use the current HOMER bridge prompt track")
+if smoke.get("context_index_records") != 362:
+    raise SystemExit("smoke did not load the sealed 362-record HOMER context")
+if smoke.get("policy_trainable_parameters") != 0:
+    raise SystemExit("receiver policy is not frozen")
+if float(smoke.get("update_norm", 0.0)) <= 0.0:
+    raise SystemExit("bridge update is zero")
+if gate.get("status") != "pass":
+    raise SystemExit("bridge input gate is not pass")
+print(json.dumps({
+    "status": "pass",
+    "scientific_training": False,
+    "prompt_track": smoke["bridge_prompt_track"],
+    "context_records": smoke["context_index_records"],
+    "policy_trainable_parameters": smoke["policy_trainable_parameters"],
+    "bridge_update_norm": smoke["update_norm"],
+    "peak_allocated_bytes": smoke.get("peak_allocated_bytes"),
+}, sort_keys=True))
+PY
+
+touch "$SMOKE_OUTPUT/complete.json"

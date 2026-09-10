@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -33,6 +34,11 @@ from humor_generator_v35.training.formal_bridge import (
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
 from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
+from humor_generator_v35.training.public_bridge import (
+    PUBLIC_BRIDGE_PROMPT_TRACK,
+    load_context_index,
+    validate_row_context,
+)
 from train_bridge import fixed_hash_sample_clusters
 
 
@@ -98,6 +104,28 @@ def main() -> None:
     else:
         negative_map, negative_diagnostics = hard_negative_cluster_map(rows, traces)
 
+    # The current public-code route must exercise the same sealed HOMER
+    # summary/retrieval/selection context as the formal trainer.  Falling back
+    # to the legacy zero-prefix/text-plan prompt here would make a seemingly
+    # successful smoke a protocol mismatch, so load and validate the context
+    # before touching the receiver weights.
+    prompt_mode = str(config.get("protocol", {}).get("bridge_prompt_track", "legacy"))
+    context_index = None
+    context_index_path = None
+    if prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK:
+        context_value = config.get("data", {}).get("context_index")
+        if not isinstance(context_value, str) or not context_value:
+            raise RuntimeError("current public bridge smoke requires data.context_index")
+        context_index_path = ROOT / context_value
+        context_index = load_context_index(context_index_path)
+        for row in smoke_rows:
+            context = context_index.get(str(row["cluster_id"]))
+            if context is None:
+                raise RuntimeError(f"missing current HOMER context: {row['cluster_id']}")
+            validate_row_context(row, context)
+    elif prompt_mode != "legacy":
+        raise RuntimeError(f"unsupported bridge prompt track: {prompt_mode}")
+
     adapter = config["model"].get("adapter")
     backend = QwenBackend.load(
         config["model"]["name"], revision=config["model"]["revision"],
@@ -152,6 +180,8 @@ def main() -> None:
             semantic_prompt_include_image=bool(
                 config["training"].get("semantic_prompt_include_image", True)
             ),
+            prompt_mode=prompt_mode,
+            context_index=context_index,
         )
         if baseline == "receiver_cross_attention"
         else FrozenReceiverBridgeTask(
@@ -264,6 +294,15 @@ def main() -> None:
         "communication_interface": (
             "receiver_driven_full_state_cross_attention_no_soft_prefix"
             if baseline == "receiver_cross_attention" else "input_soft_prefix"
+        ),
+        "bridge_prompt_track": prompt_mode,
+        "context_index": (
+            None if context_index_path is None else str(context_index_path.relative_to(ROOT))
+        ),
+        "context_index_records": None if context_index is None else len(context_index),
+        "context_index_sha256": (
+            None if context_index_path is None
+            else hashlib.sha256(context_index_path.read_bytes()).hexdigest()
         ),
         "channel_visibility": config["loss"].get("channel_visibility", "all"),
         "semantic_prompt_include_image": config["training"].get(

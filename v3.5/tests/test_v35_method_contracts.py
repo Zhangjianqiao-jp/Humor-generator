@@ -180,6 +180,9 @@ def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
     assert 'config["bridge"]["layer_indices"]' in smoke
     assert 'config["bridge"]["receiver_layers"]' not in smoke
     assert "configure_frozen_receiver" in smoke
+    assert "load_context_index" in smoke
+    assert "validate_row_context" in smoke
+    assert "prompt_mode=prompt_mode" in smoke
     # Donor selection branches on the experiment baseline and must not read
     # it before the assignment (a prior GPU submission failed at this point).
     assert smoke.index('baseline = config["experiment"]["baseline"]') < smoke.index(
@@ -199,6 +202,19 @@ def test_formal_job_is_fail_closed_in_smoke_data_gpu_train_order() -> None:
         '"scripts/verify_clustered_dataset.py"'
     )
     assert '"scripts/check_trace_completion.py"' in checker
+
+
+def test_current_pretrained_bridge_smoke_is_public_route_and_training_free() -> None:
+    job = (ROOT / "jobs/pretrained_bridge_real_trace_smoke_bsimplex.pjm").read_text()
+    assert "#PJM -L rscgrp=b-batch" in job
+    assert "#PJM -L node=1" in job
+    assert "#PJM -L gpu=1" not in job
+    assert "cross_attention_caption_pretrained_public.yaml" in job
+    assert "--require-context-ready --require-bridge-data-ready" in job
+    assert "verify_pretrained_bridge_inputs.py" in job
+    assert "real_trace_bridge_smoke.py" in job
+    assert "scientific_training" in job
+    assert "train_bridge.py" not in job
 
 
 def test_a4_smoke_is_separate_and_has_no_scientific_training() -> None:
