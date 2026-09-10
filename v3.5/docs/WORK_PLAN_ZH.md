@@ -880,3 +880,8 @@ scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以�
 `check_cuda_resource.py` 会在模型加载前 fail-closed，不得改成多 GPU 或绕过 manifest
 门禁。shared 作业显式声明 `#PJM -P exec-policy=share`，并在提交后用 `pjstat` 核对
 预计启动时间；任何被排到未来时段的重复副本均在模型加载前取消并记录。
+
+随后只读检查发现 `b-reserve` 有 1 个空闲节点（100/112 GPU units free），故当前最快
+候选为 `jobs/repair_pretrained_homer_context_breserve.pjm` 的单节点独占 wrapper；它
+复用同一修复脚本，不改变数据/模型/seed。该组若提交权限或调度策略不满足，作业应在
+preflight 前失败，不能再并行提交其他副本。

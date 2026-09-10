@@ -1,0 +1,14 @@
+#!/bin/sh
+# Fast fallback for a genuinely free b-reserve node.  The delegated script
+# performs the same preflight and bounded three-shard repair; this wrapper only
+# changes the scheduler contract to node-exclusive b-reserve.
+#PJM -L rscgrp=b-reserve
+#PJM -L node=1
+#PJM -L elapse=00:45:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+export CUDA_VISIBLE_DEVICES=0
+exec sh jobs/repair_pretrained_homer_context_bbatch.pjm
