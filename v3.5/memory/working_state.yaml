@@ -1,7 +1,7 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T18:09:00+09:00"
+observed_at: "2026-09-10T20:15:00+09:00"
 must_revalidate: true
 source_commit: 3c195b35ab6789834283a2bf8aa20e253503d2d8
 branch: latent
@@ -477,18 +477,26 @@ resource_diagnosis:
   current_policy: one_full_gpu_native_allocator_cuda0
   active_jobs: []
   last_readonly_resource_snapshot:
-    observed_at: "2026-09-10T17:06:16+09:00"
-    b_batch_nodes: {total: 35, free: 0, allocated: 35}
-    b_batch_gpu: {total: 980, free: 840, allocated: 140}
+    observed_at: "2026-09-10T20:13:00+09:00"
+    b_batch_nodes: {total: 35, free: 1, allocated: 34}
+    b_batch_gpu: {total: 980, free: 847, allocated: 133}
     c_batch_nodes: {total: 2, free: 0, allocated: 2}
     c_batch_gpu: {total: 56, free: 40, allocated: 16}
     b_batch_mig_nodes: {total: 2, free: 0, allocated: 2}
     b_inter_mig_nodes: {total: 2, free: 0, allocated: 2}
-    b_reserve_nodes: {total: 4, free: 0, allocated: 4, authorized: false}
-    a_batch_nodes: {total: 1020, free: 137, allocated: 883, gpu_route: false}
-    decision: retain_b_batch_node1_only_for_next_clean_submission; no_authorized_earlier_gpu_route
+    b_reserve_nodes: {total: 4, free: 1, allocated: 3, authorized: false}
+    a_batch_nodes: {total: 1020, free: 144, allocated: 876, gpu_route: false}
+    decision: replace_oversized_smoke_with_10_minute_b_batch_node1_request; keep_one_copy
   stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
   stale_session_policy: do_not_resume_or_submit
+  last_smoke_rightsizing:
+    canceled_job: "6753754"
+    canceled_at: "2026-09-10T20:15:00+09:00"
+    reason: one_hour_request_marked_short_job_false_and_predicted_04_00
+    evidence: v35pubsmok.6753754.stats
+    replacement_script: jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm
+    replacement_walltime: "00:10:00"
+    replacement_status: pending_submission_after_clean_commit
 
 native_full_gpu_fix:
   scope: historical_p1_not_current

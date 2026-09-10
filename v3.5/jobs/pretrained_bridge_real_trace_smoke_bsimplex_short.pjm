@@ -1,0 +1,81 @@
+#!/bin/sh
+# Current public-release HOMER + latent bridge engineering smoke only.
+# This is the same protocol as pretrained_bridge_real_trace_smoke_bsimplex.pjm,
+# but uses the measured 10-minute bound so the node-exclusive request can be
+# backfilled as a short job.  It never trains/evaluates caption quality.
+# b-batch node=1 supplies the full device; do not add gpu=1, exec-policy or MIG.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=00:10:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+SMOKE_OUTPUT="${SMOKE_OUTPUT:?submit with -x SMOKE_OUTPUT=...}"
+mkdir -p "$SMOKE_OUTPUT"
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+python scripts/run_pretrained_bridge_preflight.py \
+  --output "$SMOKE_OUTPUT/cpu_preflight.json"
+python scripts/check_cuda_resource.py > "$SMOKE_OUTPUT/cuda_resource.json"
+cp results/preflight/pretrained_bridge_inputs_public.json "$SMOKE_OUTPUT/bridge_input_gate.json"
+python scripts/check_pretrained_route.py \
+  --require-data-ready --require-context-ready --require-bridge-data-ready \
+  > "$SMOKE_OUTPUT/route_gate.json"
+python scripts/real_trace_bridge_smoke.py \
+  --config configs/pilot/cross_attention_caption_pretrained_public.yaml \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output "$SMOKE_OUTPUT/real_trace_bridge_smoke.json"
+
+python - "$SMOKE_OUTPUT/cpu_preflight.json" \
+  "$SMOKE_OUTPUT/cuda_resource.json" \
+  "$SMOKE_OUTPUT/route_gate.json" \
+  "$SMOKE_OUTPUT/real_trace_bridge_smoke.json" \
+  "$SMOKE_OUTPUT/bridge_input_gate.json" <<'PY'
+import json
+import sys
+
+cpu, cuda, route, smoke, bridge = [json.load(open(path)) for path in sys.argv[1:]]
+if cpu.get("status") != "pass":
+    raise SystemExit(f"CPU preflight did not pass: {cpu}")
+if cuda.get("status") != "pass":
+    raise SystemExit(f"CUDA resource gate did not pass: {cuda}")
+if route.get("status") != "pass":
+    raise SystemExit(f"current public route gate did not pass: {route}")
+if smoke.get("status") != "pass" or smoke.get("scientific_training") is not False:
+    raise SystemExit(f"invalid engineering smoke status: {smoke}")
+if smoke.get("bridge_prompt_track") != "public_code_exact_caption_latent_plan_replacement_v1":
+    raise SystemExit("smoke did not use the current HOMER bridge prompt track")
+if smoke.get("context_index_records") != 362:
+    raise SystemExit("smoke did not load the sealed 362-record HOMER context")
+if smoke.get("policy_trainable_parameters") != 0:
+    raise SystemExit("receiver policy is not frozen")
+if float(smoke.get("update_norm", 0.0)) <= 0.0:
+    raise SystemExit("bridge update is zero")
+if bridge.get("status") != "pass":
+    raise SystemExit(f"bridge input gate did not pass: {bridge}")
+print(json.dumps({
+    "status": "pass",
+    "scientific_training": False,
+    "prompt_track": smoke["bridge_prompt_track"],
+    "context_records": smoke["context_index_records"],
+    "policy_trainable_parameters": smoke["policy_trainable_parameters"],
+    "bridge_update_norm": smoke["update_norm"],
+    "peak_allocated_bytes": smoke.get("peak_allocated_bytes"),
+}, sort_keys=True))
+PY
+
+touch "$SMOKE_OUTPUT/complete.json"

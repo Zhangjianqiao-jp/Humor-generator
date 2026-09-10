@@ -1084,6 +1084,11 @@ node（`0/35`）而在执行前取消。随后探测作业 `6753705` 试图使�
 ```
 
 `a-batch` CPU 空闲、`b-inter` 交互组和 MIG 组都不是本次后台 CUDA smoke 的自动后备。
-修改/记录完成后，重新从 clean commit 只提交一份 `jobs/pretrained_bridge_real_trace_smoke_bsimplex.pjm`
-（`b-batch + node=1`，不叠加 `gpu=1` 或 `exec-policy=simplex`）；启动前再次检查
-`pjstat -v`，通过后才允许 bridge-only formal training。
+原 `jobs/pretrained_bridge_real_trace_smoke_bsimplex.pjm` 的 `1 小时` walltime 会被 PJM
+标记为 `short-job=false`，与历史同类真实 smoke 的 `2--4 分钟`实际耗时不匹配。作业
+`6753754` 于 20:15 在执行前撤回并保留 `.stats`；没有模型加载、CUDA forward 或科学输出。
+现已新增 `jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm`，只把同一协议的
+walltime 收紧为 `10 分钟`，并额外检查 `cpu_preflight`、`cuda_resource`、`route_gate`、
+`bridge_input_gate` 均为 `pass` 后才写入 `complete.json`。提交时仍只允许一份
+`b-batch + node=1`（不叠加 `gpu=1` 或 `exec-policy=simplex`），启动前再次读取 PJM
+预计时间；通过后才允许 bridge-only formal training。详见 `V35-SCHED-023`。

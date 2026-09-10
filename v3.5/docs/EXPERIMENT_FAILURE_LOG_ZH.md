@@ -213,6 +213,20 @@ manifest、model revision、HOMER base prompt 和 repair policy，最多 32 次�
 
 ## 权威依据
 
+## V35-SCHED-023（2026-09-10）：smoke walltime 过大，按实测耗时收紧
+
+当前 public-route smoke `6753754` 使用 `b-batch + node=1`、1 小时上限，PJM 将其标记为
+`short-job=false`，并给出 09/11 04:00 的预计启动时间。根据同一路线历史真实 smoke
+`6708113` 的统计，实际耗时为 2 分 1 秒（5 分钟上限）。因此 `6753754` 在执行前撤回，
+保留 `v35pubsmok.6753754.stats` 与提交清单；没有模型加载、CUDA forward、数据写入或科学
+输出。这不是方法失败，而是 walltime 申请与实测 workload 不匹配。
+
+已新增 `jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm`：协议、模型、数据、
+CUDA/native allocator 和所有 fail-closed 门禁不变，只将上限收紧至 10 分钟，并在写入
+`complete.json` 前显式确认 CPU preflight、CUDA、route、bridge-input 及真实 trace smoke
+均为 `pass`。下一次只允许提交这一个短作业，并重新比较 PJM `START_DATE`；详见
+`docs/EXPERIMENT_FAILURES.jsonl` 中的 `V35-SCHED-023`。
+
 ## V35-ENG-011（2026-09-05）：A5 重跑被残留空输出目录保护性拒绝
 
 提交 A5 修正版作业 `6712296` 后，作业在任何模型加载或 GPU forward 之前退出，日志为
