@@ -50,7 +50,7 @@ data_contract:
   current_population_status: verified_public_release_362
   current_population_key: [dataset, contest_number, image_sha256]
   current_population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
-  current_trace_index: null
+  current_trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   current_trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
   historical_bridge_manifest: data/processed/latent_bridge_v35/manifest.json
   manifest: null
@@ -72,22 +72,26 @@ data_contract:
     unique_images: 949
     upstream_source_files: 367
     image_clusters: 810
-    planner_traces: 666
+    planner_traces: 362
+    historical_planner_traces: 666
     policy: compile_and_cli_smoke_then_byte_schema_decode_tensor_provenance_audit
   blockers:
-    - current_pretrained_trace_cache_not_generated
+    - context_validator_repair_13_residual_clusters
+    - canonical_pretrained_context_not_merged
+    - bridge_training_view_not_built
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   historical_manifest_policy: >-
     The old latent_bridge_v35 manifest is retained only for provenance and
     mechanism-pilot analysis; it is not a current population or training input.
 
 trace_contract:
-  index: null
+  index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   historical_index: data/cache/planner_traces_homer_strict_v35/index.jsonl
   current_route: pretrained_7b_homer_public_code
-  required_clusters: null
+  required_clusters: 362
   historical_required_clusters: 666
   required_schema: 3
+  status: complete_adapter_free_362_of_362
   validation:
     - At least two explicit conflict pairs.
     - Every association is exactly root-to-step1-to-step2-to-step3.
@@ -101,6 +105,33 @@ trace_contract:
       - Preserve semantic strings exactly.
       - Replay repaired text under the original HOMER prompt.
       - Record both invalid and repaired outputs and repair provenance.
+
+current_state:
+  observed_at: "2026-09-10T13:27:00+09:00"
+  source_commit: 2826ccbb67880417021acbfc937dbbaafb42c296
+  phase: pretrained_7b_context_validator_repair_waiting_authorized_gpu
+  trace_gate: {status: ready, records: 362, required: 362, adapter: null}
+  context_gate:
+    status: blocked_pending_bounded_repair
+    records: 349
+    required: 362
+    residual_failures: 13
+    partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
+    shards: {shard_0: "117/118", shard_1: "113/118", shard_2: "111/118"}
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910.json
+    repair_policy: validator-feedback-format-only-v1
+  bridge_gate: blocked_context_not_complete
+  active_jobs: []
+  last_scheduler_attempt:
+    job_id: "6749312"
+    route: b-batch_shared_gpu1
+    status: canceled_before_execution
+    estimated_start: "2026-09-12T21:00:00+09:00"
+    reason: faster_start_not_available
+  next_action: >-
+    Wait for an authorized b-batch/c-batch GPU allocation with an earlier start;
+    submit exactly one bounded repair copy, then require 362/362 context merge
+    before building bridge inputs or starting any bridge/caption evaluation.
 
 conditions:
   text:
@@ -130,8 +161,8 @@ experiment_plan:
     - id: T
       name: formal_train_validation_traces
       status: complete
-      exit_gate: exactly_666_validated_traces
-      evidence: data/cache/planner_traces_homer_strict_v35/index.jsonl
+      exit_gate: exactly_362_validated_adapter_free_traces
+      evidence: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
     - id: R
       name: corrected_legacy_bridge_counterfactual_review
       status: complete_inconclusive

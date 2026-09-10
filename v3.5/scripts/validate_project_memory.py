@@ -41,8 +41,10 @@ def main() -> None:
     if len(phase_ids) != len(set(phase_ids)):
         raise ValueError("experiment phase IDs must be unique")
     trace_contract = project["trace_contract"]
-    if trace_contract.get("required_clusters") is not None:
-        raise ValueError("current trace gate must remain unknown until the population allow-list is materialized")
+    if trace_contract.get("required_clusters") != 362:
+        raise ValueError("current public-release trace gate must require exactly 362 clusters")
+    if trace_contract.get("status") != "complete_adapter_free_362_of_362":
+        raise ValueError("current adapter-free Planner trace gate must be explicitly complete")
     if trace_contract.get("historical_required_clusters") != 666:
         raise ValueError("historical 666-cluster trace evidence must remain explicitly labelled")
     if project["evaluation"]["pilot"]["role"] != "screening_only":

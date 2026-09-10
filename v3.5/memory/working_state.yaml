@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-06T17:26:48+09:00"
+observed_at: "2026-09-10T13:28:00+09:00"
 must_revalidate: true
-source_commit: e6763d6a2314fd2da7f1ee2ec9a1512710d7eb2f
+source_commit: 2826ccbb67880417021acbfc937dbbaafb42c296
 branch: latent
 
-current_phase: pretrained_7b_public_release_362_ready_trace_pending
+current_phase: pretrained_7b_context_validator_repair_waiting_gpu
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -14,8 +14,8 @@ preference_learning:
     DPO/SimPO/IPO and preference-pair work belong to the superseded v2.5 plan;
     do not import, execute or submit those jobs in v3.5.
 trace_gate:
-  status: historical_sft_trace_passed_current_pretrained_population_trace_pending
-  available: 0
+  status: current_pretrained_adapter_free_passed
+  available: 362
   required: 362
   historical_available: 666
   current_population_count: 362
@@ -25,8 +25,32 @@ trace_gate:
     was enabled but was not invoked in either final accepted trace. These traces
     use the superseded SFT/legacy prompt route and are not valid inputs for the
     current pretrained-only HOMER protocol.
-  current_route_index: null
-  current_route_required: source_aware_pretrained_7b_trace_rebuild_after_population_gate
+  current_route_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
+  current_route_required: complete_post_trace_homer_context_before_bridge
+
+context_gate:
+  status: blocked_pending_bounded_repair
+  available: 349
+  required: 362
+  partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
+  shard_records: {shard_0: "117/118", shard_1: "113/118", shard_2: "111/118"}
+  residual_failures: 13
+  repair_manifest: manifests/pretrained_homer_context_repair_20260910.json
+  repair_policy: validator-feedback-format-only-v1
+  repair_jobs:
+    - job_id: "6749312"
+      shard: 0
+      status: canceled_before_execution
+      route: b-batch_shared_gpu1
+      estimated_start: "2026-09-12T21:00:00+09:00"
+      reason: faster_start_not_available
+  canonical_context: null
+  bridge_training_manifest: null
+  interpretation: >-
+    Trace generation is complete and valid.  The 13 residual failures are
+    strict summary/entity schema-consistency errors, not model/GPU failures.
+    Only lossless validator-feedback repair is allowed; no semantic rewriting,
+    full rerun, bridge training or caption evaluation may start before 362/362.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json
@@ -196,7 +220,7 @@ a4_channel_isolated_repair:
 
 current_gate:
   name: pretrained_7b_homer_population_and_protocol_gate
-  status: population_ready_trace_pending
+  status: context_repair_blocked
   job_id: null
   config: configs/homer_public_code_pretrained_7b.yaml
   job_script: null
@@ -206,12 +230,13 @@ current_gate:
     - full description/conflict/global/local/summary/retrieval/selection/caption ledger
     - source-aware public HIA population manifest (`public_release_362`) and its verified 362-ID allow-list
     - canonical 365 allow-list remains a separate unresolved paper-level claim
-    - pretrained-only trace cache generated after the above gates
+    - pretrained-only trace cache generated after the above gates (passed 362/362)
+    - complete post-trace context cache generated from the same Planner traces
     - zero-adapter Qwen online/replay smoke on representative images
   failed_attempt_id: "6711036"
   failed_attempt_status: terminated_by_monitoring_error_no_scientific_output
   replacement_status: public_release_362_verified
-  on_pass: pretrained_trace_rebuild_and_bridge_pilot_is_unlocked
+  on_pass: context_merge_then_bridge_dataset_build_and_bridge_pilot_is_unlocked
   on_failure: preserve_asset_hashes_and_update_docs_before_any_retry
 
 latest_homer_protocol_audit:
@@ -300,18 +325,23 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, official evaluator-asset check and full preflight.
     - Run zero-adapter Qwen smoke before any bridge-only GPU pilot.
   current_blockers:
-    - pretrained_trace_cache_not_generated
+    - context_validator_repair_13_residual_clusters
+    - canonical_context_not_merged
+    - bridge_training_view_not_built
   resource_request_note: >-
-    Do not submit a GPU job while any current_blocker remains. When unlocked, use
-    one full GPU with native allocator and CUDA_VISIBLE_DEVICES=0; MIG and duplicate
-    reservations remain forbidden by the recorded allocator incident.
+    The bounded repair job is the sole current GPU exception: it is inference-only,
+    one GPU, and scoped by the tracked repair manifest. Do not submit bridge or
+    caption training while context blockers remain. MIG and duplicate reservations
+    remain forbidden by the recorded allocator incident.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
 
 remaining_sequence_after_resource_gate:
   - verify_public_release_362_allowlist_and_population
-  - regenerate_pretrained_7b_homer_traces
+  - verify_current_pretrained_homer_traces
+  - repair_and_merge_pretrained_homer_context
+  - build_and_verify_current_bridge_training_view
   - zero_adapter_online_and_standard_replay_smoke
   - bridge_only_mechanism_pilot
   - held_out_caption_generation_and_homer_comparable_evaluation

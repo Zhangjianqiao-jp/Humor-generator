@@ -886,3 +886,11 @@ scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以�
 `jobs/repair_pretrained_homer_context_breserve.pjm` 只作为 guarded fallback 保存，不得
 再次尝试或伪造 reservation ID；在 b-batch/c-batch 给出可运行的授权 GPU 前，不提交新的
 重复副本。
+
+13:26 的再次验证提交 `6749312` 使用了 `b-batch + gpu=1 + exec-policy=share`，但
+`pjstat -v` 预计启动时间为 09/12 21:00；`pjshowrsc` 同时显示当前空闲 b-batch 节点仅
+暴露 `simplex/true`，没有可立即调度的 `shared/true` 节点。该作业在模型启动前以
+`faster_start_not_available` 删除，未产生 stdout、模型加载或数据写入（详见
+`V35-SCHED-014`）。因此当前没有活动 repair job；后续只在只读审计同时证明
+`shared/true`/node-exclusive 合同可用且预计启动时间足够早时提交一个副本。空闲 GPU
+总量不能替代 per-node capability 和 start estimate 检查；禁止继续堆叠队列作业。
