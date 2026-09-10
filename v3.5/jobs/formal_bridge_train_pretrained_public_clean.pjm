@@ -43,6 +43,15 @@ python scripts/verify_pretrained_bridge_inputs.py \
   --config "$CONFIG" \
   --output "$BRIDGE_OUTPUT/bridge_input_gate.json"
 
+# Re-run the real-trace engineering gate inside the formal allocation as a
+# dependency-safe guard.  This prevents a manually submitted formal job from
+# starting scientific optimization if the earlier queued smoke was canceled
+# or its output was stale.
+python scripts/real_trace_bridge_smoke.py \
+  --config "$CONFIG" \
+  --trace-index "$CACHE/index.jsonl" \
+  --output "$BRIDGE_OUTPUT/real_trace_bridge_smoke.json"
+
 python - "$BRIDGE_OUTPUT" "$CONFIG" <<'PY'
 import hashlib
 import json
@@ -55,12 +64,17 @@ config = Path(sys.argv[2])
 route = json.loads((out / "route_gate.json").read_text())
 trace = json.loads((out / "trace_gate.json").read_text())
 bridge = json.loads((out / "bridge_input_gate.json").read_text())
+smoke = json.loads((out / "real_trace_bridge_smoke.json").read_text())
 if route.get("status") != "pass":
     raise SystemExit("current public route gate did not pass")
 if trace.get("status") != "pass" or trace.get("records") != 362:
     raise SystemExit(f"trace gate is not 362/362: {trace}")
 if bridge.get("status") != "pass":
     raise SystemExit(f"bridge input gate did not pass: {bridge}")
+if smoke.get("status") != "pass" or smoke.get("scientific_training") is not False:
+    raise SystemExit(f"real trace engineering smoke did not pass: {smoke}")
+if smoke.get("policy_trainable_parameters") != 0 or float(smoke.get("update_norm", 0.0)) <= 0.0:
+    raise SystemExit(f"real trace smoke did not prove frozen receiver and bridge update: {smoke}")
 commit = subprocess.run(
     ["git", "rev-parse", "HEAD"], check=True, text=True,
     capture_output=True,
