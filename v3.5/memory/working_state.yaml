@@ -199,9 +199,11 @@ context_gate:
       retry_round: 9
       attempts: 16
       reason: canceled_uncommitted_provenance_before_scientific_output
-    - job_id: pending_clean_commit
+    - job_id: "6751524"
       shard: 2
-      status: ready_to_submit_after_commit
+      status: queued
+      submitted_at: "2026-09-10T16:08:19+09:00"
+      estimated_start: "2026-09-10T16:08:00+09:00"
       targets: [nycc_678]
       route: b-batch_node1_simplex
       retry_round: 10
@@ -236,9 +238,10 @@ context_gate:
     loaded the model but left the two-candidate validator residual (V35-ENG-029).
     Job 6750588 loaded the model but left the single-key summary residual (V35-ENG-030).
     Job 6750890 was canceled during model loading before scientific output because
-    its r10 files were not committed (V35-ENG-031). After the clean commit, one
-    final retry-round 10 simplex copy using r11 with at most 16 fresh attempts is
-    allowed; the later c-batch probe 6750522 was canceled before execution.
+    its r10 files were not committed (V35-ENG-031). After the clean commit, job
+    6751524 is the sole queued retry-round 10 simplex copy using r11 with at most
+    16 fresh attempts; the later c-batch probe 6750522 was canceled before
+    execution.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json
