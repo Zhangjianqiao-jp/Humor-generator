@@ -1,11 +1,11 @@
 #!/bin/sh
 # Bounded validator-feedback repair for the 13 residual context records.
-# This node-exclusive route intentionally runs the three disjoint shard
-# repairs serially on one allocated GPU because b-batch currently has a free
-# node while c-batch is full.  It never broadens beyond the tracked manifest.
+# This short shared-GPU route runs the three disjoint shard repairs serially
+# because b-batch currently has free GPU units while c-batch is full.  It
+# never broadens beyond the tracked manifest.
 #PJM -L rscgrp=b-batch
-#PJM -L node=1
-#PJM -L elapse=01:00:00
+#PJM -L gpu=1
+#PJM -L elapse=00:45:00
 #PJM -j
 #PJM -S
 
@@ -21,9 +21,9 @@ export PYTHONUNBUFFERED=1
 export TOKENIZERS_PARALLELISM=false
 export PYTORCH_ALLOC_CONF=backend:native
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-# b-batch + node=1 is node-exclusive; exposing one ordinal is safe here and
-# prevents the 7B process from initializing every GPU on the reserved node.
-export CUDA_VISIBLE_DEVICES=0
+# The scheduler must expose exactly one native GPU.  Do not overwrite
+# CUDA_VISIBLE_DEVICES in shared mode; check_cuda_resource.py fails closed if
+# the allocation is not isolated.
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
 

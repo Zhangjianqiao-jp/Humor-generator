@@ -873,7 +873,9 @@ commit 都保存于 context record/failures evidence。
 构建 bridge training view 并通过 `--require-bridge-data-ready`，才允许 bridge/caption
 训练和 pure-text HOMER 对比。
 
-本次提交前的只读资源检查显示 c-batch 当前无空闲节点，而 b-batch 有 1 个空闲节点；
-因此优先采用 `jobs/repair_pretrained_homer_context_bbatch.pjm`：一次节点独占、仅暴露
-一张 GPU，串行修复三个 shard。该选择只改变调度合同，不改变模型、prompt、seed 或数据
-范围；若 b-batch 节点在调度前被占用，作业应等待，不得改成多 GPU 或绕过 manifest 门禁。
+本次提交前的只读资源检查显示 c-batch 当前无空闲节点，而 b-batch 有大量空闲 GPU
+units；因此优先采用 `jobs/repair_pretrained_homer_context_bbatch.pjm`：仅申请一张
+scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以便 backfill。该选择只
+改变调度合同，不改变模型、prompt、seed 或数据范围；若调度器无法提供单卡可见性，
+`check_cuda_resource.py` 会在模型加载前 fail-closed，不得改成多 GPU 或绕过 manifest
+门禁。
