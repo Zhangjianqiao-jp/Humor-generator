@@ -961,3 +961,10 @@ bridge 训练、caption 生成和科学评测继续保持 fail-closed。
 策略取消（`V35-SCHED-016`）；b-batch 的 aggregate GPU FREE 数不能替代 shared 节点的
 实际 backfill 能力。随后提交唯一的 simplex 后备 `6750288`（b-batch、node=1、CUDA 0、
 30 分钟，预计 `09/10 15:00`），只处理 shard-1 的 `nycc_821`，不得与其他副本并行。
+
+`6750288` 于 `14:30:30` 启动并在 `14:33:27` 结束，CUDA、population、trace 和模型加载均
+通过，但仍返回 `nycc_821`。复核发现它沿用了 `--retry-round 1`，与 `6749861` 使用完全相同
+的 seed namespace，故这不是独立随机重试；事件记录为 `V35-ENG-023`。r3 manifest 的
+failure-ledger hash 未变化，因此保留 r3，只把全部 repair entrypoint 的 retry-round 改为
+`2`，并再次限制为该单条 residual。未通过严格 shard validator 前，不得合并或进入
+bridge/caption 评测。

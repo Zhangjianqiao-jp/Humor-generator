@@ -50,7 +50,7 @@ python scripts/cache_pretrained_homer_context.py \
   --enable-validator-repair \
   --repair-attempts 2 \
   --attempts 2 \
-  --retry-round 1 \
+  --retry-round 2 \
   --seed 20260906 \
   --temperature 1.0 \
   --top-p 1.0

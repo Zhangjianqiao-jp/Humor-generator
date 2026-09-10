@@ -96,12 +96,22 @@ trace_gate:
       reason: faster_start_not_available
     - job_id: "6750288"
       shard: 1
-      status: queued
+      status: completed_with_residual_failure
       route: b-batch_node1_simplex
       submitted_at: "2026-09-10T14:29:00+09:00"
-      estimated_start: "2026-09-10T15:00:00+09:00"
-      exit_code: null
-      reason: fastest_available_bounded_retry
+      started_at: "2026-09-10T14:30:30+09:00"
+      ended_at: "2026-09-10T14:33:27+09:00"
+      exit_code: 2
+      records: "117/118"
+      residual_failures: 1
+      reason: repeated_retry_round_seed_namespace
+    - job_id: "pending"
+      shard: 1
+      target: nycc_821
+      status: ready_to_submit_after_commit
+      route: b-batch_node1_simplex
+      retry_round: 2
+      reason: retry_round_1_was_not_independent
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
     b-batch node=1 is allowed only as a last-resort simplex fallback when a
@@ -124,8 +134,9 @@ trace_gate:
     bounded scope is shard-1 (1) plus shard-2 (7), with 354/362 records before
     the next retry.  Manifest r3 pins the current eight failure rows and hashes;
     no semantic hand-mapping is allowed.  Shared job 6750287 was canceled before
-    execution because its start estimate was 09/12; simplex retry 6750288 is
-    currently queued for the earliest observed 09/10 15:00 slot.
+    execution because its start estimate was 09/12.  Simplex retry 6750288 ran
+    with the accidentally repeated retry-round 1 and left nycc_821 unchanged;
+    all entrypoints now use retry-round 2 for the next single-target retry.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json

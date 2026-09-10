@@ -126,29 +126,33 @@ current_state:
   last_scheduler_attempt:
     job_id: "6750288"
     route: b-batch_node1_simplex
-    status: queued
+    status: completed_with_residual_failure
     submitted_at: "2026-09-10T14:29:00+09:00"
-    estimated_start: "2026-09-10T15:00:00+09:00"
-    exit_code: null
-    reason: fastest_available_bounded_retry
+    started_at: "2026-09-10T14:30:30+09:00"
+    ended_at: "2026-09-10T14:33:27+09:00"
+    exit_code: 2
+    records: "117/118"
+    residual_failures: 1
+    reason: repeated_retry_round_seed_namespace
     supersedes_delayed_job: "6750287"
-    evidence: v3.5/repair_pretrained_homer_context_bgpu_short.pjm.6750287.stats
+    evidence: v3.5/repair_pretrained_homer_context_bsimplex_short.pjm.6750288.{out,stats}
   last_repair_result:
     status: manifest_versioned_after_residual_retry
     failure_records:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-019
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-020
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-022
+      - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-023
     success_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-021
     residual_context_records: 354/362 (partial=8, shard-1=117/118, shard-2=111/118)
     repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
-    next_action: monitor_6750288_then_rerun_only_manifest_scoped_residuals_shard_2
+    next_action: commit_retry_round_2_then_rerun_only_nycc_821
   next_action: >-
-    Parser fix, versioned manifests, and shard-0 repair are complete. Shard-1 job
-    6749861 left one strict selector residual; r3 scopes only the current eight
-    failures. Shared retry 6750287 was canceled before its delayed start; simplex
-    retry 6750288 is queued for the earliest observed slot. Require 362/362
-    context merge before building bridge inputs or starting bridge/caption work.
+    Parser fix, versioned manifests, and shard-0 repair are complete. Shard-1 jobs
+    6749861 and 6750288 left the same strict selector residual because 6750288
+    accidentally reused retry-round 1. All entrypoints now advance to retry-round
+    2; resubmit only nycc_821, then process shard-2. Require 362/362 context merge
+    before building bridge inputs or starting bridge/caption work.
 
 conditions:
   text:
