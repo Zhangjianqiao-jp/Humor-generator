@@ -486,6 +486,9 @@ evaluation:
     status: generations_ready_external_judge_pending
     packet_status: ready_external_judgment_pending
     packet_directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/homer_primary
+    packet_builder: scripts/build_homer_primary_packets.py
+    evaluator_runner: scripts/run_homer_primary_openai.py
+    judgment_aggregator: scripts/aggregate_homer_primary_judgments.py
     packet_counts:
       images: 47
       conditions: 2
@@ -498,6 +501,7 @@ evaluation:
     packet_code_commit: 98004c74448b50ace406c1fb5dc3431fd039e28e
     packet_provenance_sha256: cdffde10730bc7298ac23d47f80765c396713716482ee6b16f77414de829be41
     judgment_status: not_started
+    runner_status: protocol_smoke_passed_external_api_key_not_present
     claim_boundary: >-
       No Pass@K, win rate, absolute good/weak/bad or latent quality claim is
       permitted until complete external evaluator decisions are aggregated.
