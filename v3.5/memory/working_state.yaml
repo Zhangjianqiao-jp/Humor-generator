@@ -573,7 +573,7 @@ program_risk_audit:
     latent benefit is claimed before the HOMER-comparable caption evaluation.
 
 immediate_gate:
-  action: commit_push_generation_fixes_then_submit_one_comparison_job
+  action: wait_for_compatible_gpu_start_then_submit_one_comparison_job
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -592,6 +592,7 @@ immediate_gate:
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
   current_blockers:
     - comparison_generation_not_started
+    - b_batch_node_exclusive_start_estimate_too_late
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   automatic_continuation:
     task_id: v35-complete-followup-v2
@@ -609,7 +610,8 @@ immediate_gate:
     submitted as job 6754067 with a 01:30:00 bound after a clean commit; it
     completed on genkai0002 in 00:13:13 with exit code 0. Keep exactly one
     formal/comparison copy; do not request MIG, duplicate reservations, or
-    unvalidated alternatives.
+    unvalidated alternatives. Comparison attempt 6754510 was canceled before
+    execution after PJM estimated 2026-09-13 09:00 with no free b-batch node.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
@@ -617,7 +619,7 @@ immediate_gate:
 remaining_sequence_after_resource_gate:
   - post_job_full_sha_provenance_audit
   - commit_and_push_generation_gate_fixes
-  - submit_one_current_route_comparison_generation_job
+  - submit_one_current_route_comparison_generation_job_when_start_estimate_is_acceptable
   - require_generation_gate_47x5x5x2
   - build_and_audit_blinded_caption_packets
   - obtain_non_fabricated_independent_judgments

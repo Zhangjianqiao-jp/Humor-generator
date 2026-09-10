@@ -383,3 +383,17 @@ provenance 复核发现，正式作业输出目录中的不可变提交记录
 pretrained comparison 回归测试、PJM shell 语法检查及 `git diff --check`，全部通过。
 后续每次记忆/ provenance 修改后都必须立即做结构解析和针对性测试；该问题是工程回归，
 不是 latent 方法、数据质量或训练结果。
+
+## V35-SCHED-025（2026-09-10）：比较生成作业预计启动过晚
+
+唯一提交的 comparison-generation 作业 `6754510`（`v35pubgen`）按已验证的
+`b-batch + node=1` 合同提交，但 PJM 预计启动时间为 `2026-09-13 09:00`。作业在执行前
+撤回；`.stats` 显示 `LAST STATE=QUE`、没有 start/end、exit code，且没有模型、CUDA forward、
+图片读取、caption 或输出目录，因此这不是方法失败或数据失败。
+
+根因是提交时 `b-batch` 的 35 个节点全部已分配（`FREE=0`）；虽然 aggregate GPU slot 很多，
+独占节点请求仍没有近期 backfill 窗口。后续不得因为 aggregate GPU 数字直接提交；必须同时
+检查 PJM `START_DATE`、每节点 GPU/CPU 和执行策略。只有在预计时间可接受时保留一份
+`b-batch + node=1`；若考虑 `c-batch + gpu=1`，必须确认 shared GPU 与 CPU 同时可用并先完成
+该资源合同的 smoke。MIG、CPU-only `a-batch` 和交互组不作为后备。详见
+`v35pubgen.6754510.stats`。
