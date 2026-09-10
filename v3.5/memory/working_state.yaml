@@ -1,7 +1,7 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T16:05:00+09:00"
+observed_at: "2026-09-10T16:12:00+09:00"
 must_revalidate: true
 source_commit: b9b811af3e1263d429010be21c87f3ca1e854c4b
 branch: latent
@@ -201,14 +201,26 @@ context_gate:
       reason: canceled_uncommitted_provenance_before_scientific_output
     - job_id: "6751524"
       shard: 2
-      status: queued
+      status: completed_before_model_load
       submitted_at: "2026-09-10T16:08:19+09:00"
       estimated_start: "2026-09-10T16:08:00+09:00"
+      started_at: "2026-09-10T16:09:00+09:00"
+      ended_at: "2026-09-10T16:10:00+09:00"
+      exit_code: 1
+      records: "0/1"
       targets: [nycc_678]
       route: b-batch_node1_simplex
       retry_round: 10
       attempts: 16
-      reason: final_bounded_upstream_summary_resampling
+      reason: r11_manifest_unknown_version_allowlist
+    - job_id: pending_r11_compatibility_fix
+      shard: 2
+      status: ready_to_submit_after_commit
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 10
+      attempts: 16
+      reason: same_manifest_after_pre_model_compatibility_fix
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
     b-batch node=1 is allowed only as a last-resort simplex fallback when a
@@ -238,9 +250,11 @@ context_gate:
     loaded the model but left the two-candidate validator residual (V35-ENG-029).
     Job 6750588 loaded the model but left the single-key summary residual (V35-ENG-030).
     Job 6750890 was canceled during model loading before scientific output because
-    its r10 files were not committed (V35-ENG-031). After the clean commit, job
-    6751524 is the sole queued retry-round 10 simplex copy using r11 with at most
-    16 fresh attempts; the later c-batch probe 6750522 was canceled before
+    its r10 files were not committed (V35-ENG-031). Job 6751524 then failed
+    before model load because r11 was missing from the runtime compatibility set
+    (V35-ENG-032); the ledger is unchanged. After committing that fix, one
+    same-manifest retry-round 10 simplex copy using r11 with at most 16 fresh
+    attempts is allowed; the later c-batch probe 6750522 was canceled before
     execution.
 population_gate:
   status: verified_public_release_362

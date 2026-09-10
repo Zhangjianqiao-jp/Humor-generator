@@ -1023,3 +1023,7 @@ HOMER validator。
 failure ledger；该 provenance 工程事件记为 `V35-ENG-031`。今后提交顺序固定为：本地
 manifest/脚本 gate → clean Git commit → source-commit 固定 → 确认无未提交改动 → PJM。
 因此 r11 是同一有界上游重放的唯一干净副本，完成后才允许继续 strict merge。
+
+`6751524` 在模型加载前因运行时 manifest allow-list 忘记登记 r11 而退出（`V35-ENG-032`），
+没有产生科学输出或改变 ledger。已补齐兼容集合；由于 ledger 未变，仍复用 r11/retry-round=10，
+并在重新提交前执行 `_load_repair_manifest(source_shard=2)`、编译和 clean-tree 检查。
