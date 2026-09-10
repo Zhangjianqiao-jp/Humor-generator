@@ -59,7 +59,11 @@ DEFAULT_OUTPUT = ROOT / "data/cache/homer_pretrained_7b_homer_context"
 PROMPT_SOURCE = ROOT / "src/humor_generator_v35/homer/official_prompts.py"
 MODEL_MANIFEST = ROOT / "manifests/local_qwen2_5_vl_7b.json"
 POPULATION_MANIFEST = ROOT / "manifests/homer_population_public_release_362.json"
-REPAIR_MANIFEST_VERSION = "pretrained-homer-context-repair-20260910"
+REPAIR_MANIFEST_VERSION = "pretrained-homer-context-repair-20260910-r2"
+SUPPORTED_REPAIR_MANIFEST_VERSIONS = {
+    "pretrained-homer-context-repair-20260910",
+    REPAIR_MANIFEST_VERSION,
+}
 
 
 def sha256(path: Path) -> str:
@@ -96,7 +100,7 @@ def _load_repair_manifest(
     if not path.is_file():
         raise FileNotFoundError(path)
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("repair_manifest_version") != REPAIR_MANIFEST_VERSION:
+    if payload.get("repair_manifest_version") not in SUPPORTED_REPAIR_MANIFEST_VERSIONS:
         raise ValueError("repair manifest has an unknown version")
     if payload.get("data_version") != DATA_VERSION:
         raise ValueError("repair manifest has the wrong data version")

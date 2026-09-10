@@ -118,7 +118,8 @@ current_state:
     residual_failures: 13
     partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
     shards: {shard_0: "117/118", shard_1: "113/118", shard_2: "111/118"}
-    repair_manifest: manifests/pretrained_homer_context_repair_20260910.json
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
+    superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910.json
     repair_policy: validator-feedback-format-only-v1
   bridge_gate: blocked_context_not_complete
   active_jobs: []
@@ -132,9 +133,12 @@ current_state:
     reason: lossless_validator_repair_rejected_semantic_deletion_after_truncated_json_fence
     evidence: v3.5/v35_ctx_sx_s0.6749375.{out,stats}
   last_repair_result:
-    status: parser_defect_fixed_locally
-    failure_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-019
+    status: manifest_versioned_after_prior_attempt
+    failure_records:
+      - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-019
+      - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-020
     residual_context_records: 349/362
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
     next_action: rerun_only_manifest_scoped_residuals_after_clean_commit_and_preflight
   next_action: >-
     After the local parser fix and clean preflight, wait for an authorized

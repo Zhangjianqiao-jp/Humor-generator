@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "repair_manifest_version": "pretrained-homer-context-repair-20260910-r2",
+  "data_version": "homer_pretrained_7b_public_release_362",
+  "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+  "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5",
+  "adapter": null,
+  "policy": "validator-feedback-format-only-v1",
+  "scope": "only the 13 residual failures after bounded repair attempt 6749375; no full rerun",
+  "source_failure_manifests": [
+    {
+      "path": "data/cache/homer_pretrained_7b_homer_context_shard_0/failures.json",
+      "sha256": "4fbc3cb56782ea2ba3a97dd5b0167828067871a83c1c1670147c724f1b4a6185"
+    },
+    {
+      "path": "data/cache/homer_pretrained_7b_homer_context_shard_1/failures.json",
+      "sha256": "16757ad4c2eeb9533398bad439e8ed0e317f4f6b35e84d66c3fe03ef723d9c74"
+    },
+    {
+      "path": "data/cache/homer_pretrained_7b_homer_context_shard_2/failures.json",
+      "sha256": "2922361f4008707d80b61fa07c0f6cdbfaa5bfc642f8ba4e8c0a1007969f6aa6"
+    }
+  ],
+  "targets": [
+    {
+      "cluster_id": "nycc_700",
+      "source_shard": 0,
+      "previous_error": "nycc_700: imaginator.summary validator-feedback repair failed: output is not losslessly parseable JSON"
+    },
+    {
+      "cluster_id": "nycc_575",
+      "source_shard": 1,
+      "previous_error": "summary imagination must be a JSON object"
+    },
+    {
+      "cluster_id": "nycc_655",
+      "source_shard": 1,
+      "previous_error": "official summary values must be non-empty lists of strings"
+    },
+    {
+      "cluster_id": "nycc_668",
+      "source_shard": 1,
+      "previous_error": "selected entity 'Dragon' is not present in summary keys ['Dragon holding flowers', 'Knight', 'Castle', 'flower holder']"
+    },
+    {
+      "cluster_id": "nycc_815",
+      "source_shard": 1,
+      "previous_error": "summary imagination must be a JSON object"
+    },
+    {
+      "cluster_id": "nycc_821",
+      "source_shard": 1,
+      "previous_error": "selected entities must be distinct"
+    },
+    {
+      "cluster_id": "nycc_579",
+      "source_shard": 2,
+      "previous_error": "summary imagination must be a JSON object"
+    },
+    {
+      "cluster_id": "nycc_613",
+      "source_shard": 2,
+      "previous_error": "official summary values must be non-empty lists of strings"
+    },
+    {
+      "cluster_id": "nycc_622",
+      "source_shard": 2,
+      "previous_error": "official summary values must be non-empty lists of strings"
+    },
+    {
+      "cluster_id": "nycc_678",
+      "source_shard": 2,
+      "previous_error": "selected entity 'neck' is not present in summary keys ['giraffe']"
+    },
+    {
+      "cluster_id": "nycc_717",
+      "source_shard": 2,
+      "previous_error": "summary imagination must be a JSON object"
+    },
+    {
+      "cluster_id": "nycc_723",
+      "source_shard": 2,
+      "previous_error": "selected entity 'Animals performing in a recording studio' is not present in summary keys ['Animals in a recording studio', 'Animals usually found acting in domestic or natural settings', 'Human control room observers', 'Animals commonly portrayed as passively reacting rather than actively participating in the creative process']"
+    },
+    {
+      "cluster_id": "nycc_892",
+      "source_shard": 2,
+      "previous_error": "summary imagination must be a JSON object"
+    }
+  ],
+  "supersedes": "manifests/pretrained_homer_context_repair_20260910.json",
+  "created_after_job": "6749447"
+}

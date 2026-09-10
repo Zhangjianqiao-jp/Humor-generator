@@ -857,7 +857,7 @@ hash、错误 hash、模型/prompt/seed/commit provenance，并只重试这 13 �
 #### 15.3.3 有界 validator-feedback repair（2026-09-10）
 
 本轮只恢复 `V35-ENG-017` 列出的 13 个 residual cluster，不重新遍历 362 条：
-`manifests/pretrained_homer_context_repair_20260910.json` 固定 cluster、来源 shard、
+`manifests/pretrained_homer_context_repair_20260910_r2.json` 固定 cluster、来源 shard、
 原始 error 和三个 `failures.json` 的 SHA-256。`scripts/cache_pretrained_homer_context.py`
 在同一 Qwen2.5-VL-7B revision、同一 HOMER 原始 prompt 后追加一轮 validator feedback；
 summary 只允许严格 JSON 序列化修复，entity 只允许映射到唯一已有 summary key。修复前后
@@ -929,3 +929,11 @@ HOMER prompt、模型、seed 或 semantic policy。事件和原始证据登记�
 preflight 通过后，才允许再次提交**唯一一个** manifest-scoped repair 副本；在三个
 shard 都精确达到 `118/118`、`failures.json=[]` 并通过 strict merger 之前，context gate
 仍为 `349/362 blocked`，bridge/caption 训练和科学评测继续禁止。
+
+`6749447` 随后在模型加载前被 provenance 门禁拒绝（exit code 2）：`6749375` 已经把
+新的 repair 尝试写回 shard-0 的 `failures.json`，旧 manifest 的源文件哈希和
+`nycc_700` 当前错误字段随之过期。该终态不是数据或 GPU 故障。旧 manifest 保留作为
+历史记录；新增 `pretrained_homer_context_repair_20260910_r2.json`，明确标注
+`supersedes`、作业 ID、更新后的三份 failure hash 和当前 13 个错误，所有 repair
+入口已切换到 r2。以后每次失败若使 `failures.json` 变化，必须先生成新的版本化 manifest
+并完成 hash/target 校验，禁止原地改写 manifest 或绕过 provenance gate。
