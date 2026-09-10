@@ -1,0 +1,81 @@
+#!/bin/sh
+# Generate the current, matched public-HOMER caption comparison after a
+# completed bridge run.  Both conditions use one sealed context and the same
+# 5-candidate x 5-trial schedule; this job does not call a judge.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+BRIDGE_CHECKPOINT="${BRIDGE_CHECKPOINT:?submit with -x BRIDGE_CHECKPOINT=...}"
+GEN_OUTPUT="${GEN_OUTPUT:?submit with -x GEN_OUTPUT=...}"
+mkdir -p "$GEN_OUTPUT"
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+CONFIG=configs/pilot/cross_attention_caption_pretrained_public.yaml
+DATA=data/processed/homer_pretrained_7b_public_release_362
+
+python scripts/check_pretrained_route.py \
+  --require-data-ready --require-context-ready --require-bridge-data-ready \
+  > "$GEN_OUTPUT/route_gate.json"
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config "$CONFIG" \
+  --output "$GEN_OUTPUT/bridge_input_gate.json"
+
+python scripts/generate_pretrained_bridge_comparison.py \
+  --config "$CONFIG" --dataset "$DATA" --split test \
+  --condition text_homer_context_replay \
+  --trials 5 --candidates 5 --base-seed 20260910 --trial-stride 100 \
+  --max-new-tokens 96 \
+  --output "$GEN_OUTPUT/text_homer_context_replay.jsonl"
+
+python scripts/generate_pretrained_bridge_comparison.py \
+  --config "$CONFIG" --dataset "$DATA" --split test \
+  --condition latent_bridge --checkpoint "$BRIDGE_CHECKPOINT" \
+  --trials 5 --candidates 5 --base-seed 20260910 --trial-stride 100 \
+  --max-new-tokens 96 \
+  --output "$GEN_OUTPUT/latent_bridge.jsonl"
+
+cat "$GEN_OUTPUT/text_homer_context_replay.jsonl" \
+    "$GEN_OUTPUT/latent_bridge.jsonl" > "$GEN_OUTPUT/generations.jsonl"
+python - "$GEN_OUTPUT/generations.jsonl" "$BRIDGE_CHECKPOINT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+checkpoint = str(Path(sys.argv[2]).resolve())
+rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+if len(rows) != 47 * 5 * 5 * 2:
+    raise SystemExit(f"expected 2350 current test generations, got {len(rows)}")
+systems = {row.get("system_id") for row in rows}
+if systems != {"text_homer_context_replay", "latent_bridge"}:
+    raise SystemExit(f"unexpected comparison systems: {systems}")
+for row in rows:
+    if row.get("split") != "test":
+        raise SystemExit("comparison contains a non-test row")
+    if row.get("system_id") == "latent_bridge" and row.get("checkpoint_sha256") is None:
+        raise SystemExit("latent row is missing checkpoint provenance")
+print(json.dumps({
+    "status": "pass",
+    "records": len(rows),
+    "systems": sorted(systems),
+    "checkpoint": checkpoint,
+    "judge": "not_run",
+}, sort_keys=True))
+PY
