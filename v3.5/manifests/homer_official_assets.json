@@ -11,7 +11,7 @@
     "generator.py": "d56b13a1f74533d533a1f020524bf7d05adcd1eeeae3db4dbc453fbd773c7a",
     "demo.py": "88ec1879eb1fef4ac1b06d68f876d6ce438059d579e62c7916c0021573650fe5",
     "local_official_prompts.py": "3b3626c78f6fcbd37d318387b02a2f698ffdf63b483124fdc470d62931c12487",
-    "local_public_code_pipeline.py": "c056bdb9e6ec4d80cdc00082929cffdba89e1349ab20ebad7a8114352ba68ba8",
+    "local_public_code_pipeline.py": "b9cf9a45e9c5beb457c85f47bace0afefbef985957804a7e75a3c2fb2c49ce51",
     "local_homer_retrieval.py": "7e534019d4cf07d6160acfa65ec20f8590eb1617ea5b9c16aed22d34f0307320"
   },
   "joke_corpus": {

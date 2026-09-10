@@ -12,7 +12,7 @@ from humor_generator_v35.homer.official_prompts import (
     description_messages,
 )
 from humor_generator_v35.homer.omega import balanced_grid, parse as parse_omega
-from humor_generator_v35.homer.public_code_pipeline import HomerPublicCodePipeline
+from humor_generator_v35.homer.public_code_pipeline import HomerPublicCodePipeline, _json_object
 from scripts.check_pretrained_route import check
 from scripts.verify_homer_evaluation_assets import verify
 
@@ -65,6 +65,12 @@ def test_official_prompt_constants_are_distinct_from_historical_adapter() -> Non
     assert len(caption_messages("d", "c", "The free-association chain")[1]["content"]) == 2
     assert caption_messages("d", "c", "The free-association chain")[1]["content"][0]["text"].startswith("Description:\n")
     assert caption_messages("d", "c", "The free-association chain")[1]["content"][1]["text"].startswith("Free-association chains:\n")
+
+
+def test_public_code_json_object_accepts_truncated_opening_fence() -> None:
+    assert _json_object('```json\n{"giraffe":["long neck"]}', stage="summary") == {
+        "giraffe": ["long neck"]
+    }
 
 
 def test_public_code_pipeline_runs_all_stages_with_standard_description() -> None:

@@ -986,6 +986,13 @@ strict merger。
 仅处理 `nycc_579` 与 `nycc_678`。该作业是当前唯一活动副本；完成后先执行严格 shard
 post-check，再决定是否合并 362 条 context。作业运行期间不得启动 bridge、caption 或
 任何 v2.5/DPO 流程。
+
 `6750419` 于 `15:09:38` 结束：`nycc_579` 修复成功，`nycc_678` 仍因重复实体被严格
 拒绝，当前 context 为 `361/362`。事件记录为 `V35-ENG-026`；已创建 r6 manifest，
 仅包含 `nycc_678`，下一轮使用 retry-round=5。成功前继续保持 bridge/caption 门禁关闭。
+
+`6750455` 使用 r6/retry-round=5 仅处理 `nycc_678`，于 `15:19:04` 结束，仍为
+`117/118`。这次暴露了共享解析器缺陷：validator 已能无损接受缺失 closing fence，
+但 public-code `_json_object` 尚未同步处理该格式。该工程问题已记录为 `V35-ENG-027`；
+已修复并更新 `homer_official_assets.json` 的源文件 hash，r7 只保留当前 residual，
+retry-round=6。模型、GPU 和数据门禁均无异常，bridge/caption 继续锁定。

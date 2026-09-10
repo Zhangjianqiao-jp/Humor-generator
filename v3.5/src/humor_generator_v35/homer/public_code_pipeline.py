@@ -80,7 +80,13 @@ class PublicCodeRun:
 def _strip_json_fence(text: str) -> str:
     candidate = text.strip()
     match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", candidate, flags=re.I | re.S)
-    return match.group(1).strip() if match else candidate
+    if match:
+        return match.group(1).strip()
+    # A generation boundary can drop only the closing markdown fence.  This
+    # is a serialization defect, not a semantic change; accept it here using
+    # the same lossless rule as validator-feedback repair.
+    opening = re.match(r"^```(?:json)?(?:\s+|\s*$)", candidate, flags=re.I | re.S)
+    return candidate[opening.end():].strip() if opening else candidate
 
 
 def _json_object(text: str, *, stage: str) -> dict[str, Any]:
