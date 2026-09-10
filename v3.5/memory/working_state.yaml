@@ -1,7 +1,7 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T14:20:35+09:00"
+observed_at: "2026-09-10T14:55:06+09:00"
 must_revalidate: true
 source_commit: e583fd35262434eee97d516b556499ccfbe16c79
 branch: latent
@@ -28,15 +28,15 @@ trace_gate:
   current_route_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   current_route_required: complete_post_trace_homer_context_before_bridge
 
-  context_gate:
+context_gate:
   status: blocked_pending_bounded_repair
-  available: 355
+  available: 360
   required: 362
   partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
-  shard_records: {shard_0: "118/118", shard_1: "117/118", shard_2: "111/118"}
-  residual_failures: 7
-  repair_manifest: manifests/pretrained_homer_context_repair_20260910_r4.json
-  superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
+  shard_records: {shard_0: "118/118", shard_1: "118/118", shard_2: "116/118"}
+  residual_failures: 2
+  repair_manifest: manifests/pretrained_homer_context_repair_20260910_r5.json
+  superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r4.json
   repair_policy: validator-feedback-format-only-v1
   repair_jobs:
     - job_id: "6749312"
@@ -117,11 +117,25 @@ trace_gate:
       max_memory_mib: 6225.9
       retry_round: 2
       reason: independent_retry_and_public_homer_replay_passed
+    - job_id: "6750335"
+      shard: 2
+      status: completed_with_residual_failure
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T14:46:30+09:00"
+      ended_at: "2026-09-10T14:55:06+09:00"
+      exit_code: 2
+      records: "116/118"
+      residual_failures: 2
+      repaired_targets: 5
+      max_memory_mib: 6366.5
+      retry_round: 3
+      reason: two_ambiguous_selector_references
     - job_id: "pending"
       shard: 2
       status: ready_to_submit_after_commit
+      targets: [nycc_579, nycc_678]
       route: b-batch_node1_simplex
-      retry_round: 3
+      retry_round: 4
       reason: r4_manifest_scoped_residuals
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
@@ -142,11 +156,12 @@ trace_gate:
     Shard-0 repair job 6749521 subsequently passed with 118/118 and failures.json=[];
     shard-1 repair job 6749861 reached 117/118 but correctly rejected one
     non-uniquely-repairable selector concept (V35-ENG-022).  The remaining
-    bounded scope is now shard-2 (7), with 355/362 records.  Manifest r4 pins
-    the current seven failure rows and hashes; no semantic hand-mapping is
-    allowed.  Shared job 6750287 was canceled before execution because its
-    start estimate was 09/12.  Independent retry-round 2 job 6750308 resolved
-    nycc_821; next action is a single retry-round 3 shard-2 job, then strict merge.
+    bounded scope is now shard-2 (2), with 360/362 records.  Manifest r5 pins
+    the current two failure rows and hashes; no semantic hand-mapping is allowed.
+    Shared job 6750287 was canceled before execution because its start estimate
+    was 09/12.  Independent retry-round 2 job 6750308 resolved nycc_821; r4
+    retry-round 3 resolved five shard-2 targets, and the next action is one
+    retry-round 4 job for nycc_579/nycc_678, then strict merge.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json

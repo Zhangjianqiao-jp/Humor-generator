@@ -974,3 +974,10 @@ shard-2 的 7 条 residual，并把下一轮设为 `retry-round=3`；只有 shar
 failure-ledger hash 未变化，因此保留 r3，只把全部 repair entrypoint 的 retry-round 改为
 `2`，并再次限制为该单条 residual。未通过严格 shard validator 前，不得合并或进入
 bridge/caption 评测。
+
+`6750335` 使用 r4/`retry-round=3` 处理 shard-2 的 7 条 residual，其中 5 条通过、2 条
+失败（`nycc_579` 的 `Royal demeanor` 不能唯一映射，`nycc_678` 会产生重复实体）。因此
+当前 context 为 `360/362`（partial=8、shard-0=118、shard-1=118、shard-2=116），
+详见 `V35-ENG-025`。已建立 r5 manifest，仅锁定这 2 条，并将下一轮提升为
+`retry-round=4`；不得放宽 lossless validator 或手工改写实体，只有两条均通过才运行
+strict merger。
