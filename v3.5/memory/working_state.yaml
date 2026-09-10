@@ -1,7 +1,7 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T13:48:59+09:00"
+observed_at: "2026-09-10T14:10:05+09:00"
 must_revalidate: true
 source_commit: 4f4c0602af1d826707ac56376bbf6677e834c761
 branch: latent
@@ -30,11 +30,11 @@ trace_gate:
 
 context_gate:
   status: blocked_pending_bounded_repair
-  available: 349
+  available: 350
   required: 362
   partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
-  shard_records: {shard_0: "117/118", shard_1: "113/118", shard_2: "111/118"}
-  residual_failures: 13
+  shard_records: {shard_0: "118/118", shard_1: "113/118", shard_2: "111/118"}
+  residual_failures: 12
   repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
   superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910.json
   repair_policy: validator-feedback-format-only-v1
@@ -67,6 +67,17 @@ context_gate:
       ended_at: "2026-09-10T13:54:12+09:00"
       exit_code: 2
       reason: stale_source_failure_manifest_hash_gate
+    - job_id: "6749521"
+      shard: 0
+      status: completed_successfully
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T14:07:15+09:00"
+      ended_at: "2026-09-10T14:10:05+09:00"
+      exit_code: 0
+      records: "118/118"
+      repaired_targets: 1
+      max_memory_mib: 6124.9
+      reason: lossless_validator_repair_and_public_homer_replay_passed
   candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
   candidate_route_policy: >-
     b-batch node=1 is allowed only as a last-resort simplex fallback when a
@@ -75,7 +86,7 @@ context_gate:
   canonical_context: null
   bridge_training_manifest: null
   interpretation: >-
-    Trace generation is complete and valid.  The 13 residual failures are
+    Trace generation is complete and valid.  The 13 residual failures were
     strict summary/entity schema-consistency errors, not model/GPU failures.
     The first real simplex repair passed all preflight/model-load gates but exposed
     a parser defect on a truncated opening JSON fence; this is recorded as V35-ENG-019.
@@ -83,6 +94,8 @@ context_gate:
     failures.json; this is recorded as V35-ENG-020 and superseded by repair manifest r2.
     Only lossless validator-feedback repair is allowed; no semantic rewriting,
     full rerun, bridge training or caption evaluation may start before 362/362.
+    Shard-0 repair job 6749521 subsequently passed with 118/118 and failures.json=[];
+    the remaining bounded scope is shard-1 (5) plus shard-2 (7), 350/362 records total.
 population_gate:
   status: verified_public_release_362
   manifest: manifests/homer_population_public_release_362.json
