@@ -65,6 +65,13 @@ status: complete_packets_external_judgment_pending
 严格拒绝缺失、重复、额外或非 A/B 的判断，并要求每个 image×trial×reference 有完整五个
 candidate，随后输出 Caption-judgement 可直接计算官方无偏 Pass@1/3/5 的 records。
 
+若具备评测权限，可用 `scripts/run_homer_primary_openai.py` 读取 public packet，使用官方
+固定的 `gpt-5-chat-latest`、`temperature=0`、`max_tokens=1` 参数生成一行一个 A/B 判断。
+该 runner 在请求前校验 prompt hash、provenance、response contract，并支持安全断点续跑；
+它不读取 private mapping，也不接受模型条件。环境变量可使用官方脚本同名的
+`OPEN_API_KEY`（或兼容的 `OPENAI_API_KEY`）。没有 key 或 `openai` 客户端时会在本地失败，
+不会创建伪造判断。
+
 当前没有任何 judgment 被写入，因此不报告 Pass@K、win rate 或 latent 质量结论。辅助
 Group-of-10 包仍是独立扩展轨道（94 个镜像 packet、三个空白 judge 模板），不能与 HOMER
 主评测混合。外部 evaluator 完成后，先聚合主 packet，再运行 `caption-judge homer-pass-at-k`，
