@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T17:12:30+09:00"
+observed_at: "2026-09-10T18:02:00+09:00"
 must_revalidate: true
-source_commit: 473412aad7f60bf6e9e4551ebb98f645963bb612
+source_commit: 6e68fc27b052a771e2233d2a76318cd321bda19b
 branch: latent
 
-current_phase: pretrained_7b_real_trace_bridge_smoke_clean_resubmission_pending
+current_phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -533,7 +533,7 @@ program_risk_audit:
     claimed before the training and HOMER-comparable evaluation gates.
 
 immediate_gate:
-  action: submit_current_pretrained_bridge_engineering_smoke_after_final_clean_commit
+  action: commit_resource_audit_and_submit_bbatch_node_smoke
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -550,13 +550,17 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot.
   current_blockers:
-    - final_clean_commit_and_smoke_resubmission_pending
+    - resource_audit_documentation_commit_and_smoke_resubmission_pending
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   resource_request_note: >-
     The next GPU request is one full native GPU for <=2-example real-trace
-    engineering smoke only. Do not request MIG, duplicate reservations or
-    formal training until the smoke validator passes; the two 7B policies stay
-    frozen and only the bridge may update.
+    engineering smoke only. The 2026-09-10 audit found no schedulable b-batch
+    node, no GPU resource in a-batch, and no batch permission for the b-inter
+    fallback; do not use those routes. After the documentation commit, submit
+    exactly one b-batch node=1 job without gpu=1 or exec-policy=simplex. Do not
+    request MIG, duplicate reservations or formal training until the smoke
+    validator passes; the two 7B policies stay frozen and only the bridge may
+    update.
   historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
   historical_a4_job_id: "6711109"
   historical_a4_status: complete_pilot_inconclusive
@@ -573,7 +577,7 @@ remaining_sequence_after_resource_gate:
   - held_out_caption_generation_and_homer_comparable_evaluation
 
 eta:
-  scheduler_wait: not_applicable_no_current_job
+  scheduler_wait: pending_compatible_bbatch_node
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
   outer_semantic_confirmation: historical_provenance_failure
@@ -596,7 +600,7 @@ next_agent_actions:
   - "Use the sealed current route: `trace_index` 362/362, context index 362/362, bridge view 1086 rows; do not substitute historical traces."
   - Run `scripts/verify_pretrained_bridge_inputs.py` with both current bridge configs and retain its JSON evidence.
   - CPU `scripts/engineering_smoke.py` and targeted public-route tests currently pass; next run is the <=2-example real-trace GPU smoke.
-  - Request one full native GPU only after a clean source commit; no MIG, duplicate reservation, formal training or caption evaluation before the smoke validator passes.
+  - Commit the resource audit/error records, then request one full native GPU only after a clean source commit; no MIG, duplicate reservation, formal training or caption evaluation before the smoke validator passes.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
   - Do not start caption generation or preference learning until bridge-only training and held-out HOMER evaluation are complete; preference learning remains disabled in v3.5.
 

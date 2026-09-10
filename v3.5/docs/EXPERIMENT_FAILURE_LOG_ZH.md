@@ -259,3 +259,18 @@ checkpoint。该 partial 目录已移动为
    EMNLP 2021: https://aclanthology.org/2021.emnlp-main.703/
 10. Koehn, Statistical Significance Tests for Machine Translation Evaluation, EMNLP 2004:
     https://aclanthology.org/W04-3250/
+
+## V35-SCHED-022（2026-09-10）：GPU 资源组误判，两个 smoke 均在执行前撤回
+
+`6753645` 使用已固定 commit 的 `b-batch + node=1` 路由，PJM 预计次日 02:00 启动；只读
+审计确认该组节点为 `0/35` 空闲，因此在模型加载前取消。随后曾尝试 `6753705` 使用
+`a-batch` 的空闲节点，但该组虽然有空闲 CPU 节点，`pjshowrsc --rscgrp a-batch
+--custom-resource` 没有暴露 `gpu` 资源，同样在执行前取消。一次 `b-inter + gpu=1`
+覆盖还被 PJM 以 `node` 与 `gpu` 同时指定拒绝。所有作业均没有 CUDA forward、数据写入或
+科学结果。
+
+根因是把“组内 GPU slot 余量”和“当前账户可调度的 batch GPU 节点”混为一谈。以后资源选择
+必须同时通过：batch 权限、GPU 资源可见性、执行策略兼容性和 PJM `START_DATE` 四项检查。
+不得把 `a-batch` CPU 空闲、已分配节点上的 aggregate GPU slot 或 `b-inter` 交互组当作
+自动 batch 后备；MIG 仍因既有 allocator 错误禁用。当前只保留一份经过清洁 commit 门禁的
+`b-batch + node=1` smoke，提交前再次读取 PJM 预计启动时间。

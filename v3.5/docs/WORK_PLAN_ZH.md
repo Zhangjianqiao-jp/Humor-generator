@@ -1062,3 +1062,28 @@ manifest/脚本 gate → clean Git commit → source-commit 固定 → 确认无
 `6751524` 在模型加载前因运行时 manifest allow-list 忘记登记 r11 而退出（`V35-ENG-032`），
 没有产生科学输出或改变 ledger。已补齐兼容集合；由于 ledger 未变，仍复用 r11/retry-round=10，
 并在重新提交前执行 `_load_repair_manifest(source_shard=2)`、编译和 clean-tree 检查。
+
+#### 15.3.6 当前 GPU smoke 资源复核（2026-09-10）
+
+当前 public 362 route 的 CPU preflight、完整 pytest、HOMER public-code smoke、trace/context
+和 bridge-input gate 均已通过；尚未产生任何新的 GPU forward 或科学 bridge 结果。
+
+曾提交的 smoke `6753645`（`b-batch + node=1`）预计次日 02:00，因该组当时没有空闲
+node（`0/35`）而在执行前取消。随后探测作业 `6753705` 试图使用 `a-batch` 的空闲节点，
+但该组没有 `gpu` custom resource，也在执行前取消；一次 `b-inter + gpu=1` 命令则在提交
+前因脚本残留 `node=1` 与 `gpu=1` 冲突被 PJM 拒绝。没有模型、CUDA、数据或科学结果受到
+影响，详见 `V35-SCHED-022`。
+
+资源选择不再依据 aggregate GPU 数字，而必须同时满足：
+
+```text
+合法 batch 模式
+→ 选定组暴露 GPU resource
+→ node/shared/exec-policy 与脚本请求兼容
+→ PJM START_DATE 为当前候选中最早
+```
+
+`a-batch` CPU 空闲、`b-inter` 交互组和 MIG 组都不是本次后台 CUDA smoke 的自动后备。
+修改/记录完成后，重新从 clean commit 只提交一份 `jobs/pretrained_bridge_real_trace_smoke_bsimplex.pjm`
+（`b-batch + node=1`，不叠加 `gpu=1` 或 `exec-policy=simplex`）；启动前再次检查
+`pjstat -v`，通过后才允许 bridge-only formal training。

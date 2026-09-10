@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T17:12:30+09:00"
-  source_commit: 473412aad7f60bf6e9e4551ebb98f645963bb612
-  phase: pretrained_7b_real_trace_bridge_smoke_clean_resubmission_pending
+  observed_at: "2026-09-10T18:02:00+09:00"
+  source_commit: 6e68fc27b052a771e2233d2a76318cd321bda19b
+  phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -131,6 +131,15 @@ current_state:
     manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
     rows: {train: 813, validation: 132, test: 141}
   active_jobs: []
+  smoke_resource_audit:
+    canceled_before_execution:
+      - {job_id: "6753645", route: b-batch_node1_simplex, estimated_start: "2026-09-11T02:00:00+09:00", reason: b_batch_node_free_zero}
+      - {job_id: "6753705", route: a-batch_cpu_only_probe, estimated_start: "2026-09-10T18:50:00+09:00", reason: selected_group_exposes_no_gpu_resource}
+    rejected_before_job_id:
+      - {route: b-inter_gpu1_override, reason: node_and_gpu_options_conflict}
+    status: no_compatible_fast_batch_gpu_route
+    next_route: b-batch_node1_simplex
+    evidence: docs/EXPERIMENT_FAILURES.jsonl#V35-SCHED-022
   last_scheduler_attempt:
     job_id: "6751564"
     route: b-batch_node1_simplex
@@ -391,6 +400,8 @@ resource_policy:
     - MIG is forbidden for formal bridge training after both multi-slice and single-slice allocator failures on pilot data.
     - A smoke must exercise the exact pilot placement and a representative high-cost visual sample; a convenient first-row smoke is insufficient.
     - Formal bridge jobs use one full GPU, a fixed device map to CUDA device 0, and the native PyTorch allocator.
+    - A resource group is eligible only when batch permission, GPU visibility, execution-policy compatibility and the PJM START_DATE all pass; free CPU nodes or aggregate GPU slots on allocated nodes are not sufficient.
+    - Do not use a-batch for CUDA work when its custom-resource listing has no gpu entry; do not use b-inter for unattended batch scripts; do not combine node=1 with gpu=1 or exec-policy=simplex.
 
 authoritative_references:
   - {id: homer, venue: ICLR_2026, url: "https://openreview.net/pdf?id=SzaRhPom4o"}
