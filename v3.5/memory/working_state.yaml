@@ -3,7 +3,7 @@ memory_id: humor_generator_v35_working
 volatile: true
 observed_at: "2026-09-10T13:34:00+09:00"
 must_revalidate: true
-source_commit: f7dbf9fe78b0376778ed9b4f28ecddff0ad39f06
+source_commit: de7d00bd67e1b688800ab2e087edbf5172092611
 branch: latent
 
 current_phase: pretrained_7b_context_validator_repair_waiting_gpu
@@ -50,6 +50,11 @@ context_gate:
       route: c-batch_shared_gpu1
       estimated_start: "2026-09-11T10:00:00+09:00"
       reason: c_batch_cpu_full_delayed
+  candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
+  candidate_route_policy: >-
+    b-batch node=1 is allowed only as a last-resort simplex fallback when a
+    read-only audit shows an earlier start than shared routes; it exposes one
+    CUDA device to the process but allocates the whole node.
   canonical_context: null
   bridge_training_manifest: null
   interpretation: >-

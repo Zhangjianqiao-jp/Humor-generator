@@ -900,3 +900,8 @@ scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以�
 09/11 10:00 才能启动。作业在模型启动前以 `c_batch_cpu_full_delayed` 删除，未产生
 科学输出（`V35-SCHED-015`）。因此当前仍是“等待同时具备 shared GPU 与 CPU 容量的
 授权槽位”，不是代码或数据失败；不得因 GPU 数字看似空闲而绕过 CPU/节点能力检查。
+
+新增 guarded simplex 后备脚本 `jobs/repair_pretrained_homer_context_bsimplex_short.pjm`：
+它只提交一个 shard、申请 `b-batch + node=1`、30 分钟，并在进程内暴露 CUDA 0。
+该路由会占用整节点，只有在只读审计证明其启动时间早于 shared 路由时才允许使用；
+否则必须保持不提交。脚本不会改变 repair manifest、模型、prompt、seed 或输出范围。
