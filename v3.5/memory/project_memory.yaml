@@ -111,8 +111,8 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T18:06:00+09:00"
-  source_commit: 9b9f40cc34ada9ab711475cedb8bff230712bb57
+  observed_at: "2026-09-10T18:09:00+09:00"
+  source_commit: 3c195b35ab6789834283a2bf8aa20e253503d2d8
   phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
