@@ -59,9 +59,10 @@ DEFAULT_OUTPUT = ROOT / "data/cache/homer_pretrained_7b_homer_context"
 PROMPT_SOURCE = ROOT / "src/humor_generator_v35/homer/official_prompts.py"
 MODEL_MANIFEST = ROOT / "manifests/local_qwen2_5_vl_7b.json"
 POPULATION_MANIFEST = ROOT / "manifests/homer_population_public_release_362.json"
-REPAIR_MANIFEST_VERSION = "pretrained-homer-context-repair-20260910-r2"
+REPAIR_MANIFEST_VERSION = "pretrained-homer-context-repair-20260910-r3"
 SUPPORTED_REPAIR_MANIFEST_VERSIONS = {
     "pretrained-homer-context-repair-20260910",
+    "pretrained-homer-context-repair-20260910-r2",
     REPAIR_MANIFEST_VERSION,
 }
 
@@ -94,8 +95,11 @@ def _load_repair_manifest(
     """Load and independently verify the bounded residual-failure manifest.
 
     The repair job must never silently broaden its scope when a shard failure
-    file has changed.  The tracked manifest pins both the thirteen cluster IDs
-    and the exact failure-file bytes that justified repairing them.
+    file has changed.  The tracked manifest pins the bounded residual cluster
+    IDs and the exact failure-file bytes that justified repairing them.  The
+    number of targets is intentionally allowed to shrink after a successful
+    retry; requiring the historical count would force us to re-introduce
+    already repaired records merely to satisfy a stale guard.
     """
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -111,8 +115,8 @@ def _load_repair_manifest(
     if payload.get("policy") != REPAIR_POLICY_VERSION:
         raise ValueError("repair manifest uses an unsupported repair policy")
     targets = payload.get("targets")
-    if not isinstance(targets, list) or len(targets) != 13:
-        raise ValueError("repair manifest must contain exactly 13 targets")
+    if not isinstance(targets, list) or not 1 <= len(targets) <= 362:
+        raise ValueError("repair manifest must contain between 1 and 362 targets")
     ids: list[str] = []
     for target in targets:
         if not isinstance(target, dict):

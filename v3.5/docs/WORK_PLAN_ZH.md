@@ -937,3 +937,22 @@ shard 都精确达到 `118/118`、`failures.json=[]` 并通过 strict merger 之
 `supersedes`、作业 ID、更新后的三份 failure hash 和当前 13 个错误，所有 repair
 入口已切换到 r2。以后每次失败若使 `failures.json` 变化，必须先生成新的版本化 manifest
 并完成 hash/target 校验，禁止原地改写 manifest 或绕过 provenance gate。
+
+#### 15.3.5 r2 分片结果与 r3 有界重试（2026-09-10）
+
+`6749861` 使用 r2 manifest 在 b-batch simplex 节点完成了 shard-1 的 5 个 residual
+目标处理。作业通过 CUDA、population、adapter-free trace 和模型加载门禁，但最终为
+`117/118`、`failures.json` 保留 1 条 `nycc_821`，因此以 exit code 2 结束。该错误不是
+资源或模型故障：selector 输出了 summary key 中不存在且无法唯一引用已有 key 的
+`engagement`。由于当前 policy 是 validator-feedback **format/reference-only**，把它
+改成 `eagle`、`perch` 或 `tree` 会改变语义，故不能手工兜底；完整原始输出、修复输出、
+错误和 hash 均保留，事件见 `V35-ENG-022`。
+
+本次成功重试使可复用 context 达到 `350/362`（shard-0=`118/118`、shard-1=`117/118`、
+shard-2=`111/118`）。由于每次作业都会刷新 `failures.json`，r2 的源 hash 已过期；已新建
+`manifests/pretrained_homer_context_repair_20260910_r3.json`，只锁定当前 8 条 residual
+（shard-1 一条、shard-2 七条），并将 loader 的旧“必须 13 条”检查改为 `1..362` 的有界
+检查。来源文件 hash 与 target/error 集合仍必须完全相等，所以不会扩大重试范围；所有
+repair entrypoint 已切换到 r3。下一步只允许按资源策略提交 shard-1 的单条 retry，随后
+再提交 shard-2；三 shard 精确达到 `118/118` 且 `failures.json=[]` 前，strict merger、
+bridge 训练、caption 生成和科学评测继续保持 fail-closed。

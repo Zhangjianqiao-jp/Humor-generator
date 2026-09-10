@@ -107,7 +107,7 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T14:10:05+09:00"
+  observed_at: "2026-09-10T14:20:35+09:00"
   source_commit: 4f4c0602af1d826707ac56376bbf6677e834c761
   phase: pretrained_7b_context_validator_repair_waiting_authorized_gpu
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
@@ -115,39 +115,41 @@ current_state:
     status: blocked_pending_bounded_repair
     records: 350
     required: 362
-    residual_failures: 12
+    residual_failures: 8
     partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
-    shards: {shard_0: "118/118", shard_1: "113/118", shard_2: "111/118"}
-    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
-    superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910.json
+    shards: {shard_0: "118/118", shard_1: "117/118", shard_2: "111/118"}
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
+    superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
     repair_policy: validator-feedback-format-only-v1
   bridge_gate: blocked_context_not_complete
   active_jobs: []
   last_scheduler_attempt:
-    job_id: "6749521"
+    job_id: "6749861"
     route: b-batch_node1_simplex
-    status: completed_successfully
-    started_at: "2026-09-10T14:07:15+09:00"
-    ended_at: "2026-09-10T14:10:05+09:00"
-    exit_code: 0
-    records: "118/118"
-    repaired_targets: 1
-    reason: lossless_validator_repair_and_public_homer_replay_passed
-    evidence: v3.5/repair_pretrained_homer_context_bsimplex_short.pjm.6749521.{out,stats}
+    status: completed_with_residual_failure
+    started_at: "2026-09-10T14:14:24+09:00"
+    ended_at: "2026-09-10T14:20:31+09:00"
+    exit_code: 2
+    records: "117/118"
+    residual_failures: 1
+    reason: selector_concept_not_uniquely_repairable
+    evidence: v3.5/repair_pretrained_homer_context_bsimplex_short.pjm.6749861.{out,stats}
   last_repair_result:
-    status: manifest_versioned_after_prior_attempt
+    status: manifest_versioned_after_residual_retry
     failure_records:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-019
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-020
+      - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-022
     success_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-021
     residual_context_records: 350/362
-    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
-    next_action: rerun_only_manifest_scoped_residuals_shards_1_and_2_after_clean_commit_and_preflight
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
+    next_action: rerun_only_manifest_scoped_residuals_shard_1_then_shard_2_after_clean_commit_and_preflight
   next_action: >-
-    Parser fix, versioned manifest, and shard-0 repair are complete. Wait for an
-    authorized b-batch/c-batch allocation with an earlier start; submit exactly one
-    bounded repair copy for shard-1 or shard-2, then require 362/362 context merge
-    before building bridge inputs or starting any bridge/caption evaluation.
+    Parser fix, versioned manifests, and shard-0 repair are complete. Shard-1 job
+    6749861 passed preflight/model load but left one strict selector residual; r3
+    now scopes only the current eight failures. Submit exactly one bounded repair
+    copy for shard-1, then shard-2, and require 362/362 context merge before
+    building bridge inputs or starting any bridge/caption evaluation.
 
 conditions:
   text:
