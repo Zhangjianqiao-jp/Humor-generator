@@ -259,12 +259,14 @@ Pass@K 混算。
 当前已经完成的是代码与协议隔离以及 362-contest public population gate，不是新的训练
 结果。不得把旧 SFT trace、旧 A5 caption 或旧 Group-of-3 结果移植到本路线。
 
-`scripts/check_pretrained_route.py` 分成三层：默认调用检查模型、adapter、协议和
-population manifest，并报告 `data_gate=blocked|ready`；`trace_gate` 单独报告当前
-pretrained hidden-state trace 是否存在；`bridge_data_gate` 只有两者都 ready 才为 ready。
-`--require-data-ready` 同时要求 population 与 trace 均 ready。这样可以在不占 GPU 的
-情况下运行在线 public-code baseline，同时保证 bridge 训练不会把 planner-input 清单
-冒充 hidden-state trace。
+`scripts/check_pretrained_route.py` 将在线基线和 bridge 输入拆成四个独立门禁：
+`data_gate` 检查固定的 public population，`trace_gate` 检查 adapter-free Planner
+hidden-state trace，`context_gate` 检查 362 条 summary/retrieval/selection 后处理上下文，
+`bridge_data_gate` 还要求 source-caption bridge training view 存在并指向同一 context
+hash。在线 public-code baseline 只需要 `data_gate`；`--require-data-ready` 要求
+population 与 trace；bridge 作业必须显式使用 `--require-bridge-data-ready` 或等价的
+`verify_pretrained_bridge_inputs.py`。这样既能在不占 GPU 的情况下运行文本基线，也不会
+把 planner-input 清单、未完成 context 或旧 bridge 数据冒充可训练输入。
 
 ## 权威依据
 

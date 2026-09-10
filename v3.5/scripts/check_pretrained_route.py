@@ -6,11 +6,19 @@ from argparse import ArgumentParser
 import hashlib
 import json
 from pathlib import Path
+import sys
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from humor_generator_v35.training.public_bridge import load_context_index
+
+
 EXPECTED_REVISION = "cc594898137f460bfe9f0759e9844b3ce807cfb5"
+DATA_VERSION = "homer_pretrained_7b_public_release_362"
+MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
 
 
 def check(config_path: Path) -> dict[str, object]:
@@ -168,6 +176,122 @@ def check(config_path: Path) -> dict[str, object]:
         value = str(data["bridge_training_manifest"])
         if "latent_bridge_v35" in value:
             data_errors.append("historical latent_bridge_v35 manifest is forbidden on the pretrained route")
+
+    # Context is deliberately separate from the online population/trace
+    # gates.  The public text baseline can run without this post-trace cache,
+    # while bridge training must fail closed until all 362
+    # summary/retrieval/selection records have been validated.
+    context_errors: list[str] = []
+    context_value = data.get("bridge_context_index")
+    context_records = 0
+    context_index_hash: str | None = None
+    contexts: dict[str, object] = {}
+    if not isinstance(context_value, str) or not context_value:
+        context_errors.append(
+            "data.bridge_context_index is missing; bridge context has not been sealed"
+        )
+    else:
+        context_path = ROOT / context_value
+        if not context_path.is_file():
+            context_errors.append(f"data.bridge_context_index does not exist: {context_value}")
+        else:
+            context_index_hash = hashlib.sha256(context_path.read_bytes()).hexdigest()
+            try:
+                contexts = load_context_index(context_path)
+                context_records = len(contexts)
+            except Exception as exc:
+                context_errors.append(f"pretrained HOMER context index is invalid: {exc}")
+            manifest_path = context_path.parent / "manifest.json"
+            if not manifest_path.is_file():
+                context_errors.append("pretrained HOMER context manifest is missing")
+            else:
+                try:
+                    context_manifest = json.loads(manifest_path.read_text())
+                except json.JSONDecodeError as exc:
+                    context_manifest = {}
+                    context_errors.append(
+                        f"pretrained HOMER context manifest is invalid JSON: {exc}"
+                    )
+                if context_manifest.get("status") != "pass":
+                    context_errors.append(
+                        "pretrained HOMER context manifest is not complete (status != pass)"
+                    )
+                if context_manifest.get("records_in_index") != 362:
+                    context_errors.append(
+                        "pretrained HOMER context index must contain 362 records"
+                    )
+                if context_manifest.get("failure_records") != 0:
+                    context_errors.append(
+                        "pretrained HOMER context cache reports generation failures"
+                    )
+                if context_manifest.get("data_version") != DATA_VERSION:
+                    context_errors.append("pretrained HOMER context data version mismatch")
+                if (
+                    context_manifest.get("model") != MODEL_NAME
+                    or context_manifest.get("revision") != EXPECTED_REVISION
+                ):
+                    context_errors.append("pretrained HOMER context Planner identity mismatch")
+                if context_manifest.get("adapter") is not None:
+                    context_errors.append("pretrained HOMER context must declare adapter=null")
+                trace_path = ROOT / str(data.get("trace_index", ""))
+                input_path = ROOT / str(data.get("trace_input_manifest", ""))
+                if trace_path.is_file() and context_manifest.get(
+                    "trace_index_sha256"
+                ) != hashlib.sha256(trace_path.read_bytes()).hexdigest():
+                    context_errors.append("pretrained HOMER context trace-index hash mismatch")
+                if input_path.is_file() and context_manifest.get(
+                    "trace_input_manifest_sha256"
+                ) != hashlib.sha256(input_path.read_bytes()).hexdigest():
+                    context_errors.append("pretrained HOMER context trace-input hash mismatch")
+            if context_records != 362:
+                context_errors.append(
+                    f"pretrained HOMER context index has {context_records} records; expected 362"
+                )
+            if trace_value and (ROOT / trace_value).is_file() and contexts:
+                try:
+                    trace_clusters = {
+                        str(json.loads(line).get("cluster_id"))
+                        for line in (ROOT / trace_value).read_text().splitlines()
+                        if line.strip()
+                    }
+                except (json.JSONDecodeError, OSError):
+                    trace_clusters = set()
+                if trace_clusters and trace_clusters != set(contexts):
+                    context_errors.append(
+                        "pretrained HOMER context and trace cluster sets differ"
+                    )
+
+    # A complete context cache is still not a bridge dataset.  Keep the final
+    # bridge gate blocked until the source-caption training view is present
+    # and its own verified manifest points at this exact context hash.
+    bridge_errors = [*data_errors, *trace_errors, *context_errors]
+    bridge_manifest_value = data.get("bridge_training_manifest")
+    if not isinstance(bridge_manifest_value, str) or not bridge_manifest_value:
+        bridge_errors.append(
+            "data.bridge_training_manifest is missing; bridge input view is not sealed"
+        )
+    else:
+        bridge_manifest_path = ROOT / bridge_manifest_value
+        if not bridge_manifest_path.is_file():
+            bridge_errors.append(
+                f"data.bridge_training_manifest does not exist: {bridge_manifest_value}"
+            )
+        else:
+            try:
+                bridge_manifest = json.loads(bridge_manifest_path.read_text())
+            except json.JSONDecodeError as exc:
+                bridge_manifest = {}
+                bridge_errors.append(f"bridge training manifest is invalid JSON: {exc}")
+            if bridge_manifest.get("status") != "verified_current_pretrained_bridge_training_view":
+                bridge_errors.append(
+                    "bridge training manifest is not the verified current pretrained view"
+                )
+            if bridge_manifest.get("data_version") != DATA_VERSION:
+                bridge_errors.append("bridge training manifest data version mismatch")
+            if context_index_hash and bridge_manifest.get(
+                "context_index_sha256"
+            ) != context_index_hash:
+                bridge_errors.append("bridge training manifest context-index hash mismatch")
     return {
         "status": "pass" if not errors else "fail",
         "config": str(config_path),
@@ -178,7 +302,12 @@ def check(config_path: Path) -> dict[str, object]:
         "data_errors": data_errors,
         "trace_gate": "ready" if not trace_errors else "blocked",
         "trace_errors": trace_errors,
-        "bridge_data_gate": "ready" if not data_errors and not trace_errors else "blocked",
+        "context_gate": "ready" if not context_errors else "blocked",
+        "context_errors": context_errors,
+        "context_records": context_records,
+        "context_index_sha256": context_index_hash,
+        "bridge_data_gate": "ready" if not bridge_errors else "blocked",
+        "bridge_data_errors": bridge_errors,
         "population_manifest": population_manifest_payload,
         "evaluator": {
             "model": evaluator_model,
@@ -200,12 +329,32 @@ def main() -> None:
         action="store_true",
         help="Exit non-zero unless the verified population rows and current trace index exist.",
     )
+    parser.add_argument(
+        "--require-context-ready",
+        action="store_true",
+        help="Also require the complete 362-record post-trace HOMER context cache.",
+    )
+    parser.add_argument(
+        "--require-bridge-data-ready",
+        action="store_true",
+        help="Require the complete context cache and verified bridge training view.",
+    )
     args = parser.parse_args()
     report = check(args.config.resolve())
     print(json.dumps(report, indent=2))
     if report["status"] != "pass" or (
         args.require_data_ready
         and (report["data_gate"] != "ready" or report["trace_gate"] != "ready")
+    ) or (
+        args.require_context_ready
+        and (
+            report["data_gate"] != "ready"
+            or report["trace_gate"] != "ready"
+            or report["context_gate"] != "ready"
+        )
+    ) or (
+        args.require_bridge_data_ready
+        and report["bridge_data_gate"] != "ready"
     ):
         raise SystemExit(1)
 

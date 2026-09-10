@@ -109,7 +109,11 @@ def test_pretrained_route_has_no_policy_adapters() -> None:
     report = check(Path(__file__).parents[1] / "configs/homer_public_code_pretrained_7b.yaml")
     assert report["status"] == "pass"
     assert report["data_gate"] == "ready"
-    assert report["trace_gate"] == "blocked"
+    # Planner hidden-state traces are complete, but post-trace
+    # summary/retrieval/selection context and the bridge training view have
+    # not yet been sealed.  These are intentionally independent gates.
+    assert report["trace_gate"] == "ready"
+    assert report["context_gate"] == "blocked"
     assert report["bridge_data_gate"] == "blocked"
     assert report["population_manifest"]["allowlist_contest_count"] == 362
 

@@ -6,6 +6,7 @@ must not introduce, remove, paraphrase, or reorder semantic content.
 """
 from __future__ import annotations
 
+import ast
 from collections import Counter
 import json
 import re
@@ -37,6 +38,16 @@ CHANNEL_REQUIREMENTS = {
         "Return one JSON object mapping each previously stated root entity to exactly three "
         "previously stated association-step strings."
     ),
+    "summary": (
+        "Return one JSON object. Preserve every root key and every value string from the "
+        "preceding answer verbatim; only normalize its serialization so each value is a "
+        "non-empty list of strings. Do not add, remove, merge, reorder, paraphrase, or infer."
+    ),
+    "entities": (
+        "Return exactly [entity1, entity2], choosing only names from the supplied entity list. "
+        "A name may be normalized to the unique supplied key it explicitly refers to; do not "
+        "invent, add, remove, or paraphrase an entity."
+    ),
 }
 
 _NUMBERED_ITEM = re.compile(
@@ -63,6 +74,126 @@ def _association_semantics(value: Any) -> list[str]:
                 result.append(_normalized(key))
             result.extend(_association_semantics(item))
     return [item for item in result if item]
+
+
+def _jsonish(value: str) -> Any:
+    """Parse JSON, or a Python-literal serialization, without executing code."""
+    candidate = value.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", candidate, flags=re.I | re.S)
+    if fenced:
+        candidate = fenced.group(1).strip()
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        try:
+            return ast.literal_eval(candidate)
+        except (SyntaxError, ValueError, TypeError) as exc:
+            raise ValueError("output is not losslessly parseable JSON") from exc
+
+
+def _summary_semantics(value: Any) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Canonicalize summary content while preserving keys, values, and order."""
+    if isinstance(value, dict):
+        items = list(value.items())
+    elif isinstance(value, list) and value and all(isinstance(item, dict) and len(item) == 1 for item in value):
+        items = []
+        for item in value:
+            items.extend(item.items())
+    else:
+        raise ValueError("summary semantic source must be an object or one-key object list")
+    result: list[tuple[str, tuple[str, ...]]] = []
+    for key, raw_values in items:
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("summary root key is not a string")
+        values = [raw_values] if isinstance(raw_values, str) else raw_values
+        if not isinstance(values, (list, tuple)) or not values:
+            raise ValueError("summary values are not a non-empty string sequence")
+        if any(not isinstance(item, str) or not item.strip() for item in values):
+            raise ValueError("summary contains a non-string value")
+        result.append((_normalized(key), tuple(_normalized(item) for item in values)))
+    return tuple(result)
+
+
+def assert_lossless_summary_repair(invalid_output: str, repaired_output: str) -> None:
+    """Allow only a serialization repair of a summary response.
+
+    The repaired response must be a strict JSON object whose per-root value is
+    a list of strings.  Comparing the canonical ordered key/value sequence to
+    the original prevents a repair model from inventing or paraphrasing
+    imagination content.
+    """
+    before = _summary_semantics(_jsonish(invalid_output))
+    after_value = _jsonish(repaired_output)
+    if not isinstance(after_value, dict) or not after_value:
+        raise ValueError("repaired summary must be a non-empty JSON object")
+    after = _summary_semantics(after_value)
+    if before != after:
+        raise ValueError("repair changed summary semantic strings")
+    # A valid repair must be JSON (not merely a Python literal) and list-valued.
+    try:
+        parsed = json.loads(repaired_output.strip().removeprefix("```json").removesuffix("```").strip())
+    except json.JSONDecodeError as exc:
+        raise ValueError("repaired summary must be strict JSON") from exc
+    if not isinstance(parsed, dict) or any(
+        not isinstance(key, str) or not isinstance(values, list) or not values
+        or any(not isinstance(item, str) or not item.strip() for item in values)
+        for key, values in parsed.items()
+    ):
+        raise ValueError("repaired summary values must be non-empty lists of strings")
+
+
+def _entity_candidates(value: str) -> list[str]:
+    matches = re.findall(r"\[([^\]]*)\]", value, flags=re.S)
+    if not matches:
+        raise ValueError("entity response has no bracketed list")
+    values = [item.strip().strip("\\\"'") for item in matches[-1].split(",") if item.strip().strip("\\\"'")]
+    return values
+
+
+def _entity_tokens(value: str) -> set[str]:
+    return set(re.findall(r"[\w]+", value.casefold()))
+
+
+def assert_reference_only_entity_repair(
+    invalid_output: str,
+    repaired_output: str,
+    *,
+    available: list[str],
+) -> None:
+    """Validate entity repair as unique reference normalization only.
+
+    This permits e.g. ``Dragon`` → ``Dragon holding flowers`` when that key is
+    the unique available reference, but rejects invented entities, paraphrases,
+    duplicate selections, and ambiguous mappings.
+    """
+    before = _entity_candidates(invalid_output)
+    after = _entity_candidates(repaired_output)
+    if len(before) != 2 or len(after) != 2:
+        raise ValueError("entity repair must preserve exactly two candidates")
+    folded = {str(item).casefold(): str(item) for item in available}
+    mapped: list[str] = []
+    for candidate in before:
+        exact = folded.get(candidate.casefold())
+        if exact is not None:
+            matches = [exact]
+        else:
+            tokens = _entity_tokens(candidate)
+            matches = [
+                item for item in available
+                if tokens and (
+                    tokens.issubset(_entity_tokens(item))
+                    or _entity_tokens(item).issubset(tokens)
+                )
+            ]
+        if len(matches) != 1:
+            raise ValueError(f"entity reference is not uniquely repairable: {candidate!r}")
+        mapped.append(matches[0])
+    if len({item.casefold() for item in mapped}) != 2:
+        raise ValueError("entity repair cannot make duplicate references distinct")
+    if [item.casefold() for item in after] != [item.casefold() for item in mapped]:
+        raise ValueError("repair changed or reordered entity references")
+    if [item for item in after if item.casefold() not in folded] or len(set(after)) != 2:
+        raise ValueError("repaired entities must be distinct supplied keys")
 
 
 def assert_lossless_repair(invalid_output: str, repaired_output: str, *, channel: str) -> None:

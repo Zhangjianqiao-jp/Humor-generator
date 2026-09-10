@@ -853,3 +853,22 @@ hash、错误 hash、模型/prompt/seed/commit provenance，并只重试这 13 �
 通过 `failures.json=[]` 且三 shard 的精确 118 条校验后，才可运行 strict merger；在此之前
 禁止 bridge 训练、caption 生成和任何科学结论。详细事件见
 `docs/EXPERIMENT_FAILURES.jsonl` 的 `V35-ENG-017`。
+
+#### 15.3.3 有界 validator-feedback repair（2026-09-10）
+
+本轮只恢复 `V35-ENG-017` 列出的 13 个 residual cluster，不重新遍历 362 条：
+`manifests/pretrained_homer_context_repair_20260910.json` 固定 cluster、来源 shard、
+原始 error 和三个 `failures.json` 的 SHA-256。`scripts/cache_pretrained_homer_context.py`
+在同一 Qwen2.5-VL-7B revision、同一 HOMER 原始 prompt 后追加一轮 validator feedback；
+summary 只允许严格 JSON 序列化修复，entity 只允许映射到唯一已有 summary key。修复前后
+语义字符串必须完全守恒，任何新增、删除、合并、重排、改写或伪造都会使该 cluster 失败。
+原始响应、修复响应、SHA-256、seed、模型/adapter/prompt hash、repair policy 和 Git
+commit 都保存于 context record/failures evidence。
+
+作业 `jobs/repair_pretrained_homer_context_cgpu.pjm` 按 source shard 分三次提交，每次
+只申请 `c-batch` 的一张 scheduler-visible native GPU，不设置 `CUDA_VISIBLE_DEVICES`，并
+在模型加载前运行 CUDA、人口、trace 和 route gate。每个 shard 必须回到完整 `118/118`
+且 `failures.json=[]`；否则保留 residual failure 并建立新的修复 manifest，禁止扩大范围。
+只有三个 shard 全通过，才运行严格 merger 生成 canonical `362/362` context；随后重新
+构建 bridge training view 并通过 `--require-bridge-data-ready`，才允许 bridge/caption
+训练和 pure-text HOMER 对比。

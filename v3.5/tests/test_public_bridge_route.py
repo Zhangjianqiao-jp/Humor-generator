@@ -36,6 +36,27 @@ class ContextBackend:
         raise AssertionError(f"unexpected context prompt: {text}")
 
 
+class RepairingContextBackend(ContextBackend):
+    def generate(self, messages, *, temperature, max_new_tokens, seed):
+        text = " ".join(
+            block.get("text", "")
+            for message in messages
+            for block in (
+                message.get("content", [])
+                if isinstance(message.get("content"), list)
+                else [{"text": message.get("content", "")}]
+            )
+            if isinstance(block, dict)
+        )
+        if "Repair only the schema" in text:
+            return '{"cat":["keyboard"],"keyboard":["office","deadline"]}'
+        if "two JSON lists" in text:
+            # The values are semantically valid but serialized as a one-key
+            # object list; the feedback turn may normalize this only.
+            return "[{'cat':'keyboard'},{'keyboard':['office','deadline']}]"
+        return super().generate(messages, temperature=temperature, max_new_tokens=max_new_tokens, seed=seed)
+
+
 class ContextRetriever:
     def retrieve(self, summary, *, description, conflicts):
         del description, conflicts
@@ -97,6 +118,30 @@ def test_current_context_replay_keeps_selection_and_path() -> None:
     assert [item["stage"] for item in context["call_log"]] == [
         "imaginator.summary", "generator.select_conflict", "generator.select_entities"
     ]
+
+
+def test_context_validator_feedback_repair_preserves_summary_semantics() -> None:
+    context = build_context_for_record(
+        RepairingContextBackend(),
+        _row(),
+        _trace(),
+        ContextRetriever(),
+        seed=17,
+        enable_validator_repair=True,
+        repair_attempts=1,
+    )
+    assert context["summary_imagination"] == {
+        "cat": ["keyboard"],
+        "keyboard": ["office", "deadline"],
+    }
+    assert len(context["repair_records"]) == 1
+    repair = context["repair_records"][0]
+    assert repair["channel"] == "summary"
+    assert repair["original_output_sha256"]
+    assert repair["repair_output_sha256"]
+    assert any(
+        "validator_feedback_repair" in item["stage"] for item in context["call_log"]
+    )
 
 
 def test_public_bridge_uses_official_system_and_replaces_only_plan_block(tmp_path: Path) -> None:

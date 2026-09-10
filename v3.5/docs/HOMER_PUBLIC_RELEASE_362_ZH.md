@@ -77,8 +77,9 @@ allow-list 本身位于
 
 ```text
 data_gate       = ready       # 362 公共人口可复现，允许在线 public-code baseline
-trace_gate      = blocked     # current pretrained hidden-state trace 尚未生成
-bridge_data_gate= blocked     # 因此暂不允许 bridge training
+trace_gate      = ready       # adapter-free Planner hidden-state trace 已完成
+context_gate    = blocked     # post-trace summary/retrieval/selection 尚未封存
+bridge_data_gate= blocked     # bridge view 尚未构建，因此暂不训练 bridge
 ```
 
 这避免了两个相反错误：
