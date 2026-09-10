@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T23:08:51+09:00"
+observed_at: "2026-09-11T00:25:00+09:00"
 must_revalidate: true
-source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
+source_commit: 16e887ad3420e8f6318976e6b5f1f180508cccf4
 branch: latent
 
-current_phase: pretrained_7b_formal_bridge_complete_generation_smoke_passed_full_generation_pending
+current_phase: pretrained_7b_formal_bridge_and_full_generation_complete_evaluation_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -463,7 +463,7 @@ latest_homer_protocol_audit:
   evaluator_contract: gpt-5-chat-latest_temperature_0_pass_at_1_3_5_five_repeats
   benchmark_contract: hia_original_gpt4_turbo_overall_gpt4o_vision_best_pick_separate
   data_status: public_release_362_verified_canonical_365_unresolved_current_878_lineage_verified
-  formal_generation_status: comparison_smoke_passed_full_generation_not_started
+  formal_generation_status: complete_2350_records_evaluation_pending
   claim_boundary: >-
     Prompt/stage/retrieval interface is now auditable, but model weights,
     benchmark population and evaluation runs are not identical to HOMER paper;
@@ -548,6 +548,30 @@ resource_diagnosis:
     candidates_per_image: 1
     evidence: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910
     output_gate: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910/smoke_gate.json
+  last_full_comparison_generation:
+    job_id: "6754609"
+    job_name: v35pubgen
+    route: b-batch_gpu1_shared
+    status: completed_successfully
+    started_at: "2026-09-10T23:14:26+09:00"
+    ended_at: "2026-09-11T00:17:36+09:00"
+    exit_code: 0
+    elapse_seconds: 3791
+    host: genkai0002
+    device: NVIDIA_H100
+    gpu_allocated: 1
+    max_vnode_memory_mib: 5334.9
+    records: 2350
+    images: 47
+    conditions: [text_homer_context_replay, latent_bridge]
+    trials: 5
+    candidates_per_image: 5
+    output: outputs/pilot/pretrained_public_bridge_comparison_20260910
+    generation_gate: outputs/pilot/pretrained_public_bridge_comparison_20260910/generation_gate.json
+    generation_sha256: d3d5ec8ebce0decb8e1eb04e0a12fc8e38aff5ea59f3458f69163b21b18c2327
+    caption_judgement_input: outputs/caption_judgement/pretrained_bridge_comparison_20260911/generations.jsonl
+    caption_judgement_input_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
+    scientific_status: generations_complete_judge_not_run
 
 native_full_gpu_fix:
   scope: historical_p1_not_current
@@ -592,7 +616,7 @@ program_risk_audit:
     latent benefit is claimed before the HOMER-comparable caption evaluation.
 
 immediate_gate:
-  action: submit_one_full_comparison_job_using_validated_bgpu_shared_route
+  action: build_homer_primary_and_auxiliary_blind_evaluation_packets
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -601,7 +625,7 @@ immediate_gate:
   evaluator_manifest: manifests/homer_official_assets.json
   required_resource: b-batch_gpu1_shared_native_allocator_scheduler_visible_cuda_after_real_generation_smoke
   active_jobs: []
-  scientific_training: true
+  scientific_training: false
   smoke_status: passed_job_6754567
   success_requires:
     - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
@@ -610,7 +634,8 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
   current_blockers:
-    - full_comparison_generation_pending
+    - homer_primary_judge_results_pending
+    - auxiliary_blind_ratings_pending
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   automatic_continuation:
     task_id: v35-complete-followup-v2
@@ -641,8 +666,6 @@ immediate_gate:
 
 remaining_sequence_after_resource_gate:
   - post_job_full_sha_provenance_audit
-  - commit_and_push_generation_gate_fixes
-  - submit_one_current_route_comparison_generation_job_when_start_estimate_is_acceptable
   - require_generation_gate_47x5x5x2
   - build_and_audit_blinded_caption_packets
   - obtain_non_fabricated_independent_judgments
@@ -650,7 +673,7 @@ remaining_sequence_after_resource_gate:
   - publish_text_homer_vs_latent_comparison_report
 
 eta:
-  scheduler_wait: formal_bridge_complete_generation_smoke_passed_full_generation_pending
+  scheduler_wait: full_generation_terminal_evaluation_pending
   a3_smoke: completed_in_4m20s
   a3_semantic_pilot_after_smoke: completed_in_25m06s
   outer_semantic_confirmation: historical_provenance_failure
@@ -674,10 +697,10 @@ next_agent_actions:
   - Run `scripts/verify_pretrained_bridge_inputs.py` with both current bridge configs and retain its JSON evidence.
   - CPU `scripts/engineering_smoke.py`, targeted public-route tests, and the 2-example real-trace GPU smoke 6754049 pass.
   - Formal bridge job 6754067 completed successfully; retain its full-SHA post-job audit.
-  - Commit/push the reviewed generation-only fixes, then request exactly one current-route comparison generation job using the validated b-batch shared gpu=1 route; no caption evaluation before its 2350-row gate passes.
+  - Full comparison generation job 6754609 completed successfully; retain its terminal stats and exact 2350-row gate.
   - Preserve the successful real generation smoke 6754567 as an engineering gate; it is not a quality result and must not be pooled with the 2350-row scientific output.
   - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
-  - Do not start caption generation or preference learning until bridge-only training and held-out HOMER evaluation are complete; preference learning remains disabled in v3.5.
+  - Normalized generations passed Caption-judgement schema/image validation; build blind packets and obtain external HOMER-compatible judge results next. Preference learning remains disabled in v3.5.
 
 automation:
   tmux_session: null

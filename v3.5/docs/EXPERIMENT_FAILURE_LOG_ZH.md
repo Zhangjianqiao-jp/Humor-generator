@@ -428,3 +428,23 @@ adapter 的 Qwen2.5-VL-7B revision，在两个官方 public-release test image �
 `CUDA_VISIBLE_DEVICES`，并且只提交一份。正式门禁仍必须严格通过 47 张图片 × 5 trials ×
 5 candidates × 2 conditions = 2350 条完整键集合、图片 hash、seed、两种 condition 的
 checkpoint provenance 检查后，才允许进入 Caption-judgement；smoke 本身不解锁科学结论。
+
+## V35-SCHED-028（2026-09-11）：完整 held-out caption 生成通过门禁
+
+这不是失败记录，而是对 V35-SCHED-027 smoke 后正式生成终态的审计记录。唯一正式作业
+`6754609`（`v35pubgen`）使用相同的 `b-batch + gpu=1 + shared` 路线，在 `genkai0002`
+的 NVIDIA H100 上于 `2026-09-10 23:14:26` 启动、`2026-09-11 00:17:36` 结束，exit code
+为 0，耗时 3791 秒，峰值 vnode memory 为 5334.9 MiB，分配 1 个 GPU。它在 47 张
+public-release test 图片上生成 `text_homer_context_replay` 与 `latent_bridge` 两个
+condition，每个 5 个 trial、每 trial 5 个 candidate，共 2350 行。
+
+`generation_gate.json` 验证了完整 image×trial×candidate 笛卡尔积、每 condition 1175 行、
+图片 hash、seed 映射、非空 caption 和 latent checkpoint provenance。适配到
+Caption-judgement 后，`validate --check-images` 与 `audit` 均通过：两条件各 1175 行、
+47 张图片、每个 system/image 25 个候选、空输出率为 0。该审计没有调用 judge，因此不能
+推出幽默质量、Pass@1/3/5、win rate 或 good/weak/bad 结论。
+
+根因/状态：无执行错误；当前剩余阻塞是外部评审授权和真实结果。下一步生成 HOMER primary
+评测输入以及项目扩展的盲评 packet，保存 evaluator model、temperature、prompt hash、
+代码 commit 和输入 hash；没有真实评分时严禁写入任何聚合结果。DPO、SimPO、IPO 和旧
+v2.5/v3.0 pipeline 仍在 v3.5 禁止范围内。

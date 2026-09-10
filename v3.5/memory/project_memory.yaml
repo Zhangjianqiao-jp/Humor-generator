@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T23:08:51+09:00"
-  source_commit: 2477f4e461dc4477928a9b8cf3e9cbb4a54120ea
-  phase: pretrained_7b_formal_bridge_complete_generation_smoke_passed_full_generation_pending
+  observed_at: "2026-09-11T00:25:00+09:00"
+  source_commit: 16e887ad3420e8f6318976e6b5f1f180508cccf4
+  phase: pretrained_7b_formal_bridge_and_full_generation_complete_evaluation_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -149,6 +149,30 @@ current_state:
     candidates_per_image: 1
     scientific_training: false
     evidence: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910
+  last_full_comparison_generation:
+    job_id: "6754609"
+    name: v35pubgen
+    route: b-batch_gpu1_shared
+    status: completed_successfully
+    started_at: "2026-09-10T23:14:26+09:00"
+    ended_at: "2026-09-11T00:17:36+09:00"
+    exit_code: 0
+    elapse_seconds: 3791
+    host: genkai0002
+    device: NVIDIA_H100
+    gpu_allocated: 1
+    max_vnode_memory_mib: 5334.9
+    records: 2350
+    images: 47
+    conditions: [text_homer_context_replay, latent_bridge]
+    trials: 5
+    candidates_per_image: 5
+    output: outputs/pilot/pretrained_public_bridge_comparison_20260910
+    generation_gate: outputs/pilot/pretrained_public_bridge_comparison_20260910/generation_gate.json
+    generation_sha256: d3d5ec8ebce0decb8e1eb04e0a12fc8e38aff5ea59f3458f69163b21b18c2327
+    caption_judgement_input: outputs/caption_judgement/pretrained_bridge_comparison_20260911/generations.jsonl
+    caption_judgement_input_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
+    scientific_status: generations_complete_judge_not_run
   last_formal_bridge:
     job_id: "6754067"
     name: v35pubform90
@@ -459,7 +483,7 @@ evaluation:
     candidates_per_image: 5
     pass_at_k: [1, 3, 5]
     repeated_trials: 5
-    status: protocol_locked_not_run
+    status: generations_ready_external_judge_pending
   required_metrics:
     - overall_win_rate
     - best_pick_win_rate

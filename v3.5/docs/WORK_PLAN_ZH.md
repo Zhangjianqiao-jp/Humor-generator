@@ -2,7 +2,7 @@
 
 > 本轮完整的算法/协议审计见 [`docs/ALGORITHM_AUDIT_V35_ZH.md`](ALGORITHM_AUDIT_V35_ZH.md)，方法—证据—引用逐项台账见 [`docs/METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md)。文中所有“已实现/已运行”均须能回溯到代码、配置和 artifact；历史 A3/A4/A5 结果只作失败记录，不能冒充当前主线结果。当前主线是 **adapter-free 预训练 Qwen2.5-VL-7B 的 HOMER public-code route + bridge-only latent communication**；v2.5/DPO 与旧 latent 数据均不在可执行范围。
 
-## 当前执行状态（2026-09-10）
+## 当前执行状态（2026-09-11）
 
 当前 public-release route 的四个门禁均已通过：
 
@@ -19,17 +19,21 @@ bridge_data_gate ready  (bridge rows = train 813 / validation 132 / test 141)
 hash、模型 revision、prompt hash、repair manifest 和 Git commit。修复过的 `nycc_678`
 只通过 validator-feedback format-only policy，不改写语义。
 
-下一步顺序不可跳过：
+已完成的生成门禁：
 
 ```text
-CPU route/preflight + targeted pytest
-→ ≤2 real-trace GPU engineering smoke
-→ smoke validator/provenance check
-→ 单卡 bridge-only 训练（Planner/Generator 冻结）
-→ validation early stopping/checkpoint
-→ held-out test caption generation（保留 ##Caption/##Explanation）
-→ HOMER primary Pass@1/3/5（GPT-5, 5 candidates, 5 trials）
+bridge-only training       complete (job 6754067)
+held-out caption generation complete (job 6754609; 2350 rows)
+```
+
+当前下一步顺序不可跳过：
+
+```text
+HOMER primary evaluator packets/records
+→ 获得真实 GPT-5 judge results（不能伪造）
+→ Pass@1/3/5（5 candidates, 5 trials）
 → Group-of-10/multi-judge/cluster bootstrap 作为辅助分析
+→ 统一 provenance 后发布比较报告
 ```
 
 在 bridge smoke 和训练前，不得运行 caption 科学评测，也不得启动 DPO、联合 RL 或
@@ -1189,8 +1193,39 @@ bridge-input、模型 revision、context/trace hash 和 bridge checkpoint proven
 并明确标记为 `scientific_training=false`。
 
 该 smoke 仅证明共享 GPU 资源合同和端到端生成代码可运行，不能用于判断幽默质量或 latent
-收益，也不与正式 2,350 条结果合并。后续唯一允许的科学生成作业是同一 shared 合同下的
-47 张 test image × 5 trials × 5 candidates × 2 conditions；必须先通过严格完整键集合、
-图片 hash、seed、非空 caption 和 condition-specific checkpoint provenance gate，才进入
-Caption-judgement 与 HOMER Pass@1/3/5。当前状态仍为“正式 full generation pending”，
-未开始任何盲评或质量结论。
+收益，也不与正式 2,350 条结果合并。这里记录的是正式生成启动前状态，已由 15.3.14 的
+terminal generation 记录取代；smoke 本身仍不构成质量结论。
+## 15.3.14 完整 held-out caption 生成终态（2026-09-11 00:17 JST）
+
+正式 bridge checkpoint 完成后，唯一的比较生成作业 `6754609` 已在
+`b-batch + gpu=1 + shared` 合同下于 `genkai0002/H100` 正常完成：
+
+```text
+start/end: 2026-09-10 23:14:26 → 2026-09-11 00:17:36 JST
+exit code: 0
+elapsed: 3791 s (01:03:11)
+GPU: 1 × NVIDIA H100
+peak vnode memory: 5334.9 MiB
+population: 47 public-release test images
+conditions: text_homer_context_replay, latent_bridge
+trials: 5
+candidate/image/trial: 5
+records: 2350 = 47 × 5 × 5 × 2
+```
+
+`generation_gate.json`、两个 condition manifest 和原始 `generations.jsonl` 均通过严格
+笛卡尔积、image hash、seed/trial/candidate、非空 caption 及 checkpoint provenance 检查。
+Caption-judgement 适配后的输入也通过 `validate --check-images`：两种 condition 各
+1175 行、47 张图片、每个 system/image 共 25 个候选，唯一跨 condition 完全重复 caption
+为 1 条。审计统计（只用于数据质检，不是质量结论）为：latent 平均 14.79 词、generic
+template rate 5.11%；text 平均 18.07 词、generic template rate 8.51%；两者空输出率均
+为 0。
+
+当前科学状态是 `generations_complete_judge_not_run`：尚未得到 GPT-5 HOMER evaluator 的
+`winning_caption_count`，也尚未收集项目扩展的独立盲评。因此现在不能报告 Pass@1/3/5、
+win rate、good/weak/bad 或“latent 提升”。下一步是生成并审计 HOMER primary 与
+Group-of-10 auxiliary blind packets，之后只接受有完整 provenance 的外部评审结果。
+
+本记录对应运行时代码提交 `16e887ad3420e8f6318976e6b5f1f180508cccf4`；正式 bridge
+运行时提交仍为 `2477f4e461dc4477928a9b8cf3e9cbb4a54120ea`，两者均保留，不修改历史
+作业证据。旧 v2.5/v3.0、DPO 和历史 latent 输出不进入本次统计。
