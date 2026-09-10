@@ -44,12 +44,12 @@ for shard in 0 1 2; do
     --dataset data/processed/homer_pretrained_7b_public_release_362 \
     --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
     --output "data/cache/homer_pretrained_7b_homer_context_shard_${shard}" \
-  --repair-manifest manifests/pretrained_homer_context_repair_20260910_r5.json \
+  --repair-manifest manifests/pretrained_homer_context_repair_20260910_r6.json \
     --repair-shard "$shard" \
     --enable-validator-repair \
     --repair-attempts 2 \
     --attempts 2 \
-    --retry-round 4 \
+    --retry-round 5 \
     --seed 20260906 \
     --temperature 1.0 \
     --top-p 1.0
@@ -61,7 +61,7 @@ from pathlib import Path
 
 root = Path.cwd()
 shard = int(sys.argv[1])
-manifest = json.loads((root / "manifests/pretrained_homer_context_repair_20260910_r5.json").read_text())
+manifest = json.loads((root / "manifests/pretrained_homer_context_repair_20260910_r6.json").read_text())
 targets = {item["cluster_id"] for item in manifest["targets"] if item["source_shard"] == shard}
 rows = [json.loads(line) for line in (root / "data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl").read_text().splitlines() if line.strip()]
 partial = root / "data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl"
