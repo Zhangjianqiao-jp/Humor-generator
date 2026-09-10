@@ -111,9 +111,9 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T17:03:43+09:00"
-  source_commit: 28dc1e6001c9550fd37292e1678f22f8bab28b89
-  phase: pretrained_7b_real_trace_bridge_smoke_queued
+  observed_at: "2026-09-10T17:10:30+09:00"
+  source_commit: 5305a1115bc0cb21ad3453bcde8543bef151c3f4
+  phase: pretrained_7b_real_trace_bridge_smoke_clean_resubmission_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: ready
@@ -130,18 +130,7 @@ current_state:
     dataset: data/processed/homer_pretrained_7b_bridge_362
     manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
     rows: {train: 813, validation: 132, test: 141}
-  active_jobs:
-    - job_id: "6753520"
-      name: v35pubsmoke
-      route: b-batch_node1_full_gpu
-      status: queued
-      submitted_at: "2026-09-10T17:03:16+09:00"
-      estimated_start: "2026-09-11T02:00:00+09:00"
-      output: outputs/engineering_smoke/pretrained_public_real_trace_20260910_170314
-      source_commit: a8377ad2fd7d415bc266dadabdae6305e610c066
-      scientific_training: false
-      scope: <=2_real_trace_engineering_smoke_only
-      duplicate_policy: sole_current_gpu_copy
+  active_jobs: []
   last_scheduler_attempt:
     job_id: "6751564"
     route: b-batch_node1_simplex
@@ -197,10 +186,10 @@ current_state:
     and independently verified.  CPU smoke and targeted regression tests pass.
     The previous queued smoke 6753474 was canceled before execution because its
     script preceded the final context-faithful preflight commit (V35-SCHED-019).
-    Clean replacement 6753520 was submitted after commit a8377ad was pushed and
-    is queued for the first observed b-batch node-exclusive slot.  It is the
-    sole current GPU copy; no formal training or caption evaluation is authorized
-    until its validator passes.
+    Replacement 6753520 was canceled before execution because a later memory-only
+    commit changed the runtime HEAD.  Submit one new copy only after the final
+    memory snapshot is committed and pushed; no formal training or caption
+    evaluation is authorized until its validator passes.
 
 conditions:
   text:

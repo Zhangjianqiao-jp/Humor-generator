@@ -1,12 +1,12 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-10T17:03:43+09:00"
+observed_at: "2026-09-10T17:10:30+09:00"
 must_revalidate: true
-source_commit: 28dc1e6001c9550fd37292e1678f22f8bab28b89
+source_commit: 5305a1115bc0cb21ad3453bcde8543bef151c3f4
 branch: latent
 
-current_phase: pretrained_7b_real_trace_bridge_smoke_queued
+current_phase: pretrained_7b_real_trace_bridge_smoke_clean_resubmission_pending
 scope: v3.5_latent_only
 preference_learning:
   status: disabled
@@ -475,24 +475,18 @@ resource_diagnosis:
     Both multi-slice and single-slice MIG formal paths previously triggered the same
     PyTorch/NVML allocator failure; passing a small MIG smoke did not predict formal stability.
   current_policy: one_full_gpu_native_allocator_cuda0
-  active_jobs:
-    - job_id: "6753520"
-      name: v35pubsmoke
-      status: queued
-      route: b-batch_node1_full_gpu
-      estimated_start: "2026-09-11T02:00:00+09:00"
-      output: outputs/engineering_smoke/pretrained_public_real_trace_20260910_170314
-      source_commit: a8377ad2fd7d415bc266dadabdae6305e610c066
-      scientific_training: false
+  active_jobs: []
   last_readonly_resource_snapshot:
     observed_at: "2026-09-10T17:06:16+09:00"
     b_batch_nodes: {total: 35, free: 0, allocated: 35}
+    b_batch_gpu: {total: 980, free: 840, allocated: 140}
     c_batch_nodes: {total: 2, free: 0, allocated: 2}
+    c_batch_gpu: {total: 56, free: 40, allocated: 16}
     b_batch_mig_nodes: {total: 2, free: 0, allocated: 2}
     b_inter_mig_nodes: {total: 2, free: 0, allocated: 2}
     b_reserve_nodes: {total: 4, free: 0, allocated: 4, authorized: false}
     a_batch_nodes: {total: 1020, free: 137, allocated: 883, gpu_route: false}
-    decision: retain_6753520; no_authorized_earlier_gpu_route
+    decision: retain_b_batch_node1_only_for_next_clean_submission; no_authorized_earlier_gpu_route
   stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
   stale_session_policy: do_not_resume_or_submit
 
@@ -539,7 +533,7 @@ program_risk_audit:
     claimed before the training and HOMER-comparable evaluation gates.
 
 immediate_gate:
-  action: monitor_current_pretrained_bridge_engineering_smoke_6753520
+  action: submit_current_pretrained_bridge_engineering_smoke_after_final_clean_commit
   prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
   current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
   population_manifest: manifests/homer_population_public_release_362.json
@@ -547,15 +541,7 @@ immediate_gate:
   trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
   evaluator_manifest: manifests/homer_official_assets.json
   required_resource: one_full_gpu_native_allocator_cuda0_only_after_cpu_smoke
-  active_jobs:
-    - job_id: "6753520"
-      name: v35pubsmoke
-      status: queued
-      route: b-batch_node1_full_gpu
-      estimated_start: "2026-09-11T02:00:00+09:00"
-      output: outputs/engineering_smoke/pretrained_public_real_trace_20260910_170314
-      source_commit: a8377ad2fd7d415bc266dadabdae6305e610c066
-      scientific_training: false
+  active_jobs: []
   scientific_training: false
   success_requires:
     - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
@@ -564,7 +550,7 @@ immediate_gate:
     - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
     - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot.
   current_blockers:
-    - real_trace_gpu_engineering_smoke_6753520_queued
+    - final_clean_commit_and_smoke_resubmission_pending
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   resource_request_note: >-
     The next GPU request is one full native GPU for <=2-example real-trace
