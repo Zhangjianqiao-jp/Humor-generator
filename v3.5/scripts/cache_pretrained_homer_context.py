@@ -84,7 +84,9 @@ def json_sha256(value: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _load_repair_manifest(path: Path) -> tuple[dict[str, Any], str]:
+def _load_repair_manifest(
+    path: Path, *, source_shard: int | None = None
+) -> tuple[dict[str, Any], str]:
     """Load and independently verify the bounded residual-failure manifest.
 
     The repair job must never silently broaden its scope when a shard failure
@@ -122,11 +124,21 @@ def _load_repair_manifest(path: Path) -> tuple[dict[str, Any], str]:
     failures = payload.get("source_failure_manifests")
     if not isinstance(failures, list) or not failures:
         raise ValueError("repair manifest has no source failure manifests")
+    selected_targets = {
+        str(target["cluster_id"])
+        for target in targets
+        if source_shard is None or target.get("source_shard") == source_shard
+    }
+    if source_shard is not None and not selected_targets:
+        raise ValueError(f"repair manifest has no targets for shard {source_shard}")
     seen: dict[str, dict[str, Any]] = {}
     for entry in failures:
         if not isinstance(entry, dict):
             raise ValueError("source failure manifest is not an object")
-        source = ROOT / str(entry.get("path", ""))
+        entry_path = str(entry.get("path", ""))
+        if source_shard is not None and f"_shard_{source_shard}/" not in entry_path:
+            continue
+        source = ROOT / entry_path
         expected_hash = str(entry.get("sha256", ""))
         if not source.is_file() or len(expected_hash) != 64:
             raise ValueError(f"source failure manifest is unavailable: {source}")
@@ -143,14 +155,16 @@ def _load_repair_manifest(path: Path) -> tuple[dict[str, Any], str]:
             cluster = str(row.get("cluster_id", ""))
             if cluster:
                 seen[cluster] = row
-    if set(seen) != set(ids):
+    if set(seen) != selected_targets:
         raise ValueError(
             "source failure manifests and repair targets differ: "
-            f"source_only={sorted(set(seen) - set(ids))}, "
-            f"target_only={sorted(set(ids) - set(seen))}"
+            f"source_only={sorted(set(seen) - selected_targets)}, "
+            f"target_only={sorted(selected_targets - set(seen))}"
         )
     for target in targets:
         cluster = str(target["cluster_id"])
+        if cluster not in selected_targets:
+            continue
         row = seen.get(cluster)
         if row is None or str(row.get("error", "")) != str(target["previous_error"]):
             raise ValueError(f"repair manifest no longer matches recorded failure: {cluster}")
@@ -563,7 +577,7 @@ def main() -> None:
         if args.repair_manifest is None:
             raise ValueError("--enable-validator-repair requires --repair-manifest")
         repair_manifest, repair_manifest_hash = _load_repair_manifest(
-            args.repair_manifest.resolve()
+            args.repair_manifest.resolve(), source_shard=args.repair_shard
         )
     elif args.repair_manifest is not None:
         raise ValueError("--repair-manifest is only valid with --enable-validator-repair")
