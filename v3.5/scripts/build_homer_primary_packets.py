@@ -28,6 +28,7 @@ OFFICIAL_EVALUATOR = OFFICIAL_ROOT / "evaluation/humorousAI/evaluator_humorAI.py
 REFERENCE_FILE = OFFICIAL_ROOT / "evaluation/humorousAI/sample5gt.json"
 CONTEXT_INDEX = ROOT / "data/cache/homer_pretrained_7b_homer_context/index.jsonl"
 POPULATION_MANIFEST = ROOT / "manifests/homer_population_public_release_362.json"
+EVALUATOR_RUNNER = ROOT / "scripts/run_homer_primary_openai.py"
 
 GROUPS = ("1-9", "200-209", "1000-1009")
 MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct"
@@ -243,6 +244,11 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "protocol": "homer_official_humorAI_pairwise_reference",
         "dataset": "homer_pretrained_7b_public_release_362",
         "code_commit": current_commit(),
+        "evaluator_runner": {
+            "path": str(EVALUATOR_RUNNER),
+            "sha256": sha256_file(EVALUATOR_RUNNER),
+            "code_commit": current_commit(),
+        },
         "source_generations_sha256": sha256_file(source),
         "dataset_manifest_sha256": sha256_file(POPULATION_MANIFEST),
         "models": [
@@ -295,6 +301,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "provenance": "provenance.json",
         "official_evaluator": str(OFFICIAL_EVALUATOR),
         "official_evaluator_sha256": sha256_file(OFFICIAL_EVALUATOR),
+        "evaluator_runner_sha256": sha256_file(EVALUATOR_RUNNER),
         "evaluator_system_prompt_sha256": prompt_hash,
         "images": len(expected_images),
         "conditions": expected_systems,
