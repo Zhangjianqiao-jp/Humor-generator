@@ -59,7 +59,7 @@ DEFAULT_OUTPUT = ROOT / "data/cache/homer_pretrained_7b_homer_context"
 PROMPT_SOURCE = ROOT / "src/humor_generator_v35/homer/official_prompts.py"
 MODEL_MANIFEST = ROOT / "manifests/local_qwen2_5_vl_7b.json"
 POPULATION_MANIFEST = ROOT / "manifests/homer_population_public_release_362.json"
-REPAIR_MANIFEST_VERSION = "pretrained-homer-context-repair-20260910-r7"
+REPAIR_MANIFEST_VERSION = "pretrained-homer-context-repair-20260910-r8"
 SUPPORTED_REPAIR_MANIFEST_VERSIONS = {
     "pretrained-homer-context-repair-20260910",
     "pretrained-homer-context-repair-20260910-r2",
@@ -67,6 +67,7 @@ SUPPORTED_REPAIR_MANIFEST_VERSIONS = {
     "pretrained-homer-context-repair-20260910-r4",
     "pretrained-homer-context-repair-20260910-r5",
     "pretrained-homer-context-repair-20260910-r6",
+    "pretrained-homer-context-repair-20260910-r7",
     REPAIR_MANIFEST_VERSION,
 }
 

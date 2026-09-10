@@ -996,3 +996,6 @@ post-check，再决定是否合并 362 条 context。作业运行期间不得启
 但 public-code `_json_object` 尚未同步处理该格式。该工程问题已记录为 `V35-ENG-027`；
 已修复并更新 `homer_official_assets.json` 的源文件 hash，r7 只保留当前 residual，
 retry-round=6。模型、GPU 和数据门禁均无异常，bridge/caption 继续锁定。
+`6750482` 于 `15:28:34` 在模型加载前因 r7 manifest 的 `previous_error` 与当前
+`failures.json` 不逐字一致而退出（`V35-ENG-028`）；无模型权重加载、无数据写入。
+已保留 r7 证据并创建精确匹配的 r8，下一轮为 retry-round=7，仅处理 `nycc_678`。
