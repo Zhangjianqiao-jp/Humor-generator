@@ -1,0 +1,109 @@
+#!/bin/sh
+# Current public HOMER bridge-only training, submitted only after the real
+# trace/bridge engineering smoke passes.  The job is fail-closed: it consumes
+# the already sealed 362-contest trace/context/dataset artifacts and never
+# rebuilds or mutates the training view in a scientific run.
+# b-batch node=1 is the validated full-device route.  Do not add gpu=1,
+# exec-policy=simplex, or a MIG request to this job.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+BRIDGE_OUTPUT="${BRIDGE_OUTPUT:?submit with -x BRIDGE_OUTPUT=...}"
+mkdir -p "$BRIDGE_OUTPUT"
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+CONFIG=configs/pilot/cross_attention_caption_pretrained_public.yaml
+DATA=data/processed/homer_pretrained_7b_public_release_362
+CACHE=data/cache/homer_pretrained_7b_planner_traces
+
+python scripts/check_pretrained_route.py \
+  --require-data-ready --require-context-ready --require-bridge-data-ready \
+  > "$BRIDGE_OUTPUT/route_gate.json"
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset "$DATA" --cache "$CACHE" \
+  --output "$BRIDGE_OUTPUT/trace_gate.json"
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config "$CONFIG" \
+  --output "$BRIDGE_OUTPUT/bridge_input_gate.json"
+
+python - "$BRIDGE_OUTPUT" "$CONFIG" <<'PY'
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+config = Path(sys.argv[2])
+route = json.loads((out / "route_gate.json").read_text())
+trace = json.loads((out / "trace_gate.json").read_text())
+bridge = json.loads((out / "bridge_input_gate.json").read_text())
+if route.get("status") != "pass":
+    raise SystemExit("current public route gate did not pass")
+if trace.get("status") != "pass" or trace.get("records") != 362:
+    raise SystemExit(f"trace gate is not 362/362: {trace}")
+if bridge.get("status") != "pass":
+    raise SystemExit(f"bridge input gate did not pass: {bridge}")
+commit = subprocess.run(
+    ["git", "rev-parse", "HEAD"], check=True, text=True,
+    capture_output=True,
+).stdout.strip()
+payload = {
+    "status": "pre_training_gate_pass",
+    "git_commit": commit,
+    "config": str(config),
+    "config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+    "route": route,
+    "trace": trace,
+    "bridge": bridge,
+    "scientific_training": True,
+    "trainable_component": "bridge_only",
+    "planner_frozen": True,
+    "generator_frozen": True,
+}
+(out / "formal_pre_training_gate.json").write_text(
+    json.dumps(payload, indent=2) + "\n"
+)
+PY
+
+python scripts/train_bridge.py --config "$CONFIG" --output "$BRIDGE_OUTPUT"
+test -s "$BRIDGE_OUTPUT/complete.json"
+python - "$BRIDGE_OUTPUT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+complete = json.loads((out / "complete.json").read_text())
+run = json.loads((out / "run_manifest.json").read_text())
+if complete.get("status") != "complete":
+    raise SystemExit(f"bridge run is not complete: {complete}")
+if run.get("current_homer_public_route") is not True:
+    raise SystemExit("training manifest is not the current HOMER public route")
+if run.get("policy_trainable_parameters") != 0:
+    raise SystemExit("frozen Planner/Generator policy contract failed")
+print(json.dumps({
+    "status": "pass",
+    "scientific_training": True,
+    "epochs_completed": complete.get("epochs_completed"),
+    "global_step": complete.get("global_step"),
+    "policy_trainable_parameters": run.get("policy_trainable_parameters"),
+}, sort_keys=True))
+PY
