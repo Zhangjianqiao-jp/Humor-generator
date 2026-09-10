@@ -79,9 +79,17 @@ def _association_semantics(value: Any) -> list[str]:
 def _jsonish(value: str) -> Any:
     """Parse JSON, or a Python-literal serialization, without executing code."""
     candidate = value.strip()
+    # Qwen occasionally emits the JSON opening fence but truncates the final
+    # closing fence at the generation boundary.  Treat that delimiter-only
+    # defect as recoverable: the JSON payload itself remains the semantic
+    # source and the validator-feedback turn may add the missing delimiter.
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", candidate, flags=re.I | re.S)
     if fenced:
         candidate = fenced.group(1).strip()
+    else:
+        opening = re.match(r"^```(?:json)?(?:\s+|\s*$)", candidate, flags=re.I | re.S)
+        if opening:
+            candidate = candidate[opening.end():].strip()
     try:
         return json.loads(candidate)
     except json.JSONDecodeError:

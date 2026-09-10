@@ -4,6 +4,7 @@ import pytest
 
 from humor_generator_v35.homer.contracts import SchemaError, parse_associations, parse_conflicts, validate_plan
 from humor_generator_v35.homer.repair import (
+    _jsonish,
     assert_lossless_repair,
     assert_lossless_summary_repair,
     assert_reference_only_entity_repair,
@@ -141,6 +142,14 @@ def test_lossless_summary_repair_only_normalizes_serialization() -> None:
         assert_lossless_summary_repair(
             invalid, "{'cat': ['keyboard'], 'keyboard': ['office', 'deadline']}"
         )
+
+
+def test_jsonish_accepts_truncated_opening_json_fence_without_changing_payload() -> None:
+    # A generation boundary may drop only the closing markdown fence.  This is
+    # a formatting defect; the JSON payload remains the lossless semantic
+    # source for validator-feedback repair.
+    value = _jsonish('```json\n{"centaur":["counter","bag","pharmacy"]}')
+    assert value == {"centaur": ["counter", "bag", "pharmacy"]}
 
 
 def test_entity_repair_only_normalizes_unique_supplied_reference() -> None:

@@ -905,3 +905,27 @@ scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以�
 它只提交一个 shard、申请 `b-batch + node=1`、30 分钟，并在进程内暴露 CUDA 0。
 该路由会占用整节点，只有在只读审计证明其启动时间早于 shared 路由时才允许使用；
 否则必须保持不提交。脚本不会改变 repair manifest、模型、prompt、seed 或输出范围。
+
+#### 15.3.4 simplex repair 的真实终态与 parser 修复（2026-09-10）
+
+`6749375` 是一次真实获得 `b-batch` 独占节点的受控 repair 作业，不是排队或资源
+失败。它在模型加载前通过 CUDA、population、adapter-free trace 三个 preflight，随后
+加载固定 revision 的 Qwen2.5-VL-7B；但在唯一残余 `nycc_700` 上以 exit code 2 结束，
+没有追加任何 context record。`.stats` 显示运行 5 分 01 秒、最大内存 6198 MiB，
+没有 OOM、NVML、CUDA 或数据写入异常。
+
+根因已经定位为工程 parser 缺陷：该 Planner summary 是合法 JSON payload，但生成边界
+只留下了开头的 ` ```json ` fence、缺失结尾 fence。`_jsonish` 原先只接受完整成对的
+fence，因而无法把原始 payload 交给 lossless semantic comparison。第一次 repair 保留
+了全部五个 value，第二次响应删除了两个 value；后者被语义守恒校验正确拒绝。官方
+HOMER summary prompt 是合并两路 imagination 后去重，并未规定 summary 每个 key 必须
+恰好三个 value；因此禁止为满足旧的固定长度假设而截断或改写这些 value（官方实现的
+retrieval/tree 也接受合并后的可变列表）。
+
+本次只做格式层修复：`_jsonish` 现在接受未闭合的 opening JSON fence，并新增了来自
+`nycc_700` 的回归测试；它不会放宽 summary 的对象/字符串列表 schema，也不会改变
+HOMER prompt、模型、seed 或 semantic policy。事件和原始证据登记为
+`V35-ENG-019`（见 `docs/EXPERIMENT_FAILURES.jsonl`）。完整 pytest、compile 和
+preflight 通过后，才允许再次提交**唯一一个** manifest-scoped repair 副本；在三个
+shard 都精确达到 `118/118`、`failures.json=[]` 并通过 strict merger 之前，context gate
+仍为 `349/362 blocked`，bridge/caption 训练和科学评测继续禁止。
