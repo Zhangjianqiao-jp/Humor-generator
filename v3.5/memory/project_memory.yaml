@@ -113,29 +113,31 @@ current_state:
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: blocked_pending_bounded_repair
-    records: 354
+    records: 355
     required: 362
-    residual_failures: 8
+    residual_failures: 7
     partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
     shards: {shard_0: "118/118", shard_1: "117/118", shard_2: "111/118"}
-    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
-    superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r2.json
+    repair_manifest: manifests/pretrained_homer_context_repair_20260910_r4.json
+    superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
     repair_policy: validator-feedback-format-only-v1
   bridge_gate: blocked_context_not_complete
   active_jobs: []
   last_scheduler_attempt:
-    job_id: "6750288"
+    job_id: "6750308"
     route: b-batch_node1_simplex
-    status: completed_with_residual_failure
-    submitted_at: "2026-09-10T14:29:00+09:00"
-    started_at: "2026-09-10T14:30:30+09:00"
-    ended_at: "2026-09-10T14:33:27+09:00"
-    exit_code: 2
-    records: "117/118"
-    residual_failures: 1
-    reason: repeated_retry_round_seed_namespace
+    status: completed_successfully
+    submitted_at: "2026-09-10T14:36:20+09:00"
+    started_at: "2026-09-10T14:36:42+09:00"
+    ended_at: "2026-09-10T14:39:34+09:00"
+    exit_code: 0
+    records: "118/118"
+    repaired_targets: 1
+    retry_round: 2
+    reason: independent_retry_and_public_homer_replay_passed
     supersedes_delayed_job: "6750287"
-    evidence: v3.5/repair_pretrained_homer_context_bsimplex_short.pjm.6750288.{out,stats}
+    supersedes_failed_job: "6750288"
+    evidence: v3.5/repair_pretrained_homer_context_bsimplex_short.pjm.6750308.{out,stats}
   last_repair_result:
     status: manifest_versioned_after_residual_retry
     failure_records:
@@ -144,15 +146,16 @@ current_state:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-022
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-023
     success_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-021
-    residual_context_records: 354/362 (partial=8, shard-1=117/118, shard-2=111/118)
+    residual_context_records: 355/362 (partial=8, shard-1=118/118, shard-2=111/118)
     repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
-    next_action: commit_retry_round_2_then_rerun_only_nycc_821
+    next_action: submit_r4_retry_round_3_shard_2_after_clean_commit_and_preflight
   next_action: >-
     Parser fix, versioned manifests, and shard-0 repair are complete. Shard-1 jobs
     6749861 and 6750288 left the same strict selector residual because 6750288
-    accidentally reused retry-round 1. All entrypoints now advance to retry-round
-    2; resubmit only nycc_821, then process shard-2. Require 362/362 context merge
-    before building bridge inputs or starting bridge/caption work.
+    accidentally reused retry-round 1; independent retry-round 2 job 6750308
+    resolved it. r4 now scopes only the seven shard-2 failures, with retry-round 3.
+    Require 362/362 context merge before building bridge inputs or starting
+    bridge/caption work.
 
 conditions:
   text:

@@ -957,6 +957,12 @@ repair entrypoint 已切换到 r3。下一步只允许按资源策略提交 shar
 再提交 shard-2；三 shard 精确达到 `118/118` 且 `failures.json=[]` 前，strict merger、
 bridge 训练、caption 生成和科学评测继续保持 fail-closed。
 
+`6750308` 使用新的 `retry-round=2` 于 `14:36:42` 启动并于 `14:39:34` 通过，shard-1
+达到 `118/118` 且 `failures.json=[]`；`nycc_821` 以新的合法实体组合完成，无任何语义
+手工映射，详见 `V35-ENG-024`。当前总量为 `355/362`（partial=8、shard-0=118、
+shard-1=118、shard-2=111）。r3 的 shard-1 failure ledger 已改变，故新建 r4，仅锁定
+shard-2 的 7 条 residual，并把下一轮设为 `retry-round=3`；只有 shard-2 通过后才合并。
+
 `6750287` 的 r3 shared-GPU 副本经提交后预计到 `09/12 21:00`，在模型启动前按最快启动
 策略取消（`V35-SCHED-016`）；b-batch 的 aggregate GPU FREE 数不能替代 shared 节点的
 实际 backfill 能力。随后提交唯一的 simplex 后备 `6750288`（b-batch、node=1、CUDA 0、
