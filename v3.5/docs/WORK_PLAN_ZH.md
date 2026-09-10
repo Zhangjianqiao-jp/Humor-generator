@@ -948,7 +948,7 @@ shard 都精确达到 `118/118`、`failures.json=[]` 并通过 strict merger 之
 改成 `eagle`、`perch` 或 `tree` 会改变语义，故不能手工兜底；完整原始输出、修复输出、
 错误和 hash 均保留，事件见 `V35-ENG-022`。
 
-本次成功重试使可复用 context 达到 `350/362`（shard-0=`118/118`、shard-1=`117/118`、
+本次成功重试使可复用 context 达到 `354/362`（含 partial 的 8 条；shard-0=`118/118`、shard-1=`117/118`、
 shard-2=`111/118`）。由于每次作业都会刷新 `failures.json`，r2 的源 hash 已过期；已新建
 `manifests/pretrained_homer_context_repair_20260910_r3.json`，只锁定当前 8 条 residual
 （shard-1 一条、shard-2 七条），并将 loader 的旧“必须 13 条”检查改为 `1..362` 的有界

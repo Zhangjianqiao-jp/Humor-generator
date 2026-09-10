@@ -30,7 +30,7 @@ trace_gate:
 
   context_gate:
   status: blocked_pending_bounded_repair
-  available: 350
+  available: 354
   required: 362
   partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
   shard_records: {shard_0: "118/118", shard_1: "117/118", shard_2: "111/118"}
@@ -121,7 +121,7 @@ trace_gate:
     Shard-0 repair job 6749521 subsequently passed with 118/118 and failures.json=[];
     shard-1 repair job 6749861 reached 117/118 but correctly rejected one
     non-uniquely-repairable selector concept (V35-ENG-022).  The remaining
-    bounded scope is shard-1 (1) plus shard-2 (7), with 350/362 records before
+    bounded scope is shard-1 (1) plus shard-2 (7), with 354/362 records before
     the next retry.  Manifest r3 pins the current eight failure rows and hashes;
     no semantic hand-mapping is allowed.  Shared job 6750287 was canceled before
     execution because its start estimate was 09/12; simplex retry 6750288 is

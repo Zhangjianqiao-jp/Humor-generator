@@ -113,7 +113,7 @@ current_state:
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
     status: blocked_pending_bounded_repair
-    records: 350
+    records: 354
     required: 362
     residual_failures: 8
     partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
@@ -140,7 +140,7 @@ current_state:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-020
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-022
     success_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-021
-    residual_context_records: 350/362
+    residual_context_records: 354/362 (partial=8, shard-1=117/118, shard-2=111/118)
     repair_manifest: manifests/pretrained_homer_context_repair_20260910_r3.json
     next_action: monitor_6750288_then_rerun_only_manifest_scoped_residuals_shard_2
   next_action: >-
