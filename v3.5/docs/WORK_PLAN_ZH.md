@@ -1010,3 +1010,11 @@ validator-feedback 仍返回三项候选，违反“严格保留两个实体”�
 已建立不可变的 r9 manifest（精确 hash 与错误串、retry-round=8），并完成本地脚本编译与
 manifest gate。只允许提交 `jobs/repair_pretrained_homer_context_bsimplex_r9.pjm` 的一份
 b-batch simplex 副本；成功前不得合并 context、训练 bridge、生成 caption 或运行评测。
+
+`6750588`（r9/retry-round=8）于 `15:52:14` 结束，仍因 `nycc_678` 的 summary 只有一个
+唯一实体键而无法满足两个 distinct entity 的官方选择约束；事件为 `V35-ENG-030`。
+这不是继续增加 validator-feedback 次数能解决的语义问题。已保留 r9 的所有原始/修复输出，
+建立 r10（当前 ledger 精确 hash，retry-round=9），并允许**仅此一条**通过官方
+`imaginator.summary` 的最多 16 次新 seed 重放，再进入未修改的 retrieval/selection/path。
+这是最后一轮有界上游恢复；若仍失败，停止重试并报告数据/协议阻塞，不得手工添加实体或放宽
+HOMER validator。
