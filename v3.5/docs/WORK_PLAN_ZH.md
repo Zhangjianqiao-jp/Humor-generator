@@ -878,4 +878,5 @@ units；因此优先采用 `jobs/repair_pretrained_homer_context_bbatch.pjm`：�
 scheduler-visible GPU、串行修复三个 shard，设置 45 分钟短上限以便 backfill。该选择只
 改变调度合同，不改变模型、prompt、seed 或数据范围；若调度器无法提供单卡可见性，
 `check_cuda_resource.py` 会在模型加载前 fail-closed，不得改成多 GPU 或绕过 manifest
-门禁。
+门禁。shared 作业显式声明 `#PJM -P exec-policy=share`，并在提交后用 `pjstat` 核对
+预计启动时间；任何被排到未来时段的重复副本均在模型加载前取消并记录。

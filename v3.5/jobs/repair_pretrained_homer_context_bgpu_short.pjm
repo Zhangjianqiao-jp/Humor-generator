@@ -5,6 +5,7 @@
 #PJM -L rscgrp=b-batch
 #PJM -L gpu=1
 #PJM -L elapse=00:20:00
+#PJM -P exec-policy=share
 #PJM -j
 #PJM -S
 
