@@ -1,6 +1,41 @@
 # v3.5 修正版实验计划
 
-> 本轮完整的算法/协议审计见 [`docs/ALGORITHM_AUDIT_V35_ZH.md`](ALGORITHM_AUDIT_V35_ZH.md)，方法—证据—引用逐项台账见 [`docs/METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md)。文中所有“已实现/已运行”均须能回溯到代码、配置和 artifact；`E1/E2/E3` 方案不能写成已验证结果。审计结论：A4 工程通过但语义机制仍为 `pilot_inconclusive`；在修正 A4 outer、按 channel 匹配 donor 长度并加入 zero-bridge 基线前，不得进入 caption 或 preference learning。
+> 本轮完整的算法/协议审计见 [`docs/ALGORITHM_AUDIT_V35_ZH.md`](ALGORITHM_AUDIT_V35_ZH.md)，方法—证据—引用逐项台账见 [`docs/METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md)。文中所有“已实现/已运行”均须能回溯到代码、配置和 artifact；历史 A3/A4/A5 结果只作失败记录，不能冒充当前主线结果。当前主线是 **adapter-free 预训练 Qwen2.5-VL-7B 的 HOMER public-code route + bridge-only latent communication**；v2.5/DPO 与旧 latent 数据均不在可执行范围。
+
+## 当前执行状态（2026-09-10）
+
+当前 public-release route 的四个门禁均已通过：
+
+```text
+data_gate        ready  (362 contests; train/validation/test = 271/44/47)
+trace_gate       ready  (adapter-free Planner traces = 362/362)
+context_gate     ready  (HOMER summary/retrieval/selection context = 362/362)
+bridge_data_gate ready  (bridge rows = train 813 / validation 132 / test 141)
+```
+
+证据固定在 `data/cache/homer_pretrained_7b_homer_context/`、
+`data/cache/homer_pretrained_7b_planner_traces/` 和
+`data/processed/homer_pretrained_7b_bridge_362/`；各目录的 manifest 记录输入/输出
+hash、模型 revision、prompt hash、repair manifest 和 Git commit。修复过的 `nycc_678`
+只通过 validator-feedback format-only policy，不改写语义。
+
+下一步顺序不可跳过：
+
+```text
+CPU route/preflight + targeted pytest
+→ ≤2 real-trace GPU engineering smoke
+→ smoke validator/provenance check
+→ 单卡 bridge-only 训练（Planner/Generator 冻结）
+→ validation early stopping/checkpoint
+→ held-out test caption generation（保留 ##Caption/##Explanation）
+→ HOMER primary Pass@1/3/5（GPT-5, 5 candidates, 5 trials）
+→ Group-of-10/multi-judge/cluster bootstrap 作为辅助分析
+```
+
+在 bridge smoke 和训练前，不得运行 caption 科学评测，也不得启动 DPO、联合 RL 或
+旧 v2.5/v3.0 trainer。bridge 训练配置必须使用
+`configs/pilot/cross_attention_caption_pretrained_public.yaml`（当前 public-caption
+replacement track）并通过 `scripts/verify_pretrained_bridge_inputs.py`。
 
 ## 0A. A3 gap 诊断后的 A4 修订（2026-09-04）
 

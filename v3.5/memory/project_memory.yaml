@@ -38,11 +38,15 @@ architecture:
     visual_token_budget: {min: 256, max: 1280, shared_across_all_conditions: true}
   bridge:
     only_trainable_component: true
-    communication_state: teacher_forced_post_token
-    total_slots: 24
-    typed_slots: {conflict: 8, local_association: 8, global_association: 8}
-    phase_a3_bottleneck_dim: 48
-    deferred_caption_pilot_bottleneck_dim: 256
+    communication_state: teacher_forced_post_token_full_channel_memory
+    current_interface: receiver_driven_cross_attention_no_soft_prefix
+    layer_indices: [6, 13, 20, 27]
+    bottleneck_dim: 48
+    heads: 4
+    channel_fusion: learned
+    projection_mode: per_channel
+    memory_policy: full_typed_states_no_truncation
+    historical_phase_a3_slots: 24
 
 data_contract:
   split_unit: NYCC_image_cluster
@@ -52,17 +56,20 @@ data_contract:
   current_population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
   current_trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   current_trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  current_context_index: data/cache/homer_pretrained_7b_homer_context/index.jsonl
+  current_bridge_manifest: data/processed/homer_pretrained_7b_bridge_362/manifest.json
   historical_bridge_manifest: data/processed/latent_bridge_v35/manifest.json
-  manifest: null
-  manifest_sha256: null
+  manifest: data/processed/homer_pretrained_7b_bridge_362/manifest.json
+  manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
   historical_manifest_sha256: c26c5999645d01089a937d0cb86e1982ccd4ea737f807fa698e398279a7197d8
-  splits:
+  population_splits: {train: 271, validation: 44, test: 47}
+  bridge_rows: {train: 813, validation: 132, test: 141, total: 1086}
+  historical_splits:
     train: 602
     validation: 64
     internal_test: 97
     official_hia_unseen_test: 24
     official_hia_seen_diagnostic: 23
-  primary_confirmatory_images: 121
   leakage_contract:
     - Split by image cluster, never caption row.
     - Official HIA test clusters never fit the bridge.
@@ -76,9 +83,6 @@ data_contract:
     historical_planner_traces: 666
     policy: compile_and_cli_smoke_then_byte_schema_decode_tensor_provenance_audit
   blockers:
-    - context_validator_repair_13_residual_clusters
-    - canonical_pretrained_context_not_merged
-    - bridge_training_view_not_built
     - canonical_365_allowlist_unresolved_for_canonical_claim_only
   historical_manifest_policy: >-
     The old latent_bridge_v35 manifest is retained only for provenance and
@@ -107,41 +111,44 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-10T16:16:30+09:00"
-  source_commit: 0498ccde897a2490df1048af6076d2c011614f30
-  phase: pretrained_7b_context_validator_repair_queued
+  observed_at: "2026-09-10T16:32:00+09:00"
+  source_commit: 55ba19d0631330207ceaf55c5acc33cdf633a194
+  phase: pretrained_7b_bridge_inputs_ready_cpu_smoke_passed
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
-    status: blocked_pending_bounded_repair
-    records: 361
+    status: ready
+    records: 362
     required: 362
-    residual_failures: 1
-    partial_context: data/cache/homer_pretrained_7b_homer_context_partial_6739559/index.jsonl
-    shards: {shard_0: "118/118", shard_1: "118/118", shard_2: "117/118"}
+    residual_failures: 0
+    merged_context: data/cache/homer_pretrained_7b_homer_context/index.jsonl
+    merged_context_sha256: 386bd46b9179916db6b30162c96b5fd3d33ef91e5bfc8f07ff693b83656c3b27
+    shards: {partial: "8/8", shard_0: "118/118", shard_1: "118/118", shard_2: "118/118"}
     repair_manifest: manifests/pretrained_homer_context_repair_20260910_r11.json
-    superseded_repair_manifest: manifests/pretrained_homer_context_repair_20260910_r7.json
     repair_policy: validator-feedback-format-only-v1
-  bridge_gate: blocked_context_not_complete
-  active_jobs: ["6751564"]
+  bridge_gate:
+    status: ready
+    dataset: data/processed/homer_pretrained_7b_bridge_362
+    manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
+    rows: {train: 813, validation: 132, test: 141}
+  active_jobs: []
   last_scheduler_attempt:
     job_id: "6751564"
     route: b-batch_node1_simplex
-    status: queued
+    status: completed_successfully
     submitted_at: "2026-09-10T16:16:09+09:00"
-    estimated_start: "2026-09-10T16:16:00+09:00"
-    started_at: null
-    ended_at: null
-    exit_code: null
-    records: null
-    residual_failures: 1
-    repaired_targets: null
+    started_at: "2026-09-10T16:16:31+09:00"
+    ended_at: "2026-09-10T16:20:00+09:00"
+    exit_code: 0
+    records: "118/118"
+    residual_failures: 0
+    repaired_targets: 1
     retry_round: 10
     targets: [nycc_678]
     reason: clean_commit_verified_compatibility_gate_passed
     evidence: v3.5/repair_pretrained_homer_context_bsimplex_r11.pjm.6751564.{out,stats}
     next_job: null
   last_repair_result:
-    status: manifest_versioned_after_residual_retry
+    status: complete_362_of_362_and_merged
     failure_records:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-019
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-020
@@ -155,9 +162,9 @@ current_state:
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-030
       - docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-032
     success_record: docs/EXPERIMENT_FAILURES.jsonl#V35-ENG-024
-    residual_context_records: 361/362 (partial=8, shard-0=118/118, shard-1=118/118, shard-2=117/118)
+    residual_context_records: 362/362 (partial=8, shard-0=118/118, shard-1=118/118, shard-2=118/118)
     repair_manifest: manifests/pretrained_homer_context_repair_20260910_r11.json
-    next_action: wait_for_6751564_then_strict_postcheck
+    next_action: run_current_bridge_engineering_smoke
   next_action: >-
     Parser fix, versioned manifests, and shard-0 repair are complete. Shard-1 jobs
     6749861 and 6750288 left the same strict selector residual because 6750288
@@ -173,9 +180,12 @@ current_state:
     scientific output because its newly created files were not yet committed
     (V35-ENG-031). r11 job 6751524 then failed before model load because the
     runtime compatibility set omitted r11 (V35-ENG-032), with no ledger change.
-    After the compatibility fix, r11 job 6751564 is the sole clean queued retry;
-    require strict post-check, then 362/362 context merge before bridge or
-    caption work.
+    After the compatibility fix, r11 job 6751564 completed successfully with
+    118/118.  The four-way strict post-check, shard disjointness check and
+    context merge produced 362/362; the current bridge dataset was then built
+    and independently verified.  CPU smoke and targeted regression tests pass.
+    The next gate is a <=2-example real-trace GPU engineering smoke; no formal
+    training or caption evaluation is authorized until that smoke passes.
 
 conditions:
   text:

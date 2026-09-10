@@ -1,6 +1,6 @@
 # HIA 公共发布版数据门禁（362 contests）
 
-更新时间：2026-09-06
+更新时间：2026-09-10
 
 ## 结论
 
@@ -54,8 +54,8 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.5
 # 静态模型/协议 + 公共人口门禁
 .venv/bin/python scripts/check_pretrained_route.py
 
-# bridge 训练还必须等当前预训练 Planner 的 hidden-state trace 建好
-.venv/bin/python scripts/check_pretrained_route.py --require-data-ready
+# trace、post-trace context 和 bridge view 的完整门禁
+.venv/bin/python scripts/check_pretrained_route.py --require-data-ready --require-context-ready --require-bridge-data-ready
 ```
 
 生成的 ignored artifacts 位于
@@ -65,7 +65,8 @@ cd /home/pj26000152/ku60000936/projects/Humor-generator/v3.5
 - `source_rows.jsonl`：每个 contest 的全部三条源 caption，共 1,086 行；
 - `train.jsonl`、`validation.jsonl`、`test.jsonl`：严格按公开 description split 的一行/contest 输入；
 - `official_hia_unseen_test.jsonl`：旧工具名的显式、记录级等价 alias；
-- `trace_inputs.jsonl`：362 行当前预训练 Planner 输入，尚不包含 hidden states。
+- `trace_inputs.jsonl`：362 行当前预训练 Planner 输入；hidden-state trace 独立封存在
+  `data/cache/homer_pretrained_7b_planner_traces/`。
 
 allow-list 本身位于
 `manifests/homer_public_release_362_allowlist.json`，完整 lineage 位于
@@ -77,9 +78,9 @@ allow-list 本身位于
 
 ```text
 data_gate       = ready       # 362 公共人口可复现，允许在线 public-code baseline
-trace_gate      = ready       # adapter-free Planner hidden-state trace 已完成
-context_gate    = blocked     # post-trace summary/retrieval/selection 尚未封存
-bridge_data_gate= blocked     # bridge view 尚未构建，因此暂不训练 bridge
+trace_gate      = ready       # adapter-free Planner hidden-state trace 已完成（362/362）
+context_gate    = ready       # post-trace summary/retrieval/selection 已封存（362/362）
+bridge_data_gate= ready       # 当前预训练 bridge training view 已校验
 ```
 
 这避免了两个相反错误：
@@ -89,10 +90,13 @@ bridge_data_gate= blocked     # bridge view 尚未构建，因此暂不训练 br
 
 在线 `generate_homer_public_code.py` 的默认 dataset 已切换到这个 362 版本，并新增 `--split test`；它仍然拒绝历史 `latent_bridge_v35` representative-row 数据。
 
-下一步是用 `trace_inputs.jsonl` 重新生成当前无 adapter 的 Qwen2.5-VL-7B Planner trace，并在 trace 完整性通过后才运行 bridge-only 训练。专用入口是
-`scripts/cache_pretrained_homer_traces.py`，验证器是
-`scripts/verify_pretrained_homer_traces.py`，作业模板是
-`jobs/cache_pretrained_homer_traces.pjm`。该步骤不改变 362 人口，也不把它重新命名成 365。
+当前 362 条 adapter-free Planner trace 及其 HOMER summary/retrieval/selection context
+已经完成并封存。context index 为 362/362，repair manifest 使用
+`pretrained_homer_context_repair_20260910_r11.json`，所有修复均保留原始输出、修复输出、
+seed、prompt/model/adapter hash 和代码 commit。bridge training view 位于
+`data/processed/homer_pretrained_7b_bridge_362/`，训练/验证/测试行数为 813/132/141。
+下一步必须先运行 CPU preflight 与两样本 real-trace engineering smoke；smoke 通过后才允许
+申请单卡 bridge-only GPU 作业。该步骤不改变 362 人口，也不把它重新命名成 365。
 
 trace 记录使用独立的 `data/cache/homer_pretrained_7b_planner_traces/` 目录，明确保存
 `planner_adapter=null`、模型 revision、输入 manifest hash、官方 prompt hash、模型

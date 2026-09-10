@@ -32,6 +32,7 @@ data:
   data_version: homer_pretrained_7b_public_release_362
   dataset: data/processed/homer_pretrained_7b_bridge_362
   population_manifest: manifests/homer_population_public_release_362.json
+  trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
   trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
   context_index: data/cache/homer_pretrained_7b_homer_context/index.jsonl
   # This training view is built only after 362/362 traces and contexts pass;
