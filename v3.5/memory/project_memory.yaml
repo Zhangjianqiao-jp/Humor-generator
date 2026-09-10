@@ -112,7 +112,7 @@ trace_contract:
 
 current_state:
   observed_at: "2026-09-10T20:15:00+09:00"
-  source_commit: 3c195b35ab6789834283a2bf8aa20e253503d2d8
+  source_commit: 7edae5729eabe1d8bde25d6b188fe7d455a9b39f
   phase: pretrained_7b_real_trace_bridge_smoke_resource_resubmission_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
