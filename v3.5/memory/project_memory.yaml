@@ -111,8 +111,8 @@ trace_contract:
       - Record both invalid and repaired outputs and repair provenance.
 
 current_state:
-  observed_at: "2026-09-11T00:46:00+09:00"
-  source_commit: 275d5aa5e8b92ebcaaf6a08d3109e22946b7c0ec
+  observed_at: "2026-09-11T13:38:00+09:00"
+  source_commit: 327fa9a0c655083462acb5e76a5390e7c01b3b1a
   phase: pretrained_7b_formal_bridge_and_full_generation_complete_evaluation_pending
   trace_gate: {status: ready, records: 362, required: 362, adapter: null}
   context_gate:
@@ -489,6 +489,7 @@ evaluation:
     packet_builder: scripts/build_homer_primary_packets.py
     evaluator_runner: scripts/run_homer_primary_openai.py
     judgment_aggregator: scripts/aggregate_homer_primary_judgments.py
+    finalizer: scripts/finalize_homer_primary_evaluation.py
     packet_counts:
       images: 47
       conditions: 2
