@@ -1,0 +1,450 @@
+# v3.5 实验失败与计划变更准则
+
+本文件规定所有 v3.5 实验失败的记录方式。机器可读记录位于
+`docs/EXPERIMENT_FAILURES.jsonl`，使用
+`scripts/record_experiment_failure.py` 追加，禁止静默重试或覆盖旧输出。
+
+## 强制字段
+
+每次失败必须记录：唯一 ID、时间、失败层级、状态、可观察现象、原始证据、
+根因、采取的修复、对实验计划的影响、相关 artifact。失败层级只能是：
+
+- `environment`：调度器、CUDA、NVML、依赖或文件系统；
+- `data`：缺失、泄漏、schema、hash 或 provenance；
+- `engineering`：shape、dtype、OOM、hidden/token 对齐或实现错误；
+- `method`：代码正确运行，但预注册的机制/统计 gate 未通过；
+- `evaluation`：盲化、评审、统计单位或指标错误。
+
+只有 `method` 失败才允许被写作“方法没有通过”。环境和工程失败不得作为模型
+优劣证据。每次修复后必须创建新输出目录，不允许覆盖失败实验。
+
+## 当前结论
+
+## V35-ENG-008（2026-09-05）：A5 outer donor helper 的 split 契约错误（已在执行前修复）
+
+进一步的静态审计发现 outer evaluator 复用了旧失败重评脚本的 donor helper；该 helper
+硬编码 donor 必须来自 `train`，而 A5 outer 预注册的是 validation donor。即使补上第二
+份 trace index，原 helper 仍会在 forward 前拒绝合法的 validation donor。
+
+已改为使用 `training/formal_bridge.py::length_matched_channel_donors`，该实现保留
+per-channel length-priority、different-conflict、same-source/TF-IDF tie-break，同时
+允许 outer 的 validation donor。该问题没有产生 GPU forward 或科学 artifact；旧 helper
+只继续用于历史 v1/v2 重评，不得用于 A5 outer。
+
+## V35-ENG-007（2026-09-05）：A5 outer donor trace index 缺失（已在执行前修复）
+
+静态审计发现 outer evaluator 原命令只传入 sealed held-out test trace index，但
+length-matched counterfactual donor 必须读取 validation/train trace。若直接运行，目标
+trace 能加载而 donor lookup 会缺少记录，因而不能产生合法的 outer gap。该问题在任何
+outer forward 之前发现，未产生科学输出。
+
+修复为 `run_outer_semantic_confirmation_a5.py --donor-trace-index`：目标 index 与
+666-record train/validation index 只读合并，并对重复 cluster 做记录一致性检查；summary
+同时保存 donor index 路径和 SHA-256。旧命令禁止使用，A5 outer 仍须等待 121 条 sealed
+trace 完整校验和修复后 checkpoint。
+
+## V35-ENG-006（2026-09-05）：A5 训练 donor 未按 channel 长度匹配
+
+A5 初次全量作业 `6712005` 已在第 2 epoch 中途主动取消。第 1 epoch 的 validation
+窗口出现 global mean gap `0.205538`、单 cluster 最大 gap `1.293392`，而 A5 的
+outer 协议要求按被替换 channel 的 token length 选择 donor。检查发现训练入口仍调用
+旧的 `hard_negative_cluster_map`，同一个 donor 映射同时用于三个 channel，未控制
+attention 候选数量/sequence-log-probability 的长度混淆。因此这批输出不能作为方法收益、
+semantic gate 或 caption 生成依据；原始 checkpoint、metrics 和 stdout 保留在
+`outputs/pilot/cross_attention_semantic_phase_a5_full/` 作为审计证据。
+
+该事件分类为工程协议错误，不是 OOM、CUDA、数据缺损或 latent 方法失败。修复为
+`training/formal_bridge.py::length_matched_channel_donors`：length 是首要匹配键，
+随后才使用 different-conflict、same-source 和 TF-IDF 相似度；训练允许 donor pool
+与 target split 重叠但排除自身 cluster，validation 仍只从 train donor pool 取样。新运行
+将把完整 donor map、各 channel 的 exact-length fraction/mean absolute length delta
+和 hash 写入 `channel_donors.json` / `run_manifest.json`。修复后的作业必须使用新输出
+目录 `outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched/`，重新通过
+静态测试、real-trace smoke、完整训练和 sealed outer gate 后才可进入 caption 阶段。
+
+## V35-ENG-005（2026-09-04）：旧 A4 正式脚本在执行前取消
+
+旧 c-batch 作业 `6711074` 在获得资源并开始模型 forward 前被取消。审查发现该作业
+调用的是通用 bridge 训练流程：没有 A4 专用的 `validate_phase_a4_smoke.py`/动态
+`semantic_gate.json` 约束，且输出目录与 A4 既定目录不一致。继续运行会使“训练完成”
+与 A4 gate 的 provenance 混淆，因此在无 scientific output 前主动停止。该事件是
+工程/可追溯性问题，不是 CUDA、OOM、数据缺损或 latent 方法结果。
+
+修复为独立的 `jobs/cross_attention_phase_a4.pjm`：使用 `c-batch + gpu=1`，固定
+native allocator/CUDA0，先执行 locked preflight、真实 trace resource smoke 和
+A4 validator，再训练 bridge；训练后只读取本次 `$output/semantic_gate.json`，并在
+gate 未通过时 fail-closed。A4 output 改用新目录
+`outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1`，不得覆盖旧实验。
+修复后重新运行本地回归测试和 formal preflight，再提交新作业。
+
+## V35-ENG-003（2026-09-04）：outer preflight 因工作树未提交而停止
+
+作业 `6708118` 已获得 b-batch 独占节点，但在实际 outer forward 前由 provenance guard
+报告 `dirty_tracked_worktree` 并退出。compile、75 个测试、环境检查、2846/2846 数据行、
+949/949 图片和 666/666 Planner traces 均通过；因此这不是 GPU、OOM、数据或 latent
+方法结果。没有创建 `outputs/outer_semantic_confirmation/a3_outer40`。
+
+原因是 tracked docs/job/memory 文件存在未提交修改。修复方式是审查并提交有意保留的
+修改，或从 immutable clean worktree 重跑；不得用 `--allow-dirty` 绕过来源追踪门禁。
+此事件使 outer A3 baseline 暂停，A4 channel-isolated pilot 也必须等 clean commit 后
+再提交。
+
+## V35-ENG-004（2026-09-04）：A4 smoke 被监控命令提前终止
+
+A4 real-trace smoke `6711036` 在 `genkai0002` 上启动，并在 preflight 仍运行时被发出
+`pjdel`，PJM 记录 signal 15、使用 62 秒；输出为空，A4 smoke 目录没有 report 或
+validator。触发原因是监控时 `pjstat` 暂时没有当前行，被误判为作业已结束。这是操作/监控
+工程错误，不是 CUDA、OOM、数据缺损或 latent 方法结果。
+
+保留 `.out/.stats` 作为证据；不得把该作业视为通过或失败的科学实验。修复规则是：
+`pjstat` 暂时无行时先用 `pjstat -H` 和 `.stats` 确认终态，不得直接 `pjdel`；替代 smoke
+必须使用新 output 目录，在同一 clean commit 上重新执行 preflight、真实 forward/backward、
+target-only one-hot mask 和 donor reconstruction validator。
+
+1. `cross_attention_semantic_v1` 是方法级 No-Go，不是运行失败。其 reconstruction
+   NLL 明显下降，但 validation matched-minus-shuffled gap 只有 `0.004843`，低于
+   `0.02` gate，且 `fraction_gap_gt_margin=0`。
+2. 代码审计发现 v1 把 conflict/local/global 拼接后做单一 positional softmax，长
+   association channel 可能产生长度竞争；同时实现的 InfoNCE 没有进入正式 trainer。
+3. v2 改为通道内独立 attention、通道间 receiver-dependent gate，并强制在梯度
+   累积窗口上调用真实 InfoNCE。GPU smoke 也必须用两个真实 trace 执行同一
+   contrastive backward，不能只由 CPU 单测证明。caption bridge 在新的语义 gate
+   通过前仍被禁止。
+4. plain-text/latent 不做一次性全 latent 假设。语义 gate 通过后按逐步消融比较：
+   Text-HOMER、conflict-text+association-latent、conflict-latent+association-text、
+   all-latent；只对胜出的混合方式继续拆分 local/global。
+5. v2 GPU engineering smoke 作业 `6688553` 与 stationary-teacher post-fix 作业
+   `6688566` 均已通过：两个真实 trace 均完成 hierarchical attention、
+   InfoNCE/variance backward 和 optimizer update；policy trainable params 为 0。
+   此项只关闭工程风险，不改变 v1 的方法级 No-Go。
+6. Hierarchical Phase A v2 作业 `6688689` 已完成但仍为方法级 No-Go：causal
+   matched/shuffled gap 为 `0.002664 < 0.02`，conflict router mass 下降到
+   `0.0289`。validation retrieval 的原始 `0.190476` 受同 cluster 重复 caption
+   false-negative 污染，已单独登记为评测实现错误；不能用它支持或反对方法。
+7. 对第 6 项的声明范围已审计收紧：log-probability 与两遍反传公式正确，但 negative
+   是跨 image cluster plan，不是同图单通道 counterfactual；`0.02` 也是工程阈值而非
+   统计校准阈值。因此结论只能是“all-latent v2 未通过当前操作性 gate”，不能写成
+   “latent communication 已被证伪”。
+8. v2 的 reconstruction 按全部 target token 平均，较长 local/global channel 获得更多
+   监督；unregularized router 随后将 conflict mass 压到 `0.0289`。v2 InfoNCE teacher
+   还是固定的 receiver-embedding 随机投影，只约束 trace identity，并不充分证明
+   frozen Receiver 能解释这些语义。两项均记录为设计不足。
+9. 计划已改为低成本 Phase A3：三通道等权 reconstruction、三路 contextual InfoNCE、
+   单通道 matched/shuffled counterfactual、固定等权 gate、cluster bootstrap CI。只有
+   三个 channel 都越过校准后的 control 才能进入 caption bridge；否则转入
+   conflict-text + association-latent 混合方案。
+10. 样本量解释已更正：`64/24` 是开发期机制 pilot，不是方法级 confirmatory experiment。
+    24 clusters 对接近 50% 的比例估计，正态近似 95% 半宽约 0.20，无法可靠检测小效果。
+    因此 Phase A3 的 24-cluster point pass 只能触发 sealed outer semantic validation；
+    point fail 也只能标记 `pilot_inconclusive`，不能据此排除一个可能有效的方法。只有
+    工程不变量失败（报告为 `hard_no_go`）或明确、预注册的强负向证据才是 pilot hard
+    stop。v1/v2 也必须用同一 cluster-level evaluator 重算后才能公平比较。
+11. 旧 v1/v2 重评 evaluator 又发现一个必须单独记录的 confound：v1 对拼接后的全部
+    memory 使用单一 softmax，原 donor 的 channel 长度差会改变 softmax 分母；此前
+    固定 24-cluster donor 的长度差最高约为 conflict 41、local 85、global 163 tokens。
+    因此原重评不能直接解释为语义 gap。已将 `scripts/re_evaluate_failed_semantic_bridges.py`
+    改为逐 channel 的 length-priority donor：从非 test train split 选择不同 conflict
+    signature 的 donor，优先最小长度差，再优先同源和 description 相似度；并排除该
+    checkpoint 已拟合的 train clusters。逐 cluster 长度差、gap correlation 和 donor
+    pool 均写入 provenance。详细协议见 `docs/SEMANTIC_REEVALUATION_PROTOCOL_ZH.md`。
+12. 该修正后的重评必须使用与旧 checkpoint 严格匹配的 bridge architecture，并检查
+    local model/adapter/prompt manifest；输出 summary/manifest 记录 evaluator hash、
+    seeds、checkpoint/config/data/trace/prompt/model/adapter hashes。直到新的 GPU
+    summary 完成前，不得把旧 `no_go` 重新解释为方法级无效。
+13. A3 smoke 作业 `6689653` 在真实 trace `electronic_sheep:325:0` 处提前退出：配置
+    `max_target_tokens=384`，而该 global semantic target 为 492 tokens。validator 随后
+    因预期 JSON 不存在而退出。分类为 `engineering`，不是 CUDA/OOM、数据缺损或方法
+    失败；没有产生 A3 语义结论，也没有提交正式训练。配置已提高到 768，保持完整
+    HOMER chain。
+14. 修正后的 A3 replacement smoke `6706516` 在单张完整 H100 上以 exit code 0 完成：
+    两个压力样本均完成真实 forward/backward，policy trainable parameters=0，bridge
+    update 非零，三路 contextual InfoNCE 和单通道 counterfactual 路径均实际执行，
+    validator 返回 `status=pass`。因此第 13 项工程配置错误已关闭；它仍不提供 latent
+    语义收益或 caption 质量证据，正式 A3 仍须单独运行 `64 train / 24 validation`。
+15. 外层语义确认 smoke 的资源请求曾连续被 PJM 拒绝：`node=1,gpu=1` 触发
+    `GENKAI1006`，`gpu=1,exec-policy=simplex` 触发 `GENKAI0029`。这是调度器资源
+    类型冲突，不是模型、CUDA 或数据错误。GENKAI 的节点分配作业本身就是
+    simplex/node-exclusive，并会按 b-batch 节点配置自动分配 GPU；已将脚本改为
+    `b-batch + node=1`，进程内固定 `CUDA_VISIBLE_DEVICES=0`，移除显式 `gpu` 和
+    `exec-policy`。旧探针 `6708044` 已取消，修正后的 smoke `6708113` 已以
+    exit code 0 完成，并显示 `simplex=true,gpu=4`；其 validator 通过。以后不得把
+    `node=1` 与 `gpu=1` 或
+    `exec-policy=simplex` 叠加。
+
+## V35-SCHED-003（2026-09-04）：空闲 inter 节点不接受 batch 脚本
+
+为缩短短 smoke 的等待，曾检查到 `b-inter` 有一个空闲完整节点；在取消唯一的
+queued `b-batch` 作业 `6711814` 后，尝试提交同一 smoke 的 inter 版本。PJM 返回
+`PJM 0070 pjsub No execute permission: pjsub batch`，没有启动 forward、没有生成
+输出，也没有占用科学计算资源。根因是 `b-inter` 只允许其交互作业模式，默认的
+`pjsub` batch 脚本没有执行权限；“节点空闲”不能替代“作业模式兼容”。
+
+该事件分类为 scheduler/engineering，不是模型、数据或方法结果。无效脚本已删除，
+不再与 batch/MIG 资源组 race；A4 outer smoke 应恢复到已验证的 `b-batch + node=1`
+后台模式。以后资源选择同时检查：GPU/节点是否空闲、账户限额、作业模式权限和历史
+兼容性；`*-inter` 只用于显式的短交互调试，不用于正式或自动化后台实验。
+
+## V35-ENG-009（2026-09-05）：sealed Planner trace 第一轮有界重试仍残留四条 schema 失败
+
+第一轮 sealed test trace 缓存最初只有 `105/121` 条完整记录。使用同一输入 manifest、
+Qwen2.5-VL-7B revision、Planner SFT adapter、HOMER prompt 和 validator-feedback repair
+进行 8 次有界重试后，缓存增加到 `117/121`；`test_planner_trace_validation_retry.json`
+正确报告 `status=fail`、`missing_clusters=4`，残留为 `nycc_236`、`nycc_323`、
+`nycc_394`、`nycc_682`。错误分别是 record-style JSON 缺少严格字段、association 重复
+实体或错误嵌套；这些输出不能由无损 repair 自动改写成合法语义，因此没有被强行接受。
+
+该事件是 **data/provenance completeness**，不是 latent 方法、模型或 CUDA 失败。已保留
+第一轮的原始输出和失败原因，新增 `jobs/cache_test_planner_traces_retry2.pjm` 做第二轮
+有界重试（仅 residual IDs，16 attempts，`retry_round=2`），不改写已成功 trace，不变更
+prompt/model/manifest。若第二轮仍失败，必须继续 fail-closed，重新设计受约束的生成/修复
+协议后再试，禁止用人工补写或放宽 schema 伪造 `121/121`。
+
+## V35-ENG-010（2026-09-05）：retry2 后仍有两个不可无损修复的 Planner association 输出
+
+retry2 已把 sealed cache 补到 `119/121`，但 `nycc_323` 仍输出嵌套 association 数组，
+`nycc_394` 仍输出多键 mapping 列表。严格 validator 报告缺少可 replay 的三步链；从这些
+结构无法在不增删或重排语义的前提下推断唯一合法 JSON，因此没有采用人工重写或放宽
+schema。该事件仍属于 **data/provenance completeness**，不构成 latent 方法失败。
+
+已注册 `jobs/cache_test_planner_traces_retry3.pjm`，只对这两个 cluster 使用相同
+manifest、model revision、HOMER base prompt 和 repair policy，最多 32 次尝试。若仍失败，
+必须停在 `data gate blocked`，另立“受约束 Planner serialization”实验后再继续；不得用
+不完整 cache 运行 outer 或 caption。
+
+## 权威依据
+
+## V35-SCHED-023（2026-09-10）：smoke walltime 过大，按实测耗时收紧
+
+当前 public-route smoke `6753754` 使用 `b-batch + node=1`、1 小时上限，PJM 将其标记为
+`short-job=false`，并给出 09/11 04:00 的预计启动时间。根据同一路线历史真实 smoke
+`6708113` 的统计，实际耗时为 2 分 1 秒（5 分钟上限）。因此 `6753754` 在执行前撤回，
+保留 `v35pubsmok.6753754.stats` 与提交清单；没有模型加载、CUDA forward、数据写入或科学
+输出。这不是方法失败，而是 walltime 申请与实测 workload 不匹配。
+
+已新增 `jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm`：协议、模型、数据、
+CUDA/native allocator 和所有 fail-closed 门禁不变，只将上限收紧至 10 分钟，并在写入
+`complete.json` 前显式确认 CPU preflight、CUDA、route、bridge-input 及真实 trace smoke
+均为 `pass`。下一次只允许提交这一个短作业，并重新比较 PJM `START_DATE`；详见
+`docs/EXPERIMENT_FAILURES.jsonl` 中的 `V35-SCHED-023`。
+
+## V35-ENG-011（2026-09-05）：A5 重跑被残留空输出目录保护性拒绝
+
+提交 A5 修正版作业 `6712296` 后，作业在任何模型加载或 GPU forward 之前退出，日志为
+`refusing to reuse A5 output directory`。此前被取消的 `6712281` 只留下了一个空目录，
+没有 checkpoint、metrics 或科学输出；因此该事件不提供方法、模型或 GPU 结论。
+
+这是 provenance guard 的预期行为，不是新的 latent 失败。空目录已移动为
+`outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched_canceled_6712281_empty`，
+没有删除历史证据。正式重跑必须确认 canonical 输出路径不存在，再使用同一已通过
+preflight 的 A5 脚本；这次拒绝已写入 `docs/EXPERIMENT_FAILURES.jsonl`。
+
+## V35-ENG-012（2026-09-05）：A5 真实 smoke 暴露未初始化 baseline
+
+A5 作业 `6712300` 已成功获得原生 H100 并通过 clean preflight，但在真实 trace
+forward 之前，`real_trace_bridge_smoke.py` 在 donor-policy 分支读取了尚未赋值的
+`baseline`，触发 `UnboundLocalError`（exit code 1）。因此没有 checkpoint、metrics 或
+科学训练结果，不能解释为 GPU、数据或 latent 方法失败。
+
+修复是把 `baseline = config["experiment"]["baseline"]` 提前到所有 donor-policy 分支之前，
+并加入静态回归测试；`V35-ENG-012` 已记录在 `EXPERIMENT_FAILURES.jsonl`。修复后必须
+重新通过 `.venv` compile/pytest、真实两 cluster smoke，再提交新的 A5 canonical 输出。
+
+## V35-ENG-013（2026-09-05）：重复 A5 提交被提前取消
+
+在查询 GPU 资源后，重复提交的 A5 作业 `6712325` 发现 canonical 路径仍保留作业
+`6712300` 写入的 `preflight.json`，因此在启动前取消；没有模型 forward、GPU 科学计算或
+checkpoint。该 partial 目录已移动为
+`outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched_partial_6712300_preflight`，
+原始日志和调度记录保留。根因是资源查询与提交之间没有再次执行输出路径检查；以后提交
+必须分离资源检查、路径检查和 `pjsub`，并在重复作业启动前确认取消状态。事件已写入
+`docs/EXPERIMENT_FAILURES.jsonl`，不构成方法结论。
+
+
+1. Shang et al., HOMER, ICLR 2026: https://openreview.net/pdf?id=SzaRhPom4o
+2. He et al., MoCo, CVPR 2020: https://openaccess.thecvf.com/content_CVPR_2020/html/He_Momentum_Contrast_for_Unsupervised_Visual_Representation_Learning_CVPR_2020_paper.html
+3. Yang et al., Hierarchical Attention Networks, NAACL 2016: https://aclanthology.org/N16-1174/
+4. Libovicky and Helcl, Multi-Source Attention, ACL 2017: https://aclanthology.org/P17-2031/
+5. van den Oord et al., Contrastive Predictive Coding, 2018: https://arxiv.org/abs/1807.03748
+6. Card et al., Statistical Power in NLP, EMNLP 2020: https://aclanthology.org/2020.emnlp-main.745/
+7. Dror et al., Significance Testing in NLP, ACL 2018: https://aclanthology.org/P18-1128/
+8. Graham et al., Statistical Power and Translationese in Machine Translation Evaluation,
+   EMNLP 2020: https://aclanthology.org/2020.emnlp-main.6/
+9. Howcroft and Rieser, What happens if you treat ordinal ratings as interval data?,
+   EMNLP 2021: https://aclanthology.org/2021.emnlp-main.703/
+10. Koehn, Statistical Significance Tests for Machine Translation Evaluation, EMNLP 2004:
+    https://aclanthology.org/W04-3250/
+
+## V35-SCHED-022（2026-09-10）：GPU 资源组误判，两个 smoke 均在执行前撤回
+
+`6753645` 使用已固定 commit 的 `b-batch + node=1` 路由，PJM 预计次日 02:00 启动；只读
+审计确认该组节点为 `0/35` 空闲，因此在模型加载前取消。随后曾尝试 `6753705` 使用
+`a-batch` 的空闲节点，但该组虽然有空闲 CPU 节点，`pjshowrsc --rscgrp a-batch
+--custom-resource` 没有暴露 `gpu` 资源，同样在执行前取消。一次 `b-inter + gpu=1`
+覆盖还被 PJM 以 `node` 与 `gpu` 同时指定拒绝。所有作业均没有 CUDA forward、数据写入或
+科学结果。
+
+根因是把“组内 GPU slot 余量”和“当前账户可调度的 batch GPU 节点”混为一谈。以后资源选择
+必须同时通过：batch 权限、GPU 资源可见性、执行策略兼容性和 PJM `START_DATE` 四项检查。
+不得把 `a-batch` CPU 空闲、已分配节点上的 aggregate GPU slot 或 `b-inter` 交互组当作
+自动 batch 后备；MIG 仍因既有 allocator 错误禁用。当前只保留一份经过清洁 commit 门禁的
+`b-batch + node=1` smoke，提交前再次读取 PJM 预计启动时间。
+
+## V35-SCHED-023（2026-09-10）：engineering smoke walltime 过宽
+
+当前 public-route smoke `6753754` 使用 `b-batch + node=1`、1 小时上限，PJM 将其标记为
+`short-job=false`，预计启动为次日 04:00。它在执行前撤回，保留 `.stats`，没有模型加载、
+CUDA forward、数据写入或科学输出。历史同一路线真实 smoke 仅使用约 2 分钟，因此原请求
+与实际短作业规模不匹配。已改用完全相同协议、10 分钟上限的 `6754049`；该作业真实通过，
+并确认 CPU/CUDA/route/bridge-input 门禁、两个 7B policy 冻结以及 bridge 非零更新。
+
+## V35-SCHED-024（2026-09-10）：正式 bridge walltime 过宽
+
+正式 bridge 作业 `6754055` 使用 `b-batch + node=1`、4 小时上限，保持 QUE，PJM 预计
+启动时间为 `2026-09-12 21:00`。它在执行前被撤回；`v35pubformal.6754055.stats` 没有
+模型加载、CUDA forward、数据读取或 checkpoint，因此不构成模型、数据、CUDA 或 latent
+方法结果。
+
+当前 public bridge training view 每 epoch 只选择 271 个 image cluster，5 epoch，caption
+target 上限 128 token。历史同类 bridge 在约 602 个 cluster、较长 768-token semantic
+target 下实际耗时 1:32:27。故将正式脚本收紧为有实测依据的 `01:30:00`；清洁提交后只
+重新提交一个全新的 formal 输出目录。该变更只优化 scheduler backfill，不改变 HOMER
+prompt、sealed population、冻结两个 7B、bridge-only 训练或 caption 评测协议。
+## V35-ENG-033（2026-09-10）：public comparison 的 split 字段接口错误
+
+正式训练尚未启动时的静态审计发现，sealed public population 的行使用
+`homer_description_split`，而当前 caption comparison generator 曾强制要求不存在的
+`split` 字段。若不修复，bridge 完成后生成作业会在模型加载前失败；没有产生任何 caption
+或科学结果。
+
+已在 `scripts/generate_pretrained_bridge_comparison.py` 中将该字段仅在内存中规范化为
+`split`，并对与目标 split 不一致的行直接拒绝；未修改 sealed dataset。新增回归测试覆盖
+全部 47 个 test row，并重新执行图片文件与 SHA-256 校验，结果通过。该修复必须在正式
+comparison job 提交前提交并推送；在此之前不得把生成阶段称为已完成。
+
+## V35-ENG-034（2026-09-10）：记忆 provenance 使用短 SHA 导致回归测试失败
+
+全量 CPU 回归测试发现 `tests/test_project_memory.py` 失败：当前
+`memory/working_state.yaml` 与 `memory/project_memory.yaml` 的队列快照使用了短 SHA
+`2477f4e`，而 `scripts/validate_project_memory.py` 明确要求 40 位 Git commit。测试结果为
+114 项通过、1 项失败；没有启动 GPU、模型 forward、数据修改或科学训练。
+
+根因是记忆快照的可读缩写被误当作不可变 provenance。已将当前队列快照中的
+`source_commit` 统一改为完整的
+`2477f4e461dc4477928a9b8cf3e9cbb4a54120ea`，并重新通过 memory/public-route/generation
+相关测试、JSONL 解析和 Python 编译检查。该修复暂不提交，直到正式作业 `6754067` 终止，
+以保持其提交时的 source pin 与运行时记录一致；这不是模型或方法失败。
+
+## V35-ENG-035（2026-09-10）：生成阶段可恢复输出的完整性门禁过弱
+
+静态审计发现，caption comparison generator 原先只把已有文件中的
+`(image_id, generation_seed)` 放入集合，未验证 `system_id`、split、图片 hash、trial/
+candidate 映射，也未拒绝物理重复行。若输出目录残留旧文件，可能在不生成全部候选的情况下
+错误跳过记录；本次没有消费任何错误科学输出，也没有启动模型或 GPU。
+
+根因是把“集合键存在”误当成完整 provenance。已新增 `load_completed_keys` 和
+`assert_complete_keys`：每一行必须匹配当前 sealed population、当前 condition、图片 hash 和
+精确 HOMER seed schedule，重复或缺失都会 fail-closed；新增重复/不完整输出回归测试，相关
+测试和编译均通过。该修复必须在 generation job 提交前 commit/push；它是工程门禁，不是
+caption 质量结论。
+
+## V35-ENG-036（2026-09-10）：生成作业的总数门禁不足以证明完整覆盖
+
+进一步静态检查发现，generation job 原先的最终检查只验证总数 `2350` 和两个
+`system_id`，没有验证 47 张图片、5 个 trial、5 个 candidate 的完整笛卡尔积，也没有验证
+每行图片 hash、seed/trial 映射和两种 condition 的各自数量。若残留文件存在，重复键可能在
+总数不变时掩盖缺失候选；本次没有启动生成作业，也没有消费科学输出。
+
+已加强 `jobs/generate_pretrained_bridge_comparison_bsimplex.pjm` 的 inline validator：读取
+sealed test population，要求准确的 47×5×5×2 键集合、seed
+`20260910 + trial*100 + candidate`、每 condition 1175 行、图片 hash 一致、caption 非空，
+并检查 text/latent 的 checkpoint provenance。shell 语法、目标测试和 `git diff --check`
+均通过。该修复必须与 generation loader 一起在正式生成前提交并推送。
+
+## V35-ENG-037（2026-09-10）：正式提交记录使用短 SHA
+
+provenance 复核发现，正式作业输出目录中的不可变提交记录
+`submission.json` 保存的是短 SHA `2477f4e`，而项目契约要求 40 位 commit。该缩写当前可
+唯一解析为 `2477f4e461dc4477928a9b8cf3e9cbb4a54120ea`；作业 `6754067` 已经排队，因此不
+篡改原始调度证据，也不因这一记录格式问题取消作业。
+
+作业终止后必须检查运行时 `git_commit` 与该完整 SHA 完全一致，并生成一份链接原始
+`submission.json` 的 post-job provenance audit；此后所有新提交记录一律写入
+`git rev-parse HEAD` 的完整值。该问题不涉及模型、数据、GPU 或科学结果。
+
+## V35-ENG-038（2026-09-10）：记忆 YAML 缩进回归
+
+在一次正式作业提交前的窄范围复核中，错误的无操作补丁曾将
+`memory/working_state.yaml` 的 `active_jobs` 临时移到 `immediate_gate` 外部，使项目记忆
+结构不符合契约。该回归发生在工程文件编辑阶段；没有触碰调度器、模型、GPU、数据集、权重
+或科学输出。
+
+根因是补丁上下文遗漏了嵌套 YAML 键所需的两个空格。已恢复为
+`immediate_gate.active_jobs: ["6754067"]`，并用 PyYAML 解析两份记忆文件，运行项目记忆和
+pretrained comparison 回归测试、PJM shell 语法检查及 `git diff --check`，全部通过。
+后续每次记忆/ provenance 修改后都必须立即做结构解析和针对性测试；该问题是工程回归，
+不是 latent 方法、数据质量或训练结果。
+
+## V35-SCHED-025（2026-09-10）：比较生成作业预计启动过晚
+
+唯一提交的 comparison-generation 作业 `6754510`（`v35pubgen`）按已验证的
+`b-batch + node=1` 合同提交，但 PJM 预计启动时间为 `2026-09-13 09:00`。作业在执行前
+撤回；`.stats` 显示 `LAST STATE=QUE`、没有 start/end、exit code，且没有模型、CUDA forward、
+图片读取、caption 或输出目录，因此这不是方法失败或数据失败。
+
+根因是提交时 `b-batch` 的 35 个节点全部已分配（`FREE=0`）；虽然 aggregate GPU slot 很多，
+独占节点请求仍没有近期 backfill 窗口。后续不得因为 aggregate GPU 数字直接提交；必须同时
+检查 PJM `START_DATE`、每节点 GPU/CPU 和执行策略。只有在预计时间可接受时保留一份
+`b-batch + node=1`；若考虑 `c-batch + gpu=1`，必须确认 shared GPU 与 CPU 同时可用并先完成
+该资源合同的 smoke。MIG、CPU-only `a-batch` 和交互组不作为后备。详见
+`v35pubgen.6754510.stats`。
+
+## V35-SCHED-026（2026-09-10）：c-batch shared GPU 也没有可运行 CPU
+
+为验证唯一可能的非独占路线，提交了只读的 `c-batch + gpu=1`、5 分钟可见性 smoke
+`6754523`。PJM 预计启动时间为 `2026-09-11 18:00`，因此在执行前撤回；stats 显示
+`LAST STATE=QUE`、无 start、无模型和无科学输出。`pjshowrsc --rscgrp c-batch -v 3` 同时显示
+两个节点 CPU 均为 `FREE=0`；其中一个虽有 shared slot，却没有可调度 CPU。
+
+这证明 shared GPU slot 不能单独作为“可立即运行”的依据。后续资源门禁必须同时检查 GPU、
+CPU、执行策略和 PJM `START_DATE`；没有完整可运行 placement 时，不创建未经 smoke 验证的
+c-batch generation 版本。该事件不是模型、数据或方法失败，证据保存在
+`v35cgpu5.6754523.stats`。
+
+## V35-SCHED-027（2026-09-10）：b-batch shared GPU 真实 caption 生成 smoke 通过
+
+在不改变模型、数据、HOMER prompt 或比较协议的前提下，首次使用已经验证的
+`b-batch + gpu=1` shared 路线提交真实端到端生成 smoke：作业 `6754567`（`v35pubgensmoke`）
+于 `23:06:03` 在 `genkai0002` 启动，`23:08:48` 结束，PJM elapsed 166 秒，退出码为 0，
+分配 1 个 GPU，执行策略为 `PJM_EXEC_POLICY=share`，设备为 NVIDIA H100。它运行了当前无
+adapter 的 Qwen2.5-VL-7B revision，在两个官方 public-release test image 上分别生成
+`text_homer_context_replay` 和 `latent_bridge` 各 1 条 caption；最终 smoke gate 为 4/4
+记录、非空 caption、checkpoint provenance 完整，且明确标记 `scientific_training=false`。
+
+这只是资源合同、模型加载、图片读取、上下文回放和 bridge 注入的工程验证，不是幽默质量
+或 latent 收益结论。证据在 `v35pubgensmoke.6754567.out/.stats` 和
+`outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910/`。
+
+该成功结果改变调度策略：正式生成使用同一 `b-batch + gpu=1` shared 配置，不再手动设置
+`CUDA_VISIBLE_DEVICES`，并且只提交一份。正式门禁仍必须严格通过 47 张图片 × 5 trials ×
+5 candidates × 2 conditions = 2350 条完整键集合、图片 hash、seed、两种 condition 的
+checkpoint provenance 检查后，才允许进入 Caption-judgement；smoke 本身不解锁科学结论。
+
+## V35-SCHED-028（2026-09-11）：完整 held-out caption 生成通过门禁
+
+这不是失败记录，而是对 V35-SCHED-027 smoke 后正式生成终态的审计记录。唯一正式作业
+`6754609`（`v35pubgen`）使用相同的 `b-batch + gpu=1 + shared` 路线，在 `genkai0002`
+的 NVIDIA H100 上于 `2026-09-10 23:14:26` 启动、`2026-09-11 00:17:36` 结束，exit code
+为 0，耗时 3791 秒，峰值 vnode memory 为 5334.9 MiB，分配 1 个 GPU。它在 47 张
+public-release test 图片上生成 `text_homer_context_replay` 与 `latent_bridge` 两个
+condition，每个 5 个 trial、每 trial 5 个 candidate，共 2350 行。
+
+`generation_gate.json` 验证了完整 image×trial×candidate 笛卡尔积、每 condition 1175 行、
+图片 hash、seed 映射、非空 caption 和 latent checkpoint provenance。适配到
+Caption-judgement 后，`validate --check-images` 与 `audit` 均通过：两条件各 1175 行、
+47 张图片、每个 system/image 25 个候选、空输出率为 0。该审计没有调用 judge，因此不能
+推出幽默质量、Pass@1/3/5、win rate 或 good/weak/bad 结论。
+
+根因/状态：无执行错误；当前剩余阻塞是外部评审授权和真实结果。下一步生成 HOMER primary
+评测输入以及项目扩展的盲评 packet，保存 evaluator model、temperature、prompt hash、
+代码 commit 和输入 hash；没有真实评分时严禁写入任何聚合结果。DPO、SimPO、IPO 和旧
+v2.5/v3.0 pipeline 仍在 v3.5 禁止范围内。

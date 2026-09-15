@@ -1,0 +1,59 @@
+#!/bin/sh
+# Phase A5 repair candidate, node-exclusive variant.  This is byte-for-byte
+# the same training/evaluation sequence as cross_attention_phase_a5.pjm; only
+# the validated GENKAI resource contract changes from shared gpu=1 to
+# c-batch + node=1.  Both Qwen policies are frozen; only the bridge is trained.
+# Do not add gpu=1 or exec-policy=simplex to this node request.
+#PJM -L rscgrp=c-batch
+#PJM -L node=1
+#PJM -L elapse=08:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+config=configs/pilot/cross_attention_semantic_phase_a5.yaml
+output=outputs/pilot/cross_attention_semantic_phase_a5_lengthmatched
+test ! -e "$output" || { echo "refusing to reuse A5 output directory: $output" >&2; exit 2; }
+mkdir -p "$output"
+
+python scripts/run_formal_preflight.py \
+  --output "$output/preflight.json"
+python scripts/check_cuda_resource.py
+python scripts/real_trace_bridge_smoke.py \
+  --config "$config" \
+  --trace-index data/cache/planner_traces_homer_strict_v35/index.jsonl \
+  --output "$output/resource_smoke.json"
+python scripts/validate_phase_a5_smoke.py \
+  --config "$config" \
+  --report "$output/resource_smoke.json" \
+  > "$output/resource_smoke_contract.json"
+test -s "$output/resource_smoke_contract.json"
+
+python scripts/train_bridge.py --config "$config" --output "$output"
+test -s "$output/complete.json"
+python scripts/check_semantic_training_gate.py \
+  --config "$config" \
+  --metrics "$output/metrics.jsonl" \
+  --output "$output/semantic_gate.json" \
+  --report-only
+test -s "$output/semantic_gate.json"
+status=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$output/semantic_gate.json")
+case "$status" in
+  strong_go|go_to_outer_semantic_validation|pilot_inconclusive)
+    echo "A5 pilot status=$status; sealed outer semantic confirmation remains mandatory." ;;
+  *) echo "A5 semantic gate hard-stopped: $status" >&2; exit 2 ;;
+esac

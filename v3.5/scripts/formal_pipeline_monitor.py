@@ -10,6 +10,7 @@ from __future__ import annotations
 from argparse import ArgumentParser
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -23,9 +24,9 @@ CACHE = ROOT / "data/cache/planner_traces_homer_strict_v35"
 DATASET = ROOT / "data/processed/latent_bridge_v35"
 JOB_ID = re.compile(r"Job\s+(\d+)\s+submitted")
 TRAINING = (
-    ("pilot_learned_sft_kl", "p_l_sft_k", "configs/pilot/learned_sft_kl.yaml", "outputs/pilot/learned_sft_kl"),
-    ("pilot_typed_sft_kl", "p_t_sft_k", "configs/pilot/typed_sft_kl.yaml", "outputs/pilot/typed_sft_kl"),
-    ("pilot_typed_sft_no_kl", "p_t_sft_n", "configs/pilot/typed_sft_no_kl.yaml", "outputs/pilot/typed_sft_no_kl"),
+    ("pilot_learned_sft_kl", "p_l_sft_k2", "configs/pilot/learned_sft_kl.yaml", "outputs/pilot/learned_sft_kl_visualcap_v2"),
+    ("pilot_typed_sft_kl", "p_t_sft_k2", "configs/pilot/typed_sft_kl.yaml", "outputs/pilot/typed_sft_kl_visualcap_v2"),
+    ("pilot_typed_sft_no_kl", "p_t_sft_n2", "configs/pilot/typed_sft_no_kl.yaml", "outputs/pilot/typed_sft_no_kl_visualcap_v2"),
 )
 PILOT_EVALUATION_PACKET = ROOT / "outputs/pilot_validation/blind_packet.jsonl"
 
@@ -95,6 +96,68 @@ def cache_evidence() -> dict[str, Any]:
     }
 
 
+def training_completion_evidence(output: Path) -> dict[str, Any]:
+    """Validate the artifact set; complete.json existence alone is insufficient."""
+    required = {
+        "complete": output / "complete.json",
+        "checkpoint": output / "best_bridge.pt",
+        "manifest": output / "run_manifest.json",
+        "metrics": output / "metrics.jsonl",
+    }
+    missing = [name for name, path in required.items() if not path.is_file() or path.stat().st_size == 0]
+    if missing:
+        return {"complete": False, "reason": "missing_or_empty", "artifacts": missing}
+    try:
+        completion = json.loads(required["complete"].read_text())
+        manifest = json.loads(required["manifest"].read_text())
+        metrics = read_jsonl(required["metrics"])
+        best = float(completion["best_validation_total"])
+        valid = (
+            completion.get("status") == "complete"
+            and int(completion.get("epochs_completed", 0)) >= 1
+            and int(completion.get("global_step", 0)) >= 1
+            and math.isfinite(best)
+            and int(manifest.get("policy_trainable_parameters", -1)) == 0
+            and int(manifest.get("bridge_trainable_parameters", 0)) > 0
+            and bool(metrics)
+            and all("validation" in row and "train" in row for row in metrics)
+        )
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        return {"complete": False, "reason": "parse_error", "error": str(exc)}
+    return {
+        "complete": valid,
+        "reason": "validated" if valid else "contract_failed",
+        "epochs_completed": completion.get("epochs_completed"),
+        "global_step": completion.get("global_step"),
+        "best_validation_total": best,
+    }
+
+
+def evaluation_packet_evidence(packet: Path) -> dict[str, Any]:
+    mapping = packet.with_name("private_mapping.jsonl")
+    if not packet.is_file() or not mapping.is_file():
+        return {"complete": False, "reason": "packet_or_mapping_missing"}
+    try:
+        packets = read_jsonl(packet)
+        mappings = read_jsonl(mapping)
+        packet_ids = [row["blind_id"] for row in packets]
+        mapping_ids = [row["blind_id"] for row in mappings]
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        return {"complete": False, "reason": "parse_error", "error": str(exc)}
+    valid = (
+        bool(packets)
+        and len(packet_ids) == len(set(packet_ids))
+        and len(mapping_ids) == len(set(mapping_ids))
+        and set(packet_ids) == set(mapping_ids)
+    )
+    return {
+        "complete": valid,
+        "reason": "validated" if valid else "packet_mapping_contract_failed",
+        "packets": len(packets),
+        "mappings": len(mappings),
+    }
+
+
 def parse_submitted_job(result: subprocess.CompletedProcess[str]) -> str:
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip())
@@ -104,35 +167,88 @@ def parse_submitted_job(result: subprocess.CompletedProcess[str]) -> str:
     return match.group(1)
 
 
-def submit_cache(retry_round: int) -> str:
-    return parse_submitted_job(command([
-        "pjsub", "-N", f"cache_strict{retry_round}",
-        "-x", f"TRACE_RETRY_ROUND={retry_round}",
-        "jobs/cache_formal_planner_traces.pjm",
-    ]))
+def submit_cache(
+    retry_round: int,
+    *,
+    target_clusters: list[str] | None = None,
+    validator_repair: bool = False,
+    resource_group: str | None = None,
+) -> str:
+    environment = [f"TRACE_RETRY_ROUND={retry_round}"]
+    if target_clusters:
+        environment.append("TRACE_CLUSTER_IDS=" + ":".join(target_clusters))
+    if validator_repair:
+        environment.append("TRACE_VALIDATOR_REPAIR=1")
+    job_file = (
+        "jobs/recover_two_planner_traces.pjm"
+        if validator_repair and target_clusters == ["nycc_325", "nycc_775"]
+        else "jobs/cache_formal_planner_traces.pjm"
+    )
+    argv = ["pjsub", "-N", f"cache_strict{retry_round}"]
+    if resource_group:
+        argv.extend(["-L", f"rscgrp={resource_group},elapse=02:00:00,gpu=1"])
+    argv.extend(["-x", ",".join(environment), job_file])
+    return parse_submitted_job(command(argv))
 
 
-def submit_training(name: str, job_name: str, config: str, output: str) -> str:
-    return parse_submitted_job(command([
-        "pjsub", "-N", job_name,
+def submit_training(
+    name: str,
+    job_name: str,
+    config: str,
+    output: str,
+    *,
+    resource_group: str | None = None,
+    gpu_count: int = 1,
+) -> str:
+    argv = ["pjsub", "-N", job_name]
+    if resource_group:
+        argv.extend(["-L", f"rscgrp={resource_group},elapse=04:00:00,gpu={gpu_count}"])
+    argv.extend([
         "-x", f"BRIDGE_CONFIG={config},BRIDGE_OUTPUT={output}",
         "jobs/formal_bridge_train.pjm",
-    ]))
+    ])
+    return parse_submitted_job(command(argv))
 
 
-def submit_pilot_evaluation() -> str:
-    return parse_submitted_job(command([
-        "pjsub", "-N", "pilot_val_gen", "jobs/pilot_validation_generation.pjm",
-    ]))
+def submit_pilot_evaluation(
+    *, resource_group: str | None = None, gpu_count: int = 1,
+) -> str:
+    argv = ["pjsub", "-N", "pilot_val_gen"]
+    if resource_group:
+        argv.extend(["-L", f"rscgrp={resource_group},elapse=04:00:00,gpu={gpu_count}"])
+    argv.append("jobs/pilot_validation_generation.pjm")
+    return parse_submitted_job(command(argv))
 
 
 def verify_trace_gate() -> None:
+    dataset = command([str(ROOT / ".venv/bin/python"), "scripts/verify_clustered_dataset.py"])
+    if dataset.returncode != 0:
+        raise RuntimeError(f"dataset gate failed:\n{dataset.stdout}\n{dataset.stderr}")
+    records = read_jsonl(CACHE / "index.jsonl")
+    if any(record.get("schema_version") != 3 for record in records):
+        migration = command([
+            str(ROOT / ".venv/bin/python"), "scripts/migrate_trace_provenance_v3.py"
+        ])
+        if migration.returncode != 0:
+            raise RuntimeError(
+                f"trace provenance migration failed:\n{migration.stdout}\n{migration.stderr}"
+            )
     result = command([str(ROOT / ".venv/bin/python"), "scripts/check_trace_completion.py"])
     if result.returncode != 0:
         raise RuntimeError(f"trace gate failed:\n{result.stdout}\n{result.stderr}")
 
 
-def initialize(state_path: Path, initial_job_id: str, retry_round: int) -> dict[str, Any]:
+def initialize(
+    state_path: Path,
+    initial_job_id: str,
+    retry_round: int,
+    *,
+    target_clusters: list[str] | None = None,
+    validator_repair: bool = False,
+    cache_resource_group: str | None = None,
+    training_resource_group: str | None = None,
+    training_gpu_count: int = 1,
+) -> dict[str, Any]:
     if state_path.is_file():
         return json.loads(state_path.read_text())
     state = {
@@ -142,6 +258,11 @@ def initialize(state_path: Path, initial_job_id: str, retry_round: int) -> dict[
         "status": "monitoring_cache",
         "cache_job_id": initial_job_id,
         "cache_retry_round": retry_round,
+        "target_clusters": target_clusters or [],
+        "validator_repair": validator_repair,
+        "cache_resource_group": cache_resource_group,
+        "training_resource_group": training_resource_group,
+        "training_gpu_count": training_gpu_count,
         "training_jobs": {},
         "events": [],
     }
@@ -195,14 +316,24 @@ def advance_once(
             state["trace_gate_recorded"] = True
         jobs = state.setdefault("training_jobs", {})
         for name, job_name, config, output in TRAINING:
-            complete = ROOT / output / "complete.json"
-            if complete.is_file():
+            output_path = ROOT / output
+            completion = training_completion_evidence(output_path)
+            if completion["complete"]:
                 if name not in jobs or not jobs[name].get("complete"):
                     jobs[name] = {
                         **jobs.get(name, {}), "complete": True, "completed_at": iso(),
+                        "completion_evidence": completion,
                     }
                     append_event(state, "training_completed", experiment=name)
                 continue
+            if (output_path / "complete.json").exists():
+                state["status"] = f"blocked_invalid_complete_{name}"
+                append_event(
+                    state, "invalid_training_completion", experiment=name,
+                    evidence=completion,
+                )
+                atomic_json(state_path, state)
+                return True
             existing = jobs.get(name)
             if existing is not None:
                 job_id = str(existing.get("job_id") or "")
@@ -216,7 +347,11 @@ def advance_once(
                 return True
             # At most one formal GPU job exists at a time. Submit the next
             # pilot only after the preceding complete.json passed.
-            job_id = submit_training(name, job_name, config, output)
+            job_id = submit_training(
+                name, job_name, config, output,
+                resource_group=state.get("training_resource_group"),
+                gpu_count=int(state.get("training_gpu_count", 1)),
+            )
             jobs[name] = {
                 "job_id": job_id, "complete": False, "recorded_at": iso(),
             }
@@ -224,9 +359,18 @@ def advance_once(
             append_event(state, "training_submitted", experiment=name, job_id=job_id)
             atomic_json(state_path, state)
             return False
-        if PILOT_EVALUATION_PACKET.is_file():
+        packet_evidence = evaluation_packet_evidence(PILOT_EVALUATION_PACKET)
+        if packet_evidence["complete"]:
             state["status"] = "pilot_validation_packet_ready_for_independent_raters"
-            append_event(state, "pilot_validation_packet_ready", packet=str(PILOT_EVALUATION_PACKET))
+            append_event(
+                state, "pilot_validation_packet_ready",
+                packet=str(PILOT_EVALUATION_PACKET), evidence=packet_evidence,
+            )
+            atomic_json(state_path, state)
+            return True
+        if PILOT_EVALUATION_PACKET.exists():
+            state["status"] = "blocked_invalid_pilot_validation_packet"
+            append_event(state, "invalid_pilot_validation_packet", evidence=packet_evidence)
             atomic_json(state_path, state)
             return True
         evaluation = state.get("pilot_evaluation_job")
@@ -240,7 +384,10 @@ def advance_once(
             append_event(state, "pilot_validation_generation_missing", job_id=job_id)
             atomic_json(state_path, state)
             return True
-        job_id = submit_pilot_evaluation()
+        job_id = submit_pilot_evaluation(
+            resource_group=state.get("training_resource_group"),
+            gpu_count=int(state.get("training_gpu_count", 1)),
+        )
         state["pilot_evaluation_job"] = {"job_id": job_id, "recorded_at": iso()}
         state["status"] = "monitoring_pilot_validation_generation"
         append_event(state, "pilot_validation_generation_submitted", job_id=job_id)
@@ -256,7 +403,12 @@ def advance_once(
         append_event(state, "retry_limit_reached", evidence=evidence, max_retry_rounds=max_retry_rounds)
         atomic_json(state_path, state)
         return True
-    job_id = submit_cache(next_round)
+    job_id = submit_cache(
+        next_round,
+        target_clusters=list(state.get("target_clusters", [])),
+        validator_repair=bool(state.get("validator_repair", False)),
+        resource_group=state.get("cache_resource_group"),
+    )
     state.update({
         "status": "monitoring_cache",
         "cache_job_id": job_id,
@@ -273,13 +425,34 @@ def main() -> None:
     parser.add_argument("--initial-job-id", required=True)
     parser.add_argument("--retry-round", type=int, default=0)
     parser.add_argument("--max-retry-rounds", type=int, default=4)
+    parser.add_argument("--target-clusters", nargs="+")
+    parser.add_argument("--validator-repair", action="store_true")
+    parser.add_argument("--cache-resource-group", choices=["b-batch", "c-batch"])
+    parser.add_argument(
+        "--training-resource-group",
+        choices=["b-batch", "b-batch-mig", "c-batch"],
+    )
+    parser.add_argument("--training-gpu-count", type=int, default=1)
     parser.add_argument("--poll-seconds", type=int, default=1200)
     parser.add_argument("--confirm-absence-seconds", type=int, default=60)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
-    if args.poll_seconds < 1 or args.confirm_absence_seconds < 0:
+    if (
+        args.poll_seconds < 1
+        or args.confirm_absence_seconds < 0
+        or args.training_gpu_count < 1
+    ):
         raise ValueError("invalid monitoring intervals")
-    state = initialize(args.state, args.initial_job_id, args.retry_round)
+    state = initialize(
+        args.state,
+        args.initial_job_id,
+        args.retry_round,
+        target_clusters=args.target_clusters,
+        validator_repair=args.validator_repair,
+        cache_resource_group=args.cache_resource_group,
+        training_resource_group=args.training_resource_group,
+        training_gpu_count=args.training_gpu_count,
+    )
     while True:
         done = advance_once(
             state, args.state,

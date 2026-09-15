@@ -1,0 +1,49 @@
+#!/bin/sh
+# Resume only the missing records from the adapter-free public HOMER Planner
+# trace cache.  c-batch exposes free native GPU units; this is a shared
+# single-GPU request, so it must not be combined with node=1 or simplex.
+# The existing index is append-only and the Python entry point skips all
+# already verified cluster IDs before doing model inference.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=00:30:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+# This CPU-only gate is identical to the completed trace route and runs
+# before loading the model.  The cluster list is intentionally explicit so a
+# resubmission cannot silently regenerate the full population.
+python scripts/preflight_pretrained_homer_traces.py \
+  --output "outputs/preflight/pretrained_homer_traces_repair_$(date +%Y%m%d_%H%M%S).json"
+python scripts/cache_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --output data/cache/homer_pretrained_7b_planner_traces \
+  --cluster-ids \
+    nycc_563 nycc_748 nycc_762 nycc_877 nycc_878 nycc_879 nycc_880 \
+    nycc_881 nycc_882 nycc_883 nycc_884 nycc_885 nycc_886 nycc_887 \
+    nycc_888 nycc_889 nycc_891 nycc_892 nycc_893 nycc_894 nycc_895 \
+  --attempts 8 \
+  --seed 20260906 \
+  --retry-round 1 \
+  --temperature 1.0 \
+  --top-p 1.0
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --cache data/cache/homer_pretrained_7b_planner_traces \
+  --output outputs/preflight/pretrained_homer_trace_validation_repair.json
+test -s data/cache/homer_pretrained_7b_planner_traces/index.jsonl

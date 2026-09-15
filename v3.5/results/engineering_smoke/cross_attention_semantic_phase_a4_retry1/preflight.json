@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-04T17:27:06+09:00",
+  "status": "pass",
+  "failure": null,
+  "git_commit": "612198bbc12eb4a6d45215ba696f0bd63c6d393e",
+  "tracked_worktree_dirty": false,
+  "tests_skipped": false,
+  "commands": [
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "scripts",
+        "tests"
+      ],
+      "returncode": 0,
+      "stdout_tail": "",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "returncode": 0,
+      "stdout_tail": "........................................................................ [ 85%]\n............                                                             [100%]\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/check_environment.py"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"executable\": \"/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python\",\n  \"prefix\": \"/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv\",\n  \"python\": \"3.12.11\",\n  \"status\": \"pass\",\n  \"versions\": {\n    \"accelerate\": \"1.14.0\",\n    \"bitsandbytes\": \"0.50.0\",\n    \"nltk\": \"3.10.3\",\n    \"numpy\": \"2.5.1\",\n    \"peft\": \"0.20.0\",\n    \"pillow\": \"12.3.0\",\n    \"pyyaml\": \"6.0.3\",\n    \"qwen-vl-utils\": \"0.0.14\",\n    \"safetensors\": \"0.8.0\",\n    \"scikit-learn\": \"1.7.2\",\n    \"scipy\": \"1.16.3\",\n    \"sentence-transformers\": \"6.0.0\",\n    \"torch\": \"2.12.0+cu126\",\n    \"torchvision\": \"0.27.0+cu126\",\n    \"transformers\": \"5.14.1\"\n  }\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/check_v35_isolation.py"
+      ],
+      "returncode": 0,
+      "stdout_tail": "v3.5 isolation: pass\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/verify_frozen_artifacts.py"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"status\": \"pass\",\n  \"manifest\": \"/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/manifests/frozen_7b_adapters.json\",\n  \"checked\": {\n    \"planner_sft\": [\n      \"README.md\",\n      \"adapter_config.json\",\n      \"adapter_model.safetensors\",\n      \"chat_template.jinja\",\n      \"processor_config.json\",\n      \"tokenizer.json\",\n      \"tokenizer_config.json\"\n    ],\n    \"generator_sft\": [\n      \"README.md\",\n      \"adapter_config.json\",\n      \"adapter_model.safetensors\",\n      \"chat_template.jinja\",\n      \"processor_config.json\",\n      \"tokenizer.json\",\n      \"tokenizer_config.json\"\n    ]\n  }\n}\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/train_bridge.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: train_bridge.py [-h] --config CONFIG --output OUTPUT [--resume RESUME]\n                       [--init-bridge INIT_BRIDGE]\n\noptions:\n  -h, --help            show this help message and exit\n  --config CONFIG\n  --output OUTPUT\n  --resume RESUME\n  --init-bridge INIT_BRIDGE\n                        Initialize bridge weights only (for semantic-\n                        reconstruction -> caption stage).\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/real_trace_bridge_smoke.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: real_trace_bridge_smoke.py [-h] --config CONFIG --trace-index\n                                  TRACE_INDEX --output OUTPUT\n\noptions:\n  -h, --help            show this help message and exit\n  --config CONFIG\n  --trace-index TRACE_INDEX\n  --output OUTPUT\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/validate_phase_a4_smoke.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: validate_phase_a4_smoke.py [-h] --config CONFIG --report REPORT\n\noptions:\n  -h, --help       show this help message and exit\n  --config CONFIG\n  --report REPORT\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/generate_formal_baseline.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: generate_formal_baseline.py [-h] --condition\n                                   {budget_text,full_plan_text,learned_latent,receiver_cross_attention,statebridge,text_homer,token_embedding,typed_learned_latent}\n                                   [--label LABEL] --receiver {base,sft}\n                                   --config CONFIG [--checkpoint CHECKPOINT]\n                                   [--split {validation,internal_test,official_hia_unseen_test,official_hia_seen_diagnostic}]\n                                   [--trace-index TRACE_INDEX] --output OUTPUT\n                                   [--seeds SEEDS [SEEDS ...]]\n                                   [--max-new-tokens MAX_NEW_TOKENS]\n                                   [--slots-per-channel SLOTS_PER_CHANNEL]\n                                   [--exclude-clusters-file EXCLUDE_CLUSTERS_FILE]\n                                   [--quantize-bridge-output]\n                                   [--allow-invalid-posthoc-quantization-diagnostic]\n\noptions:\n  -h, --help            show this help message and exit\n  --condition {budget_text,full_plan_text,learned_latent,receiver_cross_attention,statebridge,text_homer,token_embedding,typed_learned_latent}\n  --label LABEL         Output label for checkpoint variants; implementation\n                        condition is preserved separately.\n  --receiver {base,sft}\n  --config CONFIG\n  --checkpoint CHECKPOINT\n  --split {validation,internal_test,official_hia_unseen_test,official_hia_seen_diagnostic}\n  --trace-index TRACE_INDEX\n  --output OUTPUT\n  --seeds SEEDS [SEEDS ...]\n  --max-new-tokens MAX_NEW_TOKENS\n  --slots-per-channel SLOTS_PER_CHANNEL\n  --exclude-clusters-file EXCLUDE_CLUSTERS_FILE\n                        JSON file containing a validation_cluster_ids list to\n                        exclude (outer-pilot eval).\n  --quantize-bridge-output\n                        Legacy post-hoc nearest-neighbor diagnostic; invalid\n                        as a trained discrete method.\n  --allow-invalid-posthoc-quantization-diagnostic\n                        Acknowledge train/test mismatch; never use this output\n                        as a candidate method.\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/run_outer_semantic_confirmation.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: run_outer_semantic_confirmation.py [-h] --config CONFIG --checkpoint\n                                          CHECKPOINT --output OUTPUT\n                                          [--seeds SEEDS [SEEDS ...]]\n                                          [--max-clusters MAX_CLUSTERS]\n\noptions:\n  -h, --help            show this help message and exit\n  --config CONFIG\n  --checkpoint CHECKPOINT\n  --output OUTPUT\n  --seeds SEEDS [SEEDS ...]\n  --max-clusters MAX_CLUSTERS\n                        Only for a real-trace smoke; omitting it enforces all\n                        40 sealed outer clusters.\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/validate_outer_semantic_confirmation.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: validate_outer_semantic_confirmation.py [-h] --output OUTPUT\n                                               [--expected-clusters EXPECTED_CLUSTERS]\n                                               [--expected-seeds EXPECTED_SEEDS]\n\noptions:\n  -h, --help            show this help message and exit\n  --output OUTPUT\n  --expected-clusters EXPECTED_CLUSTERS\n  --expected-seeds EXPECTED_SEEDS\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/formal_pipeline_monitor.py",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout_tail": "usage: formal_pipeline_monitor.py [-h] [--state STATE] --initial-job-id\n                                  INITIAL_JOB_ID [--retry-round RETRY_ROUND]\n                                  [--max-retry-rounds MAX_RETRY_ROUNDS]\n                                  [--target-clusters TARGET_CLUSTERS [TARGET_CLUSTERS ...]]\n                                  [--validator-repair]\n                                  [--cache-resource-group {b-batch,c-batch}]\n                                  [--training-resource-group {b-batch,b-batch-mig,c-batch}]\n                                  [--training-gpu-count TRAINING_GPU_COUNT]\n                                  [--poll-seconds POLL_SECONDS]\n                                  [--confirm-absence-seconds CONFIRM_ABSENCE_SECONDS]\n                                  [--once]\n\noptions:\n  -h, --help            show this help message and exit\n  --state STATE\n  --initial-job-id INITIAL_JOB_ID\n  --retry-round RETRY_ROUND\n  --max-retry-rounds MAX_RETRY_ROUNDS\n  --target-clusters TARGET_CLUSTERS [TARGET_CLUSTERS ...]\n  --validator-repair\n  --cache-resource-group {b-batch,c-batch}\n  --training-resource-group {b-batch,b-batch-mig,c-batch}\n  --training-gpu-count TRAINING_GPU_COUNT\n  --poll-seconds POLL_SECONDS\n  --confirm-absence-seconds CONFIRM_ABSENCE_SECONDS\n  --once\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/verify_clustered_dataset.py"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\"status\": \"pass\", \"split_clusters\": {\"internal_test\": 97, \"official_hia_seen_diagnostic\": 23, \"official_hia_unseen_test\": 24, \"train\": 602, \"validation\": 64}, \"exhaustive_row_audit\": {\"rows_checked\": 2846, \"unique_images_checked\": 949, \"source_inputs_checked\": 367, \"clusters_checked\": 810}}\n",
+      "stderr_tail": ""
+    },
+    {
+      "argv": [
+        "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/.venv/bin/python",
+        "scripts/check_trace_completion.py"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"required_clusters\": 666,\n  \"available_clusters\": 666,\n  \"failure_records\": 0,\n  \"missing_clusters\": 0,\n  \"extra_clusters\": 0,\n  \"invalid_trace_records\": 0,\n  \"trace_records_checked\": 666,\n  \"trace_records_passed\": 666,\n  \"unique_provenance_sets\": 3\n}\n",
+      "stderr_tail": ""
+    }
+  ],
+  "evidence": {
+    "dataset": {
+      "path": "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/results/preflight/dataset_audit/dataset_audit_summary.json",
+      "sha256": "dfe586385052d6ee32d2992582fc2180bb78ff7fe7eabd7b89432ea275f589c8",
+      "summary": {
+        "schema_version": 1,
+        "status": "pass",
+        "dataset": "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/data/processed/latent_bridge_v35",
+        "splits": {
+          "train": {
+            "rows": 2162,
+            "clusters": 602
+          },
+          "validation": {
+            "rows": 216,
+            "clusters": 64
+          },
+          "internal_test": {
+            "rows": 327,
+            "clusters": 97
+          },
+          "official_hia_unseen_test": {
+            "rows": 72,
+            "clusters": 24
+          },
+          "official_hia_seen_diagnostic": {
+            "rows": 69,
+            "clusters": 23
+          }
+        },
+        "rows_checked": 2846,
+        "rows_passed": 2846,
+        "unique_images_checked": 949,
+        "unique_images_passed": 949,
+        "source_inputs_checked": 367,
+        "source_inputs_passed": 367,
+        "clusters_checked": 810,
+        "cross_source_duplicate_clusters": 139,
+        "manifest_prefilter_cross_source_duplicate_clusters": 172,
+        "errors": []
+      }
+    },
+    "traces": {
+      "path": "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/results/preflight/trace_audit/trace_audit_summary.json",
+      "sha256": "c3184c77b1da8e3e3e9ea0d6ab1c848242c7367791332f95987f1408c6c29e40",
+      "summary": {
+        "required_clusters": 666,
+        "available_clusters": 666,
+        "failure_records": 0,
+        "missing_clusters": 0,
+        "extra_clusters": 0,
+        "invalid_trace_records": 0,
+        "trace_records_checked": 666,
+        "trace_records_passed": 666,
+        "unique_provenance_sets": 3
+      }
+    }
+  }
+}

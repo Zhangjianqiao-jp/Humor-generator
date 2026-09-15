@@ -7,6 +7,8 @@ model:
   revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
   adapter: null
   frozen: true
+  min_visual_tokens: 256
+  max_visual_tokens: 1280
 data:
   dataset: data/processed/latent_bridge_v35
   trace_index: data/cache/planner_traces_homer_strict_v35/index.jsonl

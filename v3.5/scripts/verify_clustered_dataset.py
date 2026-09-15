@@ -5,9 +5,12 @@ import hashlib
 import json
 from pathlib import Path
 
+from audit_dataset_records import audit
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data/processed/latent_bridge_v35"
+INVALID_CAPTIONS = {"u", "n", "k", "unk", "unknown", "nan", "none", "null"}
 
 
 def digest(path: Path) -> str:
@@ -15,6 +18,7 @@ def digest(path: Path) -> str:
 
 
 def main() -> None:
+    exhaustive = audit(output_dir=ROOT / "results/preflight/dataset_audit")
     manifest = json.loads((DATA / "manifest.json").read_text())
     clusters: dict[str, set[str]] = {}
     split_names = (
@@ -31,6 +35,9 @@ def main() -> None:
             raise RuntimeError(f"row count mismatch: {split}")
         if len(clusters[split]) != manifest["split_clusters"][split]:
             raise RuntimeError(f"cluster count mismatch: {split}")
+        invalid = [row["row_id"] for row in rows if str(row["caption"]).strip().casefold() in INVALID_CAPTIONS]
+        if invalid:
+            raise RuntimeError(f"invalid caption sentinels in {split}: {invalid[:10]}")
     for index, left in enumerate(split_names):
         for right in split_names[index + 1:]:
             if clusters[left] & clusters[right]:
@@ -52,7 +59,23 @@ def main() -> None:
         raise RuntimeError("official HIA test contains a non-official row")
     if any(value for value in manifest["cluster_overlap"].values()):
         raise RuntimeError("manifest reports non-zero cluster overlap")
-    print(json.dumps({"status": "pass", "split_clusters": manifest["split_clusters"]}))
+    trace_input = DATA / manifest["trace_input_manifest"]
+    if digest(trace_input) != manifest["trace_input_manifest_sha256"]:
+        raise RuntimeError("trace-input manifest hash mismatch")
+    trace_rows = [json.loads(line) for line in trace_input.read_text().splitlines() if line.strip()]
+    required = clusters["train"] | clusters["validation"]
+    if {row["cluster_id"] for row in trace_rows} != required or len(trace_rows) != len(required):
+        raise RuntimeError("trace-input manifest does not exactly cover train+validation clusters")
+    print(json.dumps({
+        "status": "pass",
+        "split_clusters": manifest["split_clusters"],
+        "exhaustive_row_audit": {
+            "rows_checked": exhaustive["rows_checked"],
+            "unique_images_checked": exhaustive["unique_images_checked"],
+            "source_inputs_checked": exhaustive["source_inputs_checked"],
+            "clusters_checked": exhaustive["clusters_checked"],
+        },
+    }))
 
 
 if __name__ == "__main__":

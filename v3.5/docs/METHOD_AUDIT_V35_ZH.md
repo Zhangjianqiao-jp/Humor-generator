@@ -1,8 +1,15 @@
 # v3.5 方法审计与修正记录
 
+> 本文件保留历史审计内容；当前逐项证据、引用和“已运行/未运行”状态以 [`METHOD_CITATION_EVIDENCE_ZH.md`](METHOD_CITATION_EVIDENCE_ZH.md) 为准。A4 已于 2026-09-04 完成 5 epochs/80 steps，但 gate 为 `pilot_inconclusive`；因此下游 caption 与 preference learning 仍未解锁。
+
 ## 结论
 
-v3.5 当前是一个可检验的 bridge-only 实验，而不是“latent 必然更好”的展示工程。真实 GPU engineering smoke 已通过，但当前仍没有 held-out 模型收益，不能启动 preference learning。
+v3.5 当前是一个可检验的 bridge-only latent 实验，而不是“latent 必然更好”的展示工程。基础真实 GPU engineering smoke 已通过；A3 replacement smoke 首次作业 `6689653` 因 target-token 配置错误在 forward/backward 前退出，修正上限后 replacement `6706516` 已通过真实双样本 validator。该结果只关闭工程门禁，仍没有 A3 training artifact 或 held-out 模型收益；不能启动 preference learning。
+
+当前唯一可执行的顺序是：修正后的 A3 real-trace smoke → 64/24 channel-balanced semantic
+recovery（冻结两个 7B、只训练 bridge）→ 40-cluster outer semantic confirmation →
+latent/text caption ablation。DPO、SimPO、IPO 和 preference-pair pipeline 属于旧 v2.5
+方案，在 v3.5 中保持禁用。
 
 ## 已发现并修正的高风险问题
 
@@ -23,6 +30,12 @@ v3.5 当前是一个可检验的 bridge-only 实验，而不是“latent 必然�
 15. **trace 缺少代码身份**：先前正式 trace 作业在 v3.5 未提交时启动，只记录模型和 tensor hash，无法锁定实际 prompt/代码。该作业已取消、部分缓存已隔离；schema v2 现在强制记录唯一 Git commit、dataset manifest、prompt 与 adapter manifest hash。
 16. **pilot 子集存在编号偏差**：旧实现取排序后的前 64/24 clusters。现改为固定 seed 的 SHA-256 cluster 抽样，且保存所选 cluster IDs 的 hash。
 17. **loss 完成被误写成实验完成**：现在三个 pilot 训练后还会自动运行 24-image × 3-seed generation 并产生匿名评审 packet；自动化在独立评审前停止，不会自动进入 full training。
+18. **无效 finalist 被当成 caption**：Electronic Sheep 用标量 `UNKNOWN` 表示缺失；旧 loader 把字符串逐字符迭代，产生 `U/N/K`，另有 `nan`。现只接受 list finalists，并拒绝 sentinel；共移除 133 个 train rows，所有图片簇划分不变。
+19. **caption 清洗错误地牵连昂贵 trace**：旧 provenance 绑定整个 dataset manifest。现新增只描述 Planner 实际输入的 `trace_inputs.jsonl`；旧缓存仅能通过逐条 cluster/split/description/tensor-hash 验证后的原子迁移复用。
+20. **learned bridge 读取的信息更多**：Learned/Typed 读取完整 hidden sequence 后压缩为 24 slots，而 budget text/token embedding/StateBridge 只读取每通道末 8 tokens。因此主结果应解释为“full-state learned compression”，不能仅据此声称 continuous 优于 text。新增 `typed_quantized`：同一 bridge 输出最近词表 embedding，与连续 Typed 的差异才更接近连续残差效应。
+21. **pilot 内外验证混用**：24 张 validation subset 已用于 early stopping，不能再作为唯一生成证据。现把其余 40 张设为 outer-pilot generation/evaluation 集，并把 24 张仅保留为训练诊断。
+22. **镜像 packet 被当作独立样本**：A/B 镜像用于检测位置偏差，不会把图片或评审数翻倍。聚合器现先在 `rater × image × comparison × mirror_pair` 内折叠两个方向，再进行 image-cluster bootstrap、显著性检验和一致性计算。
+23. **split 数量相同被误认为成员相同**：清洗后各 split cluster 数没有变化，但 source-stratified assignment 与 description 来源发生变化。旧 trace 经过逐条验证，只保留 546 条；34 条 description 不一致及 18 条超出新 train+validation 的 trace 已移动到带完整 index/failure 备份的 quarantine，而不是删除。
 
 ## 仍然不能过度声称的部分
 
@@ -38,7 +51,7 @@ v3.5 当前是一个可检验的 bridge-only 实验，而不是“latent 必然�
 2. 两个真实 Planner traces 的 engineering smoke 已验证图像特征、MRoPE、post-token states、冻结参数、finite loss/gradient/update、峰值显存及所有生成路径；
 3. 正式 trace 必须来自 clean Git commit 并通过完整 provenance gate；
 4. 之后只串行运行 Learned+KL、Typed+KL、Typed-no-KL 三个小 pilot；
-5. 三者训练结束后，自动生成 validation blind packet，并停下来等待独立评审；
+5. 三者训练结束后，在未用于 early stopping 的 40 张 validation 图片上，加入 budget-text 与 typed-quantized controls 生成 blind packet，并停下来等待独立评审；
 6. pilot 有 validation 与真实生成信号后，才扩展到 3-seed full bridge training；
 7. bridge 显示稳定 held-out 收益后，才重新讨论 preference learning。
 

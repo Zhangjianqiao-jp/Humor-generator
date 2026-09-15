@@ -19,7 +19,7 @@
     "validation_official_hia_seen_diagnostic": 0,
     "validation_official_hia_unseen_test": 0
   },
-  "cross_source_duplicate_clusters": 230,
+  "cross_source_duplicate_clusters": 172,
   "description_policy": "verbatim canny field from HOMER released standard-description JSONL",
   "input_sha256": {
     "/home/pj26000152/ku60000936/projects/Humor-generator/v3.5/data/external/benchmarks/electronic_sheep/annotations/all_newyorker_contest_annotations.json": "fc510aca512b634a98043fe5da727e0cfe0cc5be934f892b1b3f1a0c669b0e59",
@@ -394,11 +394,12 @@
   "official_hia_all_clusters_in_validation": 0,
   "official_hia_test_policy": "all 47 official HIA test clusters excluded from bridge training; 24 adapter-unseen clusters are confirmatory and 23 adapter-seen clusters diagnostic only",
   "output_sha256": {
-    "internal_test.jsonl": "27eccd0dd721d00cfeef12e15485b8f7ff0a031fb13e220b7d74322a6ad30a89",
+    "internal_test.jsonl": "e5f63825a37352bd637c71d67050e1c56a3230d7a17f40d407731659b04481d9",
     "official_hia_seen_diagnostic.jsonl": "c31d18de4a402d088a3424bf892ad03b1548c349d6c166c18c29cc7d7058aa37",
     "official_hia_unseen_test.jsonl": "cbb24b33fccd4920468ecf3eb5e464d1aacb6ff53c570afb4e81a7624d4d3a16",
-    "train.jsonl": "83028f19239e646549cfedc19338eca2d4f508cfddc61d83fd1303f41583bd36",
-    "validation.jsonl": "6cc3839d96076067aa5b6c067a9a407ec7bcefae1349626b9831bc7f40c1aa76"
+    "trace_inputs.jsonl": "599905e9d157ec04e3e67b31d62dc318d3aaec36d3edf31df02e83f67a28f98c",
+    "train.jsonl": "b0bb8df8864161cfeb83513b47a96be1207710ff8989ba90c447e710372b6ee1",
+    "validation.jsonl": "ced7a7668eebe0d6eb5e43c2d111c4e61447a7e39292156ab37624264bac9ee9"
   },
   "references": [
     "HOMER, ICLR 2026, arXiv:2602.06423",
@@ -407,15 +408,305 @@
   ],
   "schema_version": 1,
   "seed": 20260830,
-  "skipped_record_count": 1,
+  "skipped_record_count": 59,
   "skipped_records": [
+    {
+      "contest_number": 602,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 603,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 604,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 606,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 607,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 608,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 609,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 610,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 611,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 612,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 613,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 614,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 615,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 616,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 617,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 618,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 619,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 620,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 621,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 622,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 623,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 624,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 625,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 626,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 627,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 628,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 629,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 630,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 631,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 632,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 633,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 634,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 635,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 636,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 637,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 638,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 639,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 640,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 641,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 642,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 643,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 645,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 646,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 647,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 648,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 649,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 650,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 651,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 652,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 653,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 654,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 655,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 656,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 658,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 659,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 661,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 662,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
+    {
+      "contest_number": 663,
+      "dataset": "electronic_sheep",
+      "reason": "no_official_newyorker_finalists"
+    },
     {
       "contest_number": 749,
       "dataset": "electronic_sheep",
       "reason": "no_official_newyorker_finalists"
     }
   ],
-  "source_rows": 3120,
+  "source_rows": 2945,
   "split_clusters": {
     "internal_test": 97,
     "official_hia_seen_diagnostic": 23,
@@ -428,9 +719,11 @@
     "internal_test": 327,
     "official_hia_seen_diagnostic": 69,
     "official_hia_unseen_test": 72,
-    "train": 2295,
+    "train": 2162,
     "validation": 216
   },
   "split_unit": "NYCC contest cluster_id",
+  "trace_input_manifest": "trace_inputs.jsonl",
+  "trace_input_manifest_sha256": "599905e9d157ec04e3e67b31d62dc318d3aaec36d3edf31df02e83f67a28f98c",
   "unique_clusters": 810
 }

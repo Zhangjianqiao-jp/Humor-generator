@@ -6,6 +6,7 @@ from humor_generator_v35.homer.contracts import validate_plan
 from humor_generator_v35.homer.curation import JokeRecord, curate_jokes, english_word_overlap
 from humor_generator_v35.homer.retrieval import (
     HomerRetrievalAugmenter,
+    OfficialCodeRetrieval,
     OfficialQueryFittedTfidfIndex,
     SparseTfidfIndex,
     humor_frequency,
@@ -58,6 +59,27 @@ def test_official_query_fitted_retrieval_preserves_exact_match_priority() -> Non
     assert index.search_context(
         "duck", description="a board meeting", conflicts="animal vs office", k=5
     ) == ["duck one", "duck two", "duck three", "duck four", "duck five"]
+
+
+def test_official_code_retrieval_preserves_public_entity_tree_contract() -> None:
+    import nltk
+
+    nltk.data.path.insert(0, "artifacts/nltk_data")
+    retriever = OfficialCodeRetrieval([
+        "duck walks into a bar with a spreadsheet",
+        "pond meeting runs afowl",
+        "office boat budget joke",
+        "formal speech quacks up the board",
+        "water cooler comedy",
+    ])
+    trees = retriever.retrieve(
+        {"duck": ["pond", "water", "boat"]},
+        description="A duck attends an office meeting.",
+        conflicts="animal behavior vs. corporate behavior",
+    )
+    assert trees["duck"][0] == ["duck", "pond"]
+    assert ["duck", "water"] in trees["duck"]
+    assert OfficialCodeRetrieval._frequency_score(2, 10, 1, 5) > 0
 
 
 def test_retrieval_grows_backbone_nodes_and_enumerates_paths() -> None:

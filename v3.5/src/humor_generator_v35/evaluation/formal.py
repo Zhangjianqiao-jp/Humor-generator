@@ -208,6 +208,10 @@ def aggregate_group3(
     categorical: dict[tuple[str, str, str, str, int, str, str], list[str]] = defaultdict(list)
     absolute: dict[tuple[str, str, str, str, int, str], list[float]] = defaultdict(list)
     seed_absolute: dict[tuple[str, str, str, str, int, str, int], list[float]] = defaultdict(list)
+    seed_absolute_category: dict[tuple[str, str, str, str, int, str, int], list[str]] = defaultdict(list)
+    raw_observations: dict[tuple[tuple[str, ...], str, str], list[float]] = defaultdict(list)
+    raw_absolute: dict[tuple[tuple[str, ...], str, str], list[float]] = defaultdict(list)
+    raw_seed_absolute: dict[tuple[tuple[Any, ...], str, str], list[float]] = defaultdict(list)
     rater_coverage, rater_metadata, invalid = {}, {}, []
     seen_raters: set[str] = set()
     required_metadata = {"provider", "model", "version_or_date", "temperature", "prompt_sha256"}
@@ -248,17 +252,16 @@ def aggregate_group3(
                     family, item["receiver"], reference, challenger, group_size,
                     metric, item["cluster_id"],
                 )
-                observations[key].append(value)
-                categorical[key].append(
-                    "tie" if choice == "Tie" else (
-                        "challenger" if choice == challenger_side else "reference"
-                    )
-                )
+                mirror_id = str(item.get("mirror_pair_id", blind_id))
+                raw_observations[(key, rater, mirror_id)].append(value)
             for side in ("A", "B"):
                 condition = item[f"condition_{side}"]
                 group_label = decision.get(f"absolute_{side}")
                 if group_label in LABEL_VALUE:
-                    absolute[(family, item["receiver"], reference, challenger, group_size, condition)].append(LABEL_VALUE[group_label])
+                    key = (family, item["receiver"], reference, challenger, group_size, condition)
+                    raw_absolute[(key, rater, str(item.get("mirror_pair_id", blind_id)))].append(
+                        LABEL_VALUE[group_label]
+                    )
                 else:
                     invalid.append(f"{rater}:absolute_{side}:{blind_id}")
                 labels = decision.get(f"candidate_labels_{side}")
@@ -266,12 +269,35 @@ def aggregate_group3(
                     invalid.append(f"{rater}:candidate_labels_{side}:{blind_id}")
                     continue
                 for generation_seed, label in zip(item[f"seeds_{side}"], labels):
-                    seed_absolute[(family, item["receiver"], reference, challenger, group_size, condition, int(generation_seed))].append(LABEL_VALUE[label])
+                    key = (
+                        family, item["receiver"], reference, challenger, group_size,
+                        condition, int(generation_seed),
+                    )
+                    raw_seed_absolute[(key, rater, str(item.get("mirror_pair_id", blind_id)))].append(
+                        LABEL_VALUE[label]
+                    )
 
     if not seen_raters:
         raise ValueError("at least one complete rater is required")
     if strict and invalid:
         raise ValueError("invalid blind ratings: " + "; ".join(invalid[:20]))
+    # Mirrored A/B packets are a position-bias diagnostic, not independent
+    # samples. Collapse each rater × image × comparison mirror pair first.
+    for (key, _rater, _mirror_id), values in raw_observations.items():
+        value = sum(values) / len(values)
+        observations[key].append(value)
+        categorical[key].append(
+            "challenger" if value > 0.5 else "reference" if value < 0.5 else "tie"
+        )
+    for (key, _rater, _mirror_id), values in raw_absolute.items():
+        absolute[key].append(sum(values) / len(values))
+    for (key, _rater, _mirror_id), values in raw_seed_absolute.items():
+        seed_absolute[key].append(sum(values) / len(values))
+        seed_absolute_category[key].append(
+            "mirror_disagreement" if len(set(values)) > 1 else (
+                "good" if values[0] == 1.0 else "weak" if values[0] == 0.5 else "bad"
+            )
+        )
     comparison_keys = sorted({key[:5] for key in observations})
     results = []
     for pair_index, (family, receiver, reference, challenger, group_size) in enumerate(comparison_keys):
@@ -338,6 +364,14 @@ def aggregate_group3(
                 )
                 for value in values
             ]
+            candidate_categories = [
+                value
+                for (fam, rec, ref, chal, size, cond, _), values in seed_absolute_category.items()
+                if (fam, rec, ref, chal, size, cond) == (
+                    family, receiver, reference, challenger, group_size, condition
+                )
+                for value in values
+            ]
             per_seed = {
                 str(generation_seed): sum(values) / len(values)
                 for (fam, rec, ref, chal, size, cond, generation_seed), values in seed_absolute.items()
@@ -351,9 +385,10 @@ def aggregate_group3(
                 variance = sum((value - mean) ** 2 for value in per_seed.values()) / (len(per_seed) - 1)
             condition_summaries[condition] = {
                 "absolute_group_score_mean_bad0_weak0.5_good1": sum(group_values) / len(group_values) if group_values else None,
-                "candidate_good_rate": sum(value == 1.0 for value in candidate_values) / len(candidate_values) if candidate_values else None,
-                "candidate_weak_rate": sum(value == 0.5 for value in candidate_values) / len(candidate_values) if candidate_values else None,
-                "candidate_bad_rate": sum(value == 0.0 for value in candidate_values) / len(candidate_values) if candidate_values else None,
+                "candidate_good_rate": candidate_categories.count("good") / len(candidate_categories) if candidate_categories else None,
+                "candidate_weak_rate": candidate_categories.count("weak") / len(candidate_categories) if candidate_categories else None,
+                "candidate_bad_rate": candidate_categories.count("bad") / len(candidate_categories) if candidate_categories else None,
+                "candidate_mirror_disagreement_rate": candidate_categories.count("mirror_disagreement") / len(candidate_categories) if candidate_categories else None,
                 "per_generation_seed_absolute_score": per_seed or None,
                 "generation_seed_sample_variance": variance,
             }
@@ -384,8 +419,9 @@ def aggregate_group3(
                 "group_size": family[2], "comparisons": len(indices)
             }
     return {
-        "schema_version": 2, "statistical_unit": "image_cluster",
+        "schema_version": 3, "statistical_unit": "image_cluster",
         "uncertainty": "cluster resampling plus within-cluster rater resampling",
+        "mirror_policy": "collapse A/B orientations within rater × image × comparison before inference",
         "tie_policy": "0.5 win",
         "multiple_comparison_control": "Holm adjustment over overall comparison p-values",
         "absolute_scale": LABEL_VALUE, "rater_coverage": rater_coverage,

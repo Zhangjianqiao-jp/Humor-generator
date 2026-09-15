@@ -26,7 +26,11 @@ from humor_generator_v35.homer.retrieval import (
     NltkWordNetGraph,
     OfficialQueryFittedTfidfIndex,
 )
-from humor_generator_v35.latent.bridges import LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm
+from humor_generator_v35.latent.bridges import (
+    LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm,
+    nearest_vocabulary_embeddings,
+)
+from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.latent.budget import channel_causal_tail, concatenate_budgeted
 from humor_generator_v35.latent.statebridge import StateBridgeAlignment
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
@@ -35,6 +39,7 @@ from humor_generator_v35.training.formal_bridge import (
     latent_messages,
     load_trace_index,
 )
+from humor_generator_v35.training.cross_attention_bridge import zero_prefix_caption_messages
 
 
 CONDITIONS = {
@@ -45,6 +50,7 @@ CONDITIONS = {
     "statebridge",
     "learned_latent",
     "typed_learned_latent",
+    "receiver_cross_attention",
 }
 
 
@@ -71,15 +77,26 @@ def load_bridge(config: dict[str, Any], checkpoint: Path, backend: QwenBackend) 
         "target_norm": mean_embedding_norm(backend.model.get_input_embeddings().weight),
     }
     baseline = config["experiment"]["baseline"]
-    bridge = (
-        TypedLatentBridge(
-            width, width, slots=int(config["bridge"]["slots_per_channel"]), **kwargs
+    if baseline == "receiver_cross_attention":
+        bridge = ReceiverDrivenCrossAttentionBridge(
+            width, width,
+            layer_indices=[int(value) for value in config["bridge"]["layer_indices"]],
+            bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
+            heads=int(config["bridge"]["heads"]),
+            gate_init=float(config["bridge"].get("gate_init", 0.1)),
+            channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
+            projection_mode=str(config["bridge"].get("projection_mode", "shared")),
         )
-        if baseline == "typed_learned_latent"
-        else LearnedLatentBridge(
-            width, width, slots=int(config["bridge"]["total_slots"]), **kwargs
+    else:
+        bridge = (
+            TypedLatentBridge(
+                width, width, slots=int(config["bridge"]["slots_per_channel"]), **kwargs
+            )
+            if baseline == "typed_learned_latent"
+            else LearnedLatentBridge(
+                width, width, slots=int(config["bridge"]["total_slots"]), **kwargs
+            )
         )
-    )
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     bridge.load_state_dict(payload["bridge"])
     bridge.to(model_device(backend.model)).eval()
@@ -209,13 +226,32 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="+", default=[20260830, 20260831, 20260832])
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--slots-per-channel", type=int, default=8)
+    parser.add_argument(
+        "--exclude-clusters-file", type=Path,
+        help="JSON file containing a validation_cluster_ids list to exclude (outer-pilot eval).",
+    )
+    parser.add_argument(
+        "--quantize-bridge-output", action="store_true",
+        help="Legacy post-hoc nearest-neighbor diagnostic; invalid as a trained discrete method.",
+    )
+    parser.add_argument(
+        "--allow-invalid-posthoc-quantization-diagnostic", action="store_true",
+        help="Acknowledge train/test mismatch; never use this output as a candidate method.",
+    )
     args = parser.parse_args()
-    if args.condition in {"learned_latent", "typed_learned_latent"} and args.checkpoint is None:
+    if args.condition in {
+        "learned_latent", "typed_learned_latent", "receiver_cross_attention"
+    } and args.checkpoint is None:
         parser.error("learned conditions require --checkpoint")
     if args.slots_per_channel < 2:
         parser.error("communication baselines need at least two states per channel")
     if len(set(args.seeds)) != len(args.seeds):
         parser.error("generation seeds must be unique")
+    if args.quantize_bridge_output and not args.allow_invalid_posthoc_quantization_diagnostic:
+        parser.error(
+            "post-hoc nearest-vocabulary quantization is deprecated: it was not trained "
+            "with VQ/FSQ and may only be run as an explicitly acknowledged failure diagnostic"
+        )
     condition_label = args.label or args.condition
     if not condition_label.replace("_", "").replace("-", "").isalnum():
         parser.error("--label must contain only letters, digits, '_' or '-'")
@@ -225,7 +261,9 @@ def main() -> None:
     expected_receiver = "sft" if config["model"].get("adapter") else "base"
     if expected_receiver != args.receiver:
         raise RuntimeError(f"config receiver is {expected_receiver}, CLI requested {args.receiver}")
-    if args.condition in {"learned_latent", "typed_learned_latent"}:
+    if args.condition in {
+        "learned_latent", "typed_learned_latent", "receiver_cross_attention"
+    }:
         if config["experiment"]["baseline"] != args.condition:
             raise RuntimeError("bridge config baseline does not match requested condition")
 
@@ -235,16 +273,36 @@ def main() -> None:
         revision=config["model"]["revision"],
         adapter=None if adapter is None else ROOT / adapter,
         load_in_4bit=True,
+        min_visual_tokens=int(config["model"]["min_visual_tokens"]),
+        max_visual_tokens=int(config["model"]["max_visual_tokens"]),
     )
     bridge = None if args.checkpoint is None else load_bridge(config, args.checkpoint, backend)
     traces = load_trace_index(args.trace_index)
     rows = first_rows_by_cluster(read_jsonl(ROOT / config["data"]["dataset"] / f"{args.split}.jsonl"))
+    excluded_clusters: set[str] = set()
+    if args.exclude_clusters_file is not None:
+        exclusion = json.loads(args.exclude_clusters_file.read_text())
+        values = exclusion.get("validation_cluster_ids")
+        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+            raise RuntimeError("exclusion file must contain validation_cluster_ids: list[str]")
+        excluded_clusters = set(values)
+        rows = [row for row in rows if row["cluster_id"] not in excluded_clusters]
+        if not rows:
+            raise RuntimeError("cluster exclusion removed every evaluation row")
     missing = sorted({row["cluster_id"] for row in rows} - set(traces))
     if missing:
         raise RuntimeError(f"missing {len(missing)} sealed-{args.split} traces; first={missing[:5]}")
 
     retriever = build_retriever() if args.condition == "text_homer" else None
-    homer = HomerTextPipeline(backend, retriever=retriever, strict_reproduction=True) if retriever else None
+    homer = (
+        HomerTextPipeline(
+            backend,
+            retriever=retriever,
+            strict_reproduction=bool(config.get("protocol", {}).get("strict_reproduction", False)),
+        )
+        if retriever
+        else None
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     completed: set[tuple[str, int]] = set()
     if args.output.is_file():
@@ -289,6 +347,31 @@ def main() -> None:
                         max_new_tokens=args.max_new_tokens,
                         seed=generation_seed,
                     )
+                elif args.condition == "receiver_cross_attention":
+                    if not isinstance(bridge, ReceiverDrivenCrossAttentionBridge):
+                        raise RuntimeError("cross-attention condition requires its trained bridge")
+                    trace_states = load_trace(
+                        ROOT / trace_record["trace_path"],
+                        expected_sha256=trace_record["trace_sha256"],
+                    )
+                    parameter = next(bridge.parameters())
+                    full_memory = {
+                        name: trace_states[name].states.to(
+                            device=parameter.device, dtype=parameter.dtype
+                        ) for name in TypedLatentBridge.channel_order
+                    }
+                    with bridge.inject(backend.model, full_memory):
+                        caption = backend.generate(
+                            zero_prefix_caption_messages(row["image"]),
+                            temperature=1.0,
+                            max_new_tokens=args.max_new_tokens,
+                            seed=generation_seed,
+                        )
+                    metadata.update({
+                        "latent_interface": "receiver_driven_full_state_cross_attention",
+                        "latent_tokens_inserted": 0,
+                        "memory_tokens": sum(value.shape[1] for value in full_memory.values()),
+                    })
                 else:
                     slots, latent_meta = latent_slots(
                         args.condition,
@@ -297,6 +380,17 @@ def main() -> None:
                         bridge=bridge,
                         slots_per_channel=args.slots_per_channel,
                     )
+                    if args.quantize_bridge_output:
+                        if args.condition not in {"learned_latent", "typed_learned_latent"}:
+                            raise RuntimeError("bridge-output quantization requires a learned bridge")
+                        slots, token_ids = nearest_vocabulary_embeddings(
+                            slots, backend.model.get_input_embeddings().weight
+                        )
+                        latent_meta.update({
+                            "bridge_output_quantized": True,
+                            "scientific_status": "invalid_posthoc_failure_diagnostic",
+                            "quantized_token_ids": token_ids.squeeze(0).tolist(),
+                        })
                     caption = backend.generate_with_latent_prefix(
                         latent_messages(row["image"]),
                         slots,
@@ -351,16 +445,26 @@ def main() -> None:
         "split": args.split,
         "seeds": args.seeds,
         "sampling": {"temperature": 1.0, "top_p": 1.0, "repetition_penalty": 1.0},
-        "communication_budget": {
-            "slots_per_channel": args.slots_per_channel,
-            "channels": list(TypedLatentBridge.channel_order),
-            "total_slots": 3 * args.slots_per_channel,
-        },
+        "communication_budget": (
+            {
+                "policy": "full_typed_states_no_truncation",
+                "channels": list(TypedLatentBridge.channel_order),
+                "latent_input_prefix_tokens": 0,
+            }
+            if args.condition == "receiver_cross_attention"
+            else {
+                "slots_per_channel": args.slots_per_channel,
+                "channels": list(TypedLatentBridge.channel_order),
+                "total_slots": 3 * args.slots_per_channel,
+            }
+        ),
         "config_sha256": file_sha256(config_path),
         "trace_index_sha256": file_sha256(args.trace_index),
         "checkpoint_sha256": file_sha256(args.checkpoint) if args.checkpoint else None,
+        "quantize_bridge_output": args.quantize_bridge_output,
         "output_sha256": file_sha256(args.output),
         "records": len(completed),
+        "excluded_clusters": sorted(excluded_clusters),
     }
     args.output.with_suffix(args.output.suffix + ".manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"

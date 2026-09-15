@@ -18,14 +18,24 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import read_jsonl
 from humor_generator_v35.latent.bridges import LearnedLatentBridge, TypedLatentBridge, mean_embedding_norm
+from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
 from humor_generator_v35.training.formal_bridge import (
     FrozenReceiverBridgeTask,
     cluster_balanced_rows,
     hard_negative_cluster_map,
+    length_matched_channel_donors,
     load_trace_index,
     mean_metrics,
     prepare_example,
+)
+from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
+from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
+from humor_generator_v35.training.memory_safe import configure_frozen_receiver
+from humor_generator_v35.training.public_bridge import (
+    PUBLIC_BRIDGE_PROMPT_TRACK,
+    load_context_index,
+    validate_row_context,
 )
 
 
@@ -66,13 +76,42 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--resume", type=Path)
+    parser.add_argument(
+        "--init-bridge", type=Path,
+        help="Initialize bridge weights only (for semantic-reconstruction -> caption stage).",
+    )
     args = parser.parse_args()
     config_path = args.config.resolve()
     config = yaml.safe_load(config_path.read_text())
-    if config["experiment"]["baseline"] not in {"learned_latent", "typed_learned_latent"}:
-        raise ValueError("train_bridge only trains learned_latent or typed_learned_latent")
+    if args.resume and args.init_bridge:
+        raise ValueError("--resume and --init-bridge are mutually exclusive")
+    if config["experiment"]["baseline"] not in {
+        "learned_latent", "typed_learned_latent", "receiver_cross_attention"
+    }:
+        raise ValueError("unsupported trainable bridge baseline")
     if not config["model"].get("frozen", False):
         raise ValueError("formal bridge experiments require a frozen receiver")
+
+    prompt_mode = str(config.get("protocol", {}).get("bridge_prompt_track", "legacy"))
+    if prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
+        raise ValueError(f"unsupported bridge_prompt_track: {prompt_mode}")
+    current_public_route = prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK
+    if current_public_route:
+        if config["experiment"].get("route") != "homer_public_code_bridge":
+            raise ValueError(
+                "the current HOMER bridge prompt track requires experiment.route=homer_public_code_bridge"
+            )
+        for key in ("adapter", "planner_adapter", "generator_adapter"):
+            if config["model"].get(key) is not None:
+                raise ValueError(f"current HOMER bridge route requires model.{key}=null")
+        dataset_value = str(config.get("data", {}).get("dataset", ""))
+        if "latent_bridge_v35" in dataset_value:
+            raise ValueError("historical latent_bridge_v35 data is forbidden on the current HOMER bridge route")
+        context_value = config.get("data", {}).get("context_index")
+        if not isinstance(context_value, str) or not context_value:
+            raise ValueError("current HOMER bridge route requires data.context_index")
+        if config["model"].get("model_manifest") != "manifests/local_qwen2_5_vl_7b.json":
+            raise ValueError("current HOMER bridge route requires the pinned local model manifest")
 
     torch.manual_seed(int(config["training"]["seed"]))
     adapter = config["model"].get("adapter")
@@ -81,6 +120,8 @@ def main() -> None:
         revision=config["model"]["revision"],
         adapter=None if adapter is None else ROOT / adapter,
         load_in_4bit=True,
+        min_visual_tokens=int(config["model"]["min_visual_tokens"]),
+        max_visual_tokens=int(config["model"]["max_visual_tokens"]),
     )
     device = model_device(backend.model)
     if device.type != "cuda":
@@ -96,25 +137,43 @@ def main() -> None:
         "heads": int(config["bridge"]["heads"]),
         "target_norm": target_norm,
     }
-    bridge = (
-        TypedLatentBridge(
+    baseline = config["experiment"]["baseline"]
+    if baseline == "receiver_cross_attention":
+        bridge = ReceiverDrivenCrossAttentionBridge(
             width, width,
-            slots=int(config["bridge"]["slots_per_channel"]),
-            **common_bridge_args,
-        )
-        if config["experiment"]["baseline"] == "typed_learned_latent"
-        else LearnedLatentBridge(
-            width, width,
-            slots=int(config["bridge"]["total_slots"]),
-            **common_bridge_args,
-        )
-    ).to(device)
+            layer_indices=[int(value) for value in config["bridge"]["layer_indices"]],
+            bottleneck_dim=int(config["bridge"]["bottleneck_dim"]),
+            heads=int(config["bridge"]["heads"]),
+            gate_init=float(config["bridge"].get("gate_init", 0.1)),
+            channel_fusion=str(config["bridge"].get("channel_fusion", "learned")),
+            projection_mode=str(config["bridge"].get("projection_mode", "shared")),
+        ).to(device)
+    else:
+        bridge = (
+            TypedLatentBridge(
+                width, width,
+                slots=int(config["bridge"]["slots_per_channel"]),
+                **common_bridge_args,
+            )
+            if baseline == "typed_learned_latent"
+            else LearnedLatentBridge(
+                width, width,
+                slots=int(config["bridge"]["total_slots"]),
+                **common_bridge_args,
+            )
+        ).to(device)
+    freeze_report = configure_frozen_receiver(backend.model, bridge)
     resume_state = None
     if args.resume:
         resume_state = torch.load(args.resume, map_location="cpu", weights_only=True)
         bridge.load_state_dict(resume_state["bridge"])
-    policy_trainable = sum(p.numel() for p in backend.model.parameters() if p.requires_grad)
-    bridge_trainable = sum(p.numel() for p in bridge.parameters() if p.requires_grad)
+    elif args.init_bridge:
+        initial = torch.load(args.init_bridge, map_location="cpu", weights_only=True)
+        if "bridge" not in initial:
+            raise RuntimeError("initial checkpoint has no bridge state")
+        bridge.load_state_dict(initial["bridge"])
+    policy_trainable = freeze_report.policy_trainable
+    bridge_trainable = freeze_report.bridge_trainable
     if policy_trainable != 0 or bridge_trainable == 0:
         raise RuntimeError("freeze/trainable-parameter contract failed")
 
@@ -131,23 +190,123 @@ def main() -> None:
         seed=seed, split="validation",
     )
     traces = load_trace_index(trace_path)
+    context_index = None
+    context_path = None
+    if current_public_route:
+        context_path = ROOT / str(config["data"]["context_index"])
+        context_index = load_context_index(context_path)
+        dataset_manifest = dataset / "manifest.json"
+        if not dataset_manifest.is_file():
+            raise RuntimeError(f"current HOMER bridge dataset manifest is missing: {dataset_manifest}")
+        dataset_payload = json.loads(dataset_manifest.read_text())
+        if dataset_payload.get("data_version") != "homer_pretrained_7b_public_release_362":
+            raise RuntimeError("current HOMER bridge dataset has the wrong data_version")
+        if dataset_payload.get("trace_index_sha256") != sha256(trace_path):
+            raise RuntimeError("current HOMER bridge dataset was built from another trace index")
+        if dataset_payload.get("context_index_sha256") != sha256(context_path):
+            raise RuntimeError("current HOMER bridge dataset was built from another context index")
+        context_manifest = context_path.parent / "manifest.json"
+        if not context_manifest.is_file():
+            raise RuntimeError(f"current HOMER context manifest is missing: {context_manifest}")
+        context_payload = json.loads(context_manifest.read_text())
+        if context_payload.get("status") != "pass" or context_payload.get("records_in_index") != 362:
+            raise RuntimeError("current HOMER context index is incomplete; bridge training is fail-closed")
+        if context_payload.get("trace_index_sha256") != sha256(trace_path):
+            raise RuntimeError("current HOMER context was built from another trace index")
+        if context_payload.get("trace_input_manifest_sha256") != sha256(
+            ROOT / str(config["data"].get("trace_input_manifest", ""))
+        ):
+            raise RuntimeError("current HOMER context was built from another trace input manifest")
+        if context_payload.get("homer_official_prompts_sha256") != sha256(
+            ROOT / "src/humor_generator_v35/homer/official_prompts.py"
+        ):
+            raise RuntimeError("current HOMER context was built from another official prompt source")
+        if context_payload.get("model_manifest_sha256") != sha256(
+            ROOT / "manifests/local_qwen2_5_vl_7b.json"
+        ):
+            raise RuntimeError("current HOMER context was built from another model manifest")
+        if len(context_index) != 362:
+            raise RuntimeError("current HOMER context index must contain 362 clusters")
+        for cluster, context in context_index.items():
+            trace = traces.get(cluster)
+            if trace is None:
+                raise RuntimeError(f"current HOMER context has no matching trace: {cluster}")
+            if context.trace_path != str(trace.get("trace_path")):
+                raise RuntimeError(f"current HOMER context trace path mismatch: {cluster}")
+            if context.trace_sha256 != str(trace.get("trace_sha256")):
+                raise RuntimeError(f"current HOMER context trace hash mismatch: {cluster}")
     required = {row["cluster_id"] for row in train_rows + validation_rows}
     missing = sorted(required - set(traces))
     if missing:
         raise RuntimeError(f"Planner traces missing for {len(missing)} clusters; first={missing[:5]}")
+    if current_public_route:
+        for row in train_rows + validation_rows:
+            context = context_index[str(row["cluster_id"])]
+            validate_row_context(row, context)
 
-    train_shuffle, train_negative_diagnostics = hard_negative_cluster_map(train_rows, traces)
-    validation_shuffle, validation_negative_diagnostics = hard_negative_cluster_map(
-        validation_rows, traces
+    semantic_channel_training = (
+        baseline == "receiver_cross_attention"
+        and str(config["training"].get("stage")) == "semantic_reconstruction"
+        and str(config["loss"].get("semantic_objective"))
+        in {"channel_balanced_v3", "channel_isolated_v4", "channel_isolated_v5"}
     )
-    task = FrozenReceiverBridgeTask(
-        backend,
-        bridge,
-        root=ROOT,
-        trace_index=traces,
-        loss_config=config["loss"],
-        max_caption_tokens=int(config["training"]["max_caption_tokens"]),
-    )
+    if semantic_channel_training:
+        # A semantic counterfactual must not conflate content replacement with
+        # a different attention denominator.  Training targets may draw a
+        # donor from the same split, but the target cluster is excluded from
+        # its own candidate list; validation donors remain train-only.
+        train_shuffle, train_negative_diagnostics = length_matched_channel_donors(
+            train_rows, train_rows, root=ROOT, trace_index=traces,
+            allow_target_donor_overlap=True,
+        )
+        validation_shuffle, validation_negative_diagnostics = length_matched_channel_donors(
+            validation_rows, train_rows, root=ROOT, trace_index=traces,
+        )
+    else:
+        train_shuffle, train_negative_diagnostics = hard_negative_cluster_map(train_rows, traces)
+        validation_shuffle, validation_negative_diagnostics = hard_negative_cluster_map(
+            validation_rows, traces
+        )
+    if baseline == "receiver_cross_attention":
+        task = ReceiverCrossAttentionTask(
+            backend, bridge, root=ROOT, trace_index=traces,
+            loss_config=config["loss"],
+            max_target_tokens=int(config["training"]["max_target_tokens"]),
+            stage=str(config["training"]["stage"]),
+            semantic_prompt_include_image=bool(
+                config["training"].get("semantic_prompt_include_image", True)
+            ),
+            prompt_mode=prompt_mode,
+            context_index=context_index,
+        )
+        if str(config["loss"].get("alignment_teacher", "legacy_embedding_projection")) == (
+            "receiver_contextual_final_hidden"
+        ):
+            print(json.dumps({
+                "status": "caching_contextual_teachers",
+                "clusters": len(required),
+                "channels_per_cluster": 3,
+            }), flush=True)
+            task.cache_contextual_teachers(required)
+        if float(config["loss"].get("semantic_target_alignment", 0.0)) > 0:
+            print(json.dumps({
+                "status": "caching_semantic_target_teachers",
+                "clusters": len(required),
+                "channels_per_cluster": 3,
+                "teacher": "receiver_final_layer_target_span_mean",
+            }), flush=True)
+            task.cache_semantic_target_teachers(required)
+    else:
+        task = FrozenReceiverBridgeTask(
+            backend,
+            bridge,
+            root=ROOT,
+            trace_index=traces,
+            loss_config=config["loss"],
+            max_caption_tokens=int(config["training"]["max_caption_tokens"]),
+            prompt_mode=prompt_mode,
+            context_index=context_index,
+        )
     optimizer = torch.optim.AdamW(
         bridge.parameters(),
         lr=float(config["training"]["learning_rate"]),
@@ -169,12 +328,59 @@ def main() -> None:
         "bridge_trainable_parameters": bridge_trainable,
         "receiver_embedding_mean_norm": target_norm,
         "device": str(device),
-        "negative_policy": "description_tfidf_nearest_same-source_different-conflict",
+        "gradient_checkpointing": freeze_report.gradient_checkpointing,
+        "use_cache": freeze_report.use_cache,
+        "min_visual_tokens": int(config["model"]["min_visual_tokens"]),
+        "max_visual_tokens": int(config["model"]["max_visual_tokens"]),
+        "negative_policy": (
+            "different_conflict_length_priority_per_channel_same_source_tfidf"
+            if semantic_channel_training
+            else "description_tfidf_nearest_same-source_different-conflict"
+        ),
         "train_negative_diagnostics": train_negative_diagnostics,
         "validation_negative_diagnostics": validation_negative_diagnostics,
+        "channel_length_matching": semantic_channel_training,
         "train_clusters": len({row["cluster_id"] for row in train_rows}),
         "validation_clusters": len({row["cluster_id"] for row in validation_rows}),
+        "train_cluster_ids": sorted({row["cluster_id"] for row in train_rows}),
+        "validation_cluster_ids": sorted({row["cluster_id"] for row in validation_rows}),
         "subset_selection": "sha256(v35-pilot:seed:split:cluster_id)",
+        "training_stage": config["training"].get("stage", "caption"),
+        "communication_interface": (
+            "receiver_driven_full_state_cross_attention_no_soft_prefix"
+            if baseline == "receiver_cross_attention" else "input_soft_prefix"
+        ),
+        "channel_fusion": config["bridge"].get("channel_fusion"),
+        "projection_mode": config["bridge"].get("projection_mode", "shared"),
+        "semantic_objective": config["loss"].get("semantic_objective"),
+        "alignment_teacher": config["loss"].get("alignment_teacher"),
+        "channel_visibility": config["loss"].get("channel_visibility", "all"),
+        "counterfactual_reconstruction_weight": config["loss"].get(
+            "counterfactual_reconstruction", 0.0
+        ),
+        "semantic_target_alignment_weight": config["loss"].get(
+            "semantic_target_alignment", 0.0
+        ),
+        "semantic_target_teacher": (
+            "receiver_final_layer_target_span_mean"
+            if float(config["loss"].get("semantic_target_alignment", 0.0)) > 0
+            else None
+        ),
+        "semantic_prompt_include_image": config["training"].get(
+            "semantic_prompt_include_image", True
+        ),
+        "bridge_prompt_track": prompt_mode,
+        "current_homer_public_route": current_public_route,
+        "context_index": None if context_path is None else str(context_path.relative_to(ROOT)),
+        "context_index_sha256": None if context_path is None else sha256(context_path),
+        "context_manifest_sha256": (
+            None if context_path is None else sha256(context_path.parent / "manifest.json")
+        ),
+        "homer_context_contract": (
+            "same_selected_conflict_entity_and_seeded_path_for_text_teacher_and_latent_student"
+            if current_public_route else None
+        ),
+        "initial_bridge_checkpoint": None if args.init_bridge is None else str(args.init_bridge.resolve()),
         "train_cluster_ids_sha256": hashlib.sha256(
             "\n".join(sorted({row["cluster_id"] for row in train_rows})).encode()
         ).hexdigest(),
@@ -184,6 +390,27 @@ def main() -> None:
     }
     (args.output / "run_manifest.json").write_text(json.dumps(run_manifest, indent=2) + "\n")
 
+    if semantic_channel_training:
+        donor_manifest = {
+            "schema_version": 1,
+            "policy": "different_conflict_length_priority_per_channel_same_source_tfidf",
+            "training": train_shuffle,
+            "validation": validation_shuffle,
+            "training_diagnostics": train_negative_diagnostics,
+            "validation_diagnostics": validation_negative_diagnostics,
+        }
+        (args.output / "channel_donors.json").write_text(
+            json.dumps(donor_manifest, ensure_ascii=False, indent=2) + "\n"
+        )
+        run_manifest.update({
+            "channel_donor_manifest": "channel_donors.json",
+            "channel_donor_manifest_sha256": sha256(args.output / "channel_donors.json"),
+            "channel_donor_policy": donor_manifest["policy"],
+        })
+        (args.output / "run_manifest.json").write_text(
+            json.dumps(run_manifest, indent=2) + "\n"
+        )
+
     best = float(resume_state.get("best_validation_total", float("inf"))) if resume_state else float("inf")
     stale = int(resume_state.get("stale_epochs", 0)) if resume_state else 0
     global_step = int(resume_state.get("global_step", 0)) if resume_state else 0
@@ -191,6 +418,17 @@ def main() -> None:
     accumulation = int(config["training"]["gradient_accumulation"])
     if accumulation < 1:
         raise ValueError("gradient_accumulation must be positive")
+    info_nce_weight = float(config["loss"].get("info_nce", 0.0))
+    variance_weight = float(config["loss"].get("variance_floor", 0.0))
+    info_nce_temperature = float(config["loss"].get("info_nce_temperature", 0.07))
+    if (
+        baseline == "receiver_cross_attention"
+        and str(config["training"].get("stage")) == "semantic_reconstruction"
+        and info_nce_weight <= 0
+    ):
+        raise ValueError("semantic-reconstruction Phase A requires loss.info_nce > 0")
+    if info_nce_weight > 0 and accumulation < 2:
+        raise ValueError("InfoNCE requires gradient_accumulation >= 2")
     log_path = args.output / "metrics.jsonl"
     optimizer.zero_grad(set_to_none=True)
     total_epochs = int(config["training"]["epochs"])
@@ -200,16 +438,62 @@ def main() -> None:
         bridge.train()
         rows = cluster_balanced_rows(train_rows, epoch=epoch, seed=seed)
         train_metrics = []
+        train_alignment_metrics: list[dict[str, float]] = []
+        alignment_students: dict[str, list[torch.Tensor]] = {
+            name: [] for name in ("conflict", "local", "global")
+        }
+        alignment_teachers: dict[str, list[torch.Tensor]] = {
+            name: [] for name in ("conflict", "local", "global")
+        }
         for index, row in enumerate(rows):
             window_start = (index // accumulation) * accumulation
             window_size = min(accumulation, len(rows) - window_start)
             example = prepare_example(row, traces[row["cluster_id"]], seed=seed + epoch)
-            metrics = task.backward_example(
-                example,
-                train_shuffle[row["cluster_id"]],
-                loss_scale=1.0 / window_size,
+            current = {
+                "status": "preparing_example",
+                "epoch": epoch + 1,
+                "examples_in_epoch": index + 1,
+                "examples_per_epoch": len(rows),
+                "cluster_id": row["cluster_id"],
+                "row_id": row["row_id"],
+                "image": row["image"],
+                "cuda_allocated_bytes": int(torch.cuda.memory_allocated(device)),
+                "cuda_reserved_bytes": int(torch.cuda.memory_reserved(device)),
+            }
+            (args.output / "current_example.json").write_text(
+                json.dumps(current, indent=2) + "\n"
             )
+            print(json.dumps(current), flush=True)
+            if semantic_channel_training:
+                metrics = task.backward_example(
+                    example,
+                    shuffled_clusters=train_shuffle[row["cluster_id"]],
+                    loss_scale=1.0 / window_size,
+                )
+            else:
+                metrics = task.backward_example(
+                    example,
+                    train_shuffle[row["cluster_id"]],
+                    loss_scale=1.0 / window_size,
+                )
+            if info_nce_weight > 0:
+                if not isinstance(task, ReceiverCrossAttentionTask):
+                    raise RuntimeError("InfoNCE is currently defined for receiver cross-attention only")
+                pairs = task.semantic_alignment_pairs(example)
+                for channel, (student, teacher) in pairs.items():
+                    alignment_students[channel].append(student)
+                    alignment_teachers[channel].append(teacher)
             train_metrics.append(metrics)
+            current.update({
+                "status": "example_complete",
+                "cuda_allocated_bytes": int(torch.cuda.memory_allocated(device)),
+                "cuda_reserved_bytes": int(torch.cuda.memory_reserved(device)),
+                "cuda_peak_allocated_bytes": int(torch.cuda.max_memory_allocated(device)),
+                "metrics": metrics,
+            })
+            (args.output / "current_example.json").write_text(
+                json.dumps(current, indent=2) + "\n"
+            )
             if (index + 1) % int(config["training"].get("log_every_examples", 10)) == 0:
                 progress = {
                     "status": "training",
@@ -224,6 +508,46 @@ def main() -> None:
                 )
                 print(json.dumps(progress), flush=True)
             if (index + 1) % accumulation == 0 or index + 1 == len(rows):
+                if info_nce_weight > 0:
+                    if any(len(values) < 2 for values in alignment_students.values()):
+                        raise RuntimeError("the final InfoNCE window contains fewer than two examples")
+                    channel_nce: dict[str, torch.Tensor] = {}
+                    channel_retrieval: dict[str, torch.Tensor] = {}
+                    channel_variance: dict[str, torch.Tensor] = {}
+                    for channel in alignment_students:
+                        student_batch = torch.cat(alignment_students[channel], dim=0)
+                        teacher_batch = torch.cat(alignment_teachers[channel], dim=0)
+                        channel_nce[channel], channel_retrieval[channel] = symmetric_info_nce(
+                            student_batch, teacher_batch, temperature=info_nce_temperature
+                        )
+                        channel_variance[channel] = variance_floor_loss(student_batch)
+                    info_nce = torch.stack(list(channel_nce.values())).mean()
+                    retrieval_at_1 = torch.stack(list(channel_retrieval.values())).mean()
+                    anti_collapse = torch.stack(list(channel_variance.values())).mean()
+                    (info_nce_weight * info_nce + variance_weight * anti_collapse).backward()
+                    metrics["info_nce"] = float(info_nce.detach().cpu())
+                    metrics["info_nce_retrieval_at_1"] = float(retrieval_at_1.detach().cpu())
+                    metrics["variance_floor"] = float(anti_collapse.detach().cpu())
+                    for channel in channel_nce:
+                        metrics[f"info_nce_{channel}"] = float(channel_nce[channel].detach().cpu())
+                        metrics[f"info_nce_retrieval_at_1_{channel}"] = float(
+                            channel_retrieval[channel].detach().cpu()
+                        )
+                    alignment_record = {
+                        "info_nce": metrics["info_nce"],
+                        "info_nce_retrieval_at_1": metrics["info_nce_retrieval_at_1"],
+                        "variance_floor": metrics["variance_floor"],
+                    }
+                    for channel in channel_nce:
+                        alignment_record[f"info_nce_{channel}"] = metrics[f"info_nce_{channel}"]
+                        alignment_record[f"info_nce_retrieval_at_1_{channel}"] = metrics[
+                            f"info_nce_retrieval_at_1_{channel}"
+                        ]
+                    train_alignment_metrics.append(alignment_record)
+                    for values in alignment_students.values():
+                        values.clear()
+                    for values in alignment_teachers.values():
+                        values.clear()
                 gradient_norm = float(torch.nn.utils.clip_grad_norm_(
                     bridge.parameters(), float(config["training"]["max_grad_norm"])
                 ))
@@ -237,18 +561,85 @@ def main() -> None:
         validation_by_cluster: dict[str, list[dict[str, float]]] = {}
         for row in validation_rows:
             example = prepare_example(row, traces[row["cluster_id"]], seed=seed)
-            validation_by_cluster.setdefault(row["cluster_id"], []).append(task.evaluate_example(
-                example, validation_shuffle[row["cluster_id"]]
-            ))
+            if semantic_channel_training:
+                evaluated = task.evaluate_example(
+                    example,
+                    shuffled_clusters=validation_shuffle[row["cluster_id"]],
+                )
+            else:
+                evaluated = task.evaluate_example(
+                    example, validation_shuffle[row["cluster_id"]]
+                )
+            validation_by_cluster.setdefault(row["cluster_id"], []).append(evaluated)
         validation_metrics = [
             mean_metrics(validation_by_cluster[cluster])
             for cluster in sorted(validation_by_cluster)
         ]
+        validation_detail_path = args.output / f"validation_epoch_{epoch + 1}.jsonl"
+        with validation_detail_path.open("w") as handle:
+            for cluster, metrics in zip(sorted(validation_by_cluster), validation_metrics):
+                handle.write(json.dumps({"cluster_id": cluster, **metrics}) + "\n")
+        validation_alignment: dict[str, float] = {}
+        if info_nce_weight > 0:
+            # InfoNCE's statistical unit is the image/plan cluster, not the
+            # caption row. Repeated gold captions share exactly the same trace
+            # and would otherwise become false negatives of one another.
+            alignment_rows = cluster_balanced_rows(validation_rows, epoch=0, seed=seed)
+            pairs = [
+                task.semantic_alignment_pairs(
+                    prepare_example(row, traces[row["cluster_id"]], seed=seed)
+                )
+                for row in alignment_rows
+            ]
+            validation_nce_by_channel = {}
+            validation_retrieval_by_channel = {}
+            validation_variance_by_channel = {}
+            for channel in ("conflict", "local", "global"):
+                students = torch.cat([pair[channel][0] for pair in pairs], dim=0)
+                teachers = torch.cat([pair[channel][1] for pair in pairs], dim=0)
+                nce, retrieval = symmetric_info_nce(
+                    students, teachers, temperature=info_nce_temperature,
+                )
+                validation_nce_by_channel[channel] = nce
+                validation_retrieval_by_channel[channel] = retrieval
+                validation_variance_by_channel[channel] = variance_floor_loss(students)
+            validation_info_nce = torch.stack(list(validation_nce_by_channel.values())).mean()
+            validation_retrieval = torch.stack(
+                list(validation_retrieval_by_channel.values())
+            ).mean()
+            validation_alignment = {
+                "info_nce": float(validation_info_nce.detach().cpu()),
+                "info_nce_retrieval_at_1": float(validation_retrieval.detach().cpu()),
+                "variance_floor": float(
+                    torch.stack(list(validation_variance_by_channel.values())).mean().detach().cpu()
+                ),
+            }
+            for channel in validation_nce_by_channel:
+                validation_alignment[f"info_nce_{channel}"] = float(
+                    validation_nce_by_channel[channel].detach().cpu()
+                )
+                validation_alignment[f"info_nce_retrieval_at_1_{channel}"] = float(
+                    validation_retrieval_by_channel[channel].detach().cpu()
+                )
+        train_summary = mean_metrics(train_metrics)
+        if train_alignment_metrics:
+            train_alignment_summary = mean_metrics(train_alignment_metrics)
+            train_summary.update(train_alignment_summary)
+            train_summary["total"] += (
+                info_nce_weight * train_alignment_summary["info_nce"]
+                + variance_weight * train_alignment_summary["variance_floor"]
+            )
+        validation_summary = {**mean_metrics(validation_metrics), **validation_alignment}
+        if validation_alignment:
+            validation_summary["total"] += (
+                info_nce_weight * validation_alignment["info_nce"]
+                + variance_weight * validation_alignment["variance_floor"]
+            )
         record = {
             "epoch": epoch + 1,
             "global_step": global_step,
-            "train": mean_metrics(train_metrics),
-            "validation": mean_metrics(validation_metrics),
+            "train": train_summary,
+            "validation": validation_summary,
         }
         with log_path.open("a") as handle:
             handle.write(json.dumps(record) + "\n")

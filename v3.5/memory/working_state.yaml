@@ -1,0 +1,752 @@
+schema_version: 1
+memory_id: humor_generator_v35_working
+volatile: true
+observed_at: "2026-09-11T13:38:00+09:00"
+must_revalidate: true
+source_commit: 327fa9a0c655083462acb5e76a5390e7c01b3b1a
+branch: latent
+
+current_phase: pretrained_7b_formal_bridge_and_full_generation_complete_evaluation_pending
+scope: v3.5_latent_only
+preference_learning:
+  status: disabled
+  boundary: >-
+    DPO/SimPO/IPO and preference-pair work belong to the superseded v2.5 plan;
+    do not import, execute or submit those jobs in v3.5.
+trace_gate:
+  status: current_pretrained_adapter_free_passed
+  available: 362
+  required: 362
+  historical_available: 666
+  current_population_count: 362
+  index_sha256: d3b7b7db3eeb21ca3057bf21a24c54115cf68cd92e73a0536d1874bc01dc6fdf
+  recovery_note: >-
+    Current index contains only adapter-free traces generated under the pinned
+    public-code HOMER route; historical SFT/legacy traces remain excluded.
+  current_route_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
+  current_route_required: complete_post_trace_homer_context_before_bridge
+
+context_gate:
+  status: ready
+  available: 362
+  required: 362
+  merged_context: data/cache/homer_pretrained_7b_homer_context/index.jsonl
+  merged_context_sha256: 386bd46b9179916db6b30162c96b5fd3d33ef91e5bfc8f07ff693b83656c3b27
+  shard_records: {partial: "8/8", shard_0: "118/118", shard_1: "118/118", shard_2: "118/118"}
+  residual_failures: 0
+  repair_manifest: manifests/pretrained_homer_context_repair_20260910_r11.json
+  repair_policy: validator-feedback-format-only-v1
+  repair_jobs:
+    - job_id: "6749312"
+      shard: 0
+      status: canceled_before_execution
+      route: b-batch_shared_gpu1
+      estimated_start: "2026-09-12T21:00:00+09:00"
+      reason: faster_start_not_available
+    - job_id: "6749354"
+      shard: 0
+      status: canceled_before_execution
+      route: c-batch_shared_gpu1
+      estimated_start: "2026-09-11T10:00:00+09:00"
+      reason: c_batch_cpu_full_delayed
+    - job_id: "6749375"
+      shard: 0
+      status: completed_before_scientific_output
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T13:37:05+09:00"
+      ended_at: "2026-09-10T13:42:06+09:00"
+      exit_code: 2
+      reason: lossless_validator_repair_rejected_semantic_deletion_after_truncated_json_fence
+    - job_id: "6749447"
+      shard: 0
+      status: completed_before_model_load
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T13:53:20+09:00"
+      ended_at: "2026-09-10T13:54:12+09:00"
+      exit_code: 2
+      reason: stale_source_failure_manifest_hash_gate
+    - job_id: "6749521"
+      shard: 0
+      status: completed_successfully
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T14:07:15+09:00"
+      ended_at: "2026-09-10T14:10:05+09:00"
+      exit_code: 0
+      records: "118/118"
+      repaired_targets: 1
+      max_memory_mib: 6124.9
+      reason: lossless_validator_repair_and_public_homer_replay_passed
+    - job_id: "6749861"
+      shard: 1
+      status: completed_before_model_load
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T14:14:24+09:00"
+      ended_at: "2026-09-10T14:20:31+09:00"
+      exit_code: 2
+      records: "117/118"
+      residual_failures: 1
+      reason: selector_concept_not_uniquely_repairable
+    - job_id: "6750287"
+      shard: 1
+      status: canceled_before_execution
+      route: b-batch_shared_gpu1
+      estimated_start: "2026-09-12T21:00:00+09:00"
+      reason: faster_start_not_available
+    - job_id: "6750288"
+      shard: 1
+      status: completed_with_residual_failure
+      route: b-batch_node1_simplex
+      submitted_at: "2026-09-10T14:29:00+09:00"
+      started_at: "2026-09-10T14:30:30+09:00"
+      ended_at: "2026-09-10T14:33:27+09:00"
+      exit_code: 2
+      records: "117/118"
+      residual_failures: 1
+      reason: repeated_retry_round_seed_namespace
+    - job_id: "6750308"
+      shard: 1
+      status: completed_successfully
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T14:36:42+09:00"
+      ended_at: "2026-09-10T14:39:34+09:00"
+      exit_code: 0
+      records: "118/118"
+      repaired_targets: 1
+      max_memory_mib: 6225.9
+      retry_round: 2
+      reason: independent_retry_and_public_homer_replay_passed
+    - job_id: "6750335"
+      shard: 2
+      status: completed_with_residual_failure
+      route: b-batch_node1_simplex
+      started_at: "2026-09-10T14:46:30+09:00"
+      ended_at: "2026-09-10T14:55:06+09:00"
+      exit_code: 2
+      records: "116/118"
+      residual_failures: 2
+      repaired_targets: 5
+      max_memory_mib: 6366.5
+      retry_round: 3
+      reason: two_ambiguous_selector_references
+    - job_id: "6750419"
+      shard: 2
+      status: completed_with_residual_failure
+      submitted_at: "2026-09-10T15:04:48+09:00"
+      started_at: "2026-09-10T15:05:09+09:00"
+      ended_at: "2026-09-10T15:09:38+09:00"
+      exit_code: 2
+      records: "117/118"
+      residual_failures: 1
+      repaired_targets: 1
+      targets: [nycc_579, nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 4
+      reason: nycc_678_duplicate_entity_residual
+    - job_id: "6750482"
+      shard: 2
+      status: completed_before_model_load
+      submitted_at: "2026-09-10T15:27:08+09:00"
+      started_at: "2026-09-10T15:27:27+09:00"
+      ended_at: "2026-09-10T15:28:34+09:00"
+      exit_code: 1
+      records: "117/118"
+      residual_failures: 1
+      repaired_targets: 0
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 6
+      reason: r7_manifest_error_string_mismatch
+    - job_id: "6750513"
+      shard: 2
+      status: completed_with_residual_failure
+      submitted_at: "2026-09-10T15:36:28+09:00"
+      started_at: "2026-09-10T15:41:07+09:00"
+      ended_at: "2026-09-10T15:44:16+09:00"
+      exit_code: 2
+      records: "117/118"
+      residual_failures: 1
+      repaired_targets: 0
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 7
+      reason: fastest_authorized_b_batch_simplex_start
+    - job_id: "6750588"
+      shard: 2
+      status: completed_with_residual_failure
+      submitted_at: "2026-09-10T15:48:56+09:00"
+      started_at: "2026-09-10T15:49:14+09:00"
+      ended_at: "2026-09-10T15:52:14+09:00"
+      exit_code: 2
+      records: "117/118"
+      residual_failures: 1
+      repaired_targets: 0
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 8
+      reason: single_key_summary_validator_residual
+    - job_id: "6750890"
+      shard: 2
+      status: canceled_before_scientific_output
+      submitted_at: "2026-09-10T15:59:19+09:00"
+      started_at: "2026-09-10T15:59:38+09:00"
+      ended_at: "2026-09-10T16:04:00+09:00"
+      exit_code: null
+      records: "0/1"
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 9
+      attempts: 16
+      reason: canceled_uncommitted_provenance_before_scientific_output
+    - job_id: "6751524"
+      shard: 2
+      status: completed_before_model_load
+      submitted_at: "2026-09-10T16:08:19+09:00"
+      estimated_start: "2026-09-10T16:08:00+09:00"
+      started_at: "2026-09-10T16:09:00+09:00"
+      ended_at: "2026-09-10T16:10:00+09:00"
+      exit_code: 1
+      records: "0/1"
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 10
+      attempts: 16
+      reason: r11_manifest_unknown_version_allowlist
+    - job_id: "6751564"
+      shard: 2
+      status: completed_successfully
+      submitted_at: "2026-09-10T16:16:09+09:00"
+      started_at: "2026-09-10T16:16:31+09:00"
+      ended_at: "2026-09-10T16:20:00+09:00"
+      exit_code: 0
+      records: "118/118"
+      repaired_targets: 1
+      residual_failures: 0
+      max_memory_mib: not_recorded_in_summary
+      targets: [nycc_678]
+      route: b-batch_node1_simplex
+      retry_round: 10
+      attempts: 16
+      reason: clean_commit_verified_compatibility_gate_passed
+  candidate_route: jobs/repair_pretrained_homer_context_bsimplex_short.pjm
+  candidate_route_policy: >-
+    b-batch node=1 is allowed only as a last-resort simplex fallback when a
+    read-only audit shows an earlier start than shared routes; it exposes one
+    CUDA device to the process but allocates the whole node.
+  canonical_context: data/cache/homer_pretrained_7b_homer_context/manifest.json
+  canonical_context_sha256: 386bd46b9179916db6b30162c96b5fd3d33ef91e5bfc8f07ff693b83656c3b27
+  bridge_training_manifest: data/processed/homer_pretrained_7b_bridge_362/manifest.json
+  bridge_training_manifest_sha256: 090af66c85dd4495836d64fe5e3193992047358260e2152418913bfcbbc0e5ab
+  interpretation: >-
+    Trace generation is complete and valid.  The 13 residual failures were
+    strict summary/entity schema-consistency errors, not model/GPU failures.
+    The first real simplex repair passed all preflight/model-load gates but exposed
+    a parser defect on a truncated opening JSON fence; this is recorded as V35-ENG-019.
+    The immediate retry then failed before model load because the prior run changed
+    failures.json; this is recorded as V35-ENG-020 and superseded by repair manifest r2.
+    Only lossless validator-feedback repair is allowed; no semantic rewriting,
+    full rerun, bridge training or caption evaluation may start before 362/362.
+    Shard-0 repair job 6749521 subsequently passed with 118/118 and failures.json=[];
+    shard-1 repair job 6749861 reached 117/118 but correctly rejected one
+    non-uniquely-repairable selector concept (V35-ENG-022).  The remaining
+    bounded scope is now shard-2 (1), with 361/362 records.  Manifest r11 pins
+    the current single failure row and hash; no semantic hand-mapping was allowed.
+    Shared job 6750287 was canceled before execution because its start estimate
+    was 09/12.  Independent retry-round 2 job 6750308 resolved nycc_821; r4
+    retry-round 3 resolved five shard-2 targets, retry-round 4 resolved nycc_579,
+    retry-round 5 exposed the shared truncated-fence parser defect, and job
+    6750482 rejected the r7 error-string mismatch before model load. Job 6750513
+    loaded the model but left the two-candidate validator residual (V35-ENG-029).
+    Job 6750588 loaded the model but left the single-key summary residual (V35-ENG-030).
+    Job 6750890 was canceled during model loading before scientific output because
+    its r10 files were not committed (V35-ENG-031). Job 6751524 then failed
+    before model load because r11 was missing from the runtime compatibility set
+    (V35-ENG-032); the ledger is unchanged. After committing that fix, one
+    same-manifest retry-round 10 simplex copy using r11 with at most 16 fresh
+    attempts completed with 118/118.  Strict post-check, four-way merge and
+    bridge-dataset verification now pass; the next gate is a <=2-example real-
+    trace GPU engineering smoke.
+population_gate:
+  status: verified_public_release_362
+  manifest: manifests/homer_population_public_release_362.json
+  allowlist: manifests/homer_public_release_362_allowlist.json
+  rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
+  trace_inputs: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  split_counts: {train: 271, validation: 44, test: 47}
+  source_caption_rows: 1086
+  canonical_365_status: unresolved_no_public_machine_readable_allowlist
+
+latest_completed_review:
+  job_id: "6695787"
+  name: v35_old_reval
+  scheduler_state: completed
+  output_dirs:
+    - outputs/re_evaluation/semantic_v1_corrected
+    - outputs/re_evaluation/semantic_v2_corrected
+  methods: [legacy_v1, legacy_v2]
+  clusters_per_method: 24
+  protocol: length_matched_single_channel_counterfactual
+  status: pilot_inconclusive
+  key_result: >-
+    v1 has only a tiny global positive gap; conflict/local are unstable. v2 has
+    positive conflict/global point estimates but CIs cross zero and local is negative.
+    Neither method establishes stable use of all three channels.
+  evidence: docs/SEMANTIC_REEVALUATION_RESULTS_ZH.md
+
+latest_formal_attempt:
+  job_id: "6689653"
+  name: v35_a3_smoke
+  scheduler_state: failed
+  resource_group: c-batch
+  gpu_slices: 0
+  full_gpu: NVIDIA_H100_80GB_HBM3
+  started_at: "2026-09-03T01:29:48+09:00"
+  ended_at: "2026-09-03T01:32:40+09:00"
+  failed_before_forward_backward: true
+  error: >-
+    RuntimeError: global target exceeds max_target_tokens=384 for
+    electronic_sheep:325:0; actual target length was 492.
+  evidence: v35_a3_smoke.6689653.out
+  expected_output: results/engineering_smoke/cross_attention_semantic_phase_a3.json
+  output_created: false
+  interpretation: engineering_configuration_failure_not_latent_result
+  replacement_config: configs/pilot/cross_attention_semantic_phase_a3.yaml
+  replacement_max_target_tokens: 768
+  replacement_status: passed
+
+latest_gate_result:
+  job_id: "6706516"
+  name: v35_a3_smoke
+  scheduler_state: completed
+  resource_group: c-batch
+  host: genkai0001
+  full_gpu: NVIDIA_H100_80GB_HBM3
+  started_at: "2026-09-03T17:28:07+09:00"
+  ended_at: "2026-09-03T17:32:26+09:00"
+  exit_code: 0
+  status: pass
+  report: results/engineering_smoke/cross_attention_semantic_phase_a3.json
+  validator_contract: phase_a3_real_trace_forward_backward_contextual_nce_single_channel_cf
+  clusters: [nycc_888, nycc_325]
+  bridge_trainable_parameters: 2820612
+  policy_trainable_parameters: 0
+  gradient_norm: 2.179955244064331
+  update_norm: 0.16643716394901276
+  peak_allocated_gib: 9.57
+  peak_reserved_gib: 13.16
+  scientific_training: false
+  interpretation: >-
+    Engineering gate passed. It does not establish semantic-use or caption-quality
+    gains; formal A3 64/24 bridge-only training remains a separate job.
+
+latest_formal_a3:
+  job_id: "6707953"
+  name: v35_a3_formal
+  scheduler_state: completed
+  resource_group: b-batch
+  host: genkai0001
+  full_gpu: NVIDIA_H100_80GB_HBM3
+  started_at: "2026-09-03T22:35:42+09:00"
+  ended_at: "2026-09-03T23:00:48+09:00"
+  exit_code: 0
+  elapsed_seconds: 1506
+  output: outputs/pilot/cross_attention_semantic_phase_a3
+  config: configs/pilot/cross_attention_semantic_phase_a3.yaml
+  code_commit: 28d530769d3af8051696b21d55bf257cdcaa35dc
+  train_clusters: 64
+  validation_clusters: 24
+  epochs_completed: 5
+  global_steps: 80
+  bridge_trainable_parameters: 2820612
+  policy_trainable_parameters: 0
+  complete_status: complete
+  semantic_gate_status: pilot_inconclusive
+  engineering_gate_pass: true
+  validation_final:
+    total: 3.001369272338019
+    caption_nll: 1.129462348090278
+    matched_minus_shuffled_logp: 0.00021642053292857276
+    retrieval_at_1: 0.5347222685813904
+  channel_final:
+    conflict: {gap: -0.00003976126511891683, fraction_gap_gt_0: 0.4583333333333333, retrieval_at_1: 0.3958333432674408}
+    local: {gap: -0.0003169911603132884, fraction_gap_gt_0: 0.375, retrieval_at_1: 0.5625}
+    global: {gap: 0.0010060140242179234, fraction_gap_gt_0: 0.6458333333333334, retrieval_at_1: 0.6458333730697632}
+  bootstrap_95ci:
+    conflict: [-0.002805630366007487, 0.002740258971850077]
+    local: [-0.001934938132762909, 0.0013542647163073223]
+    global: [-0.0002622089038292567, 0.002395613739887873]
+  interpretation: >-
+    Formal A3 is an engineering-valid but statistically inconclusive mechanism
+    pilot. It must not be called a latent semantic failure or a caption gain.
+
+latest_outer_attempt:
+  job_id: "6708118"
+  name: v35_outer_confirmation_b_simplex
+  scheduler_state: failed
+  resource_group: b-batch
+  node_exclusive: true
+  started_at: "2026-09-04T11:55:42+09:00"
+  ended_at: "2026-09-04T11:59:54+09:00"
+  exit_code: 1
+  failed_before_forward: true
+  failure: dirty_tracked_worktree
+  preflight: outputs/preflight/outer_semantic_confirmation_20260904_115542.json
+  outputs_created: false
+  interpretation: >-
+    Engineering/provenance failure only. Compile, tests, dataset 2846/2846 and
+    traces 666/666 passed; no outer semantic or caption conclusion is allowed.
+
+a4_channel_isolated_repair:
+  status: complete_pilot_inconclusive
+  config: configs/pilot/cross_attention_semantic_phase_a4.yaml
+  job_script: jobs/cross_attention_phase_a4.pjm
+  objective: channel_isolated_v4
+  channel_visibility: target_only
+  semantic_prompt_include_image: false
+  counterfactual_reconstruction_weight: 0.75
+  formal_status: completed
+  smoke_job_id: "6711052"
+  smoke_output: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1
+  smoke_validator: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
+  smoke_status: pass
+  smoke_clusters: [nycc_888, nycc_325]
+  smoke_peak_allocated_gib: 9.32
+  smoke_peak_reserved_gib: 9.51
+  smoke_bridge_gradient_norm: 2.1927127838134766
+  smoke_bridge_update_norm: 0.16706088185310364
+  smoke_policy_trainable_parameters: 0
+  formal_job_id: "6711109"
+  formal_resource_group: c-batch
+  formal_scheduler_estimated_start: "2026-09-05T12:00:00+09:00"
+  formal_output: outputs/pilot/cross_attention_semantic_phase_a4_cbatch_retry1
+  scientific_training_started: true
+  epochs_completed: 5
+  global_steps: 80
+  semantic_gate_status: pilot_inconclusive
+  validation_final:
+    overall_gap: 0.0064997
+    conflict_gap: 0.0088532
+    local_gap: 0.0051597
+    global_gap: 0.0054863
+    note: >-
+      Point estimates are mechanism-pilot diagnostics, not caption quality;
+      conflict CI crosses zero and all channel gaps are below the preregistered
+      0.01 engineering threshold.
+
+current_gate:
+  name: pretrained_7b_homer_population_and_protocol_gate
+  status: context_repair_blocked
+  job_id: null
+  config: configs/homer_public_code_pretrained_7b.yaml
+  job_script: null
+  required_checks:
+    - exact pinned Qwen2.5-VL-7B revision with planner_adapter=null and generator_adapter=null
+    - official public-code prompt text, system shape and user block boundaries
+    - full description/conflict/global/local/summary/retrieval/selection/caption ledger
+    - source-aware public HIA population manifest (`public_release_362`) and its verified 362-ID allow-list
+    - canonical 365 allow-list remains a separate unresolved paper-level claim
+    - pretrained-only trace cache generated after the above gates (passed 362/362)
+    - complete post-trace context cache generated from the same Planner traces
+    - zero-adapter Qwen online/replay smoke on representative images
+  failed_attempt_id: "6711036"
+  failed_attempt_status: terminated_by_monitoring_error_no_scientific_output
+  replacement_status: public_release_362_verified
+  on_pass: context_merge_then_bridge_dataset_build_and_bridge_pilot_is_unlocked
+  on_failure: preserve_asset_hashes_and_update_docs_before_any_retry
+
+latest_homer_protocol_audit:
+  observed_at: "2026-09-11"
+  status: adapted_pretrained_7b_not_100_percent_reproduction
+  prompt_and_message_shape: pinned_public_commit_text_and_block_boundaries_smoke_pass
+  stage_order: description_conflict_global_local_summary_retrieval_two_selection_caption
+  retrieval: official_code_compatible_tfidf_wordnet_entity_tree
+  model_route: qwen2_5_vl_7b_revision_cc5948_no_policy_adapters_bridge_only
+  evaluator_contract: gpt-5-chat-latest_temperature_0_pass_at_1_3_5_five_repeats
+  benchmark_contract: hia_original_gpt4_turbo_overall_gpt4o_vision_best_pick_separate
+  data_status: public_release_362_verified_canonical_365_unresolved_current_878_lineage_verified
+  formal_generation_status: complete_2350_records_packets_ready_external_evaluation_pending
+  claim_boundary: >-
+    Prompt/stage/retrieval interface is now auditable, but model weights,
+    benchmark population and evaluation runs are not identical to HOMER paper;
+    no 100-percent reproduction claim is permitted.
+
+resource_diagnosis:
+  mig_formal_training: forbidden
+  reason: >-
+    Both multi-slice and single-slice MIG formal paths previously triggered the same
+    PyTorch/NVML allocator failure; passing a small MIG smoke did not predict formal stability.
+  current_policy: b_batch_shared_gpu1_native_allocator_scheduler_visible_cuda
+  active_jobs: []
+  last_readonly_resource_snapshot:
+    observed_at: "2026-09-10T20:30:11+09:00"
+    b_batch_nodes: {total: 35, free: 2, allocated: 33}
+    b_batch_gpu: {total: 980, free: 848, allocated: 132}
+    c_batch_nodes: {total: 2, free: 0, allocated: 2}
+    c_batch_gpu: {total: 56, free: 40, allocated: 16}
+    b_batch_mig_nodes: {total: 2, free: 0, allocated: 2}
+    b_inter_mig_nodes: {total: 2, free: 0, allocated: 2}
+    b_reserve_nodes: {total: 4, free: 2, allocated: 2, authorized: false}
+    a_batch_nodes: {total: 1020, free: 149, allocated: 871, gpu_route: false}
+    decision: cancel_four_hour_formal_6754055; submit_one_90_minute_b_batch_node1_formal_after_clean_commit
+  stale_legacy_tmux_sessions: [dpo-scaling-monitor, q64_val_monitor]
+  stale_session_policy: do_not_resume_or_submit
+  last_smoke_rightsizing:
+    canceled_job: "6753754"
+    canceled_at: "2026-09-10T20:15:00+09:00"
+    reason: one_hour_request_marked_short_job_false_and_predicted_04_00
+    evidence: v35pubsmok.6753754.stats
+    replacement_script: jobs/pretrained_bridge_real_trace_smoke_bsimplex_short.pjm
+    replacement_walltime: "00:10:00"
+    replacement_status: completed_successfully
+  last_formal_rightsizing:
+    canceled_job: "6754055"
+    canceled_at: "2026-09-10T20:30:15+09:00"
+    requested_walltime: "04:00:00"
+    estimated_start: "2026-09-12T21:00:00+09:00"
+    reason: four_hour_request_overstates_271_cluster_128_token_view
+    timing_reference: cross_attention_phase_a5_csimplex.pjm.6712327_used_01:32:27
+    replacement_walltime: "01:30:00"
+    replacement_output: outputs/pilot/pretrained_public_bridge_formal_1h30_20260910
+    replacement_job: "6754067"
+    replacement_submitted_at: "2026-09-10T20:41:09+09:00"
+    replacement_estimated_start: "2026-09-11T04:00:00+09:00"
+    replacement_status: completed_successfully
+    replacement_started_at: "2026-09-10T22:20:49+09:00"
+    replacement_ended_at: "2026-09-10T22:34:02+09:00"
+  last_real_trace_smoke:
+    job_id: "6754049"
+    job_name: v35pubsmok10
+    status: pass
+    scientific_training: false
+    started_at: "2026-09-10T20:21:47+09:00"
+    ended_at: "2026-09-10T20:24:25+09:00"
+    exit_code: 0
+    elapse_seconds: 158
+    max_memory_mib: 6201.0
+    gpu_allocated: 4
+    simplex: true
+    prompt_track: public_code_exact_caption_latent_plan_replacement_v1
+    context_records: 362
+    policy_trainable_parameters: 0
+    bridge_update_norm: 0.26272618770599365
+    evidence: outputs/engineering_smoke/pretrained_public_real_trace_smoke_short_20260910
+  last_comparison_generation_smoke:
+    job_id: "6754567"
+    job_name: v35pubgensmoke
+    route: b-batch_gpu1_shared
+    status: pass
+    scientific_training: false
+    started_at: "2026-09-10T23:06:03+09:00"
+    ended_at: "2026-09-10T23:08:48+09:00"
+    exit_code: 0
+    elapse_seconds: 166
+    host: genkai0002
+    device: NVIDIA_H100
+    records: 4
+    images: 2
+    conditions: [text_homer_context_replay, latent_bridge]
+    trials: 1
+    candidates_per_image: 1
+    evidence: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910
+    output_gate: outputs/engineering_smoke/pretrained_bridge_comparison_smoke_bgpu_20260910/smoke_gate.json
+  last_full_comparison_generation:
+    job_id: "6754609"
+    job_name: v35pubgen
+    route: b-batch_gpu1_shared
+    status: completed_successfully
+    started_at: "2026-09-10T23:14:26+09:00"
+    ended_at: "2026-09-11T00:17:36+09:00"
+    exit_code: 0
+    elapse_seconds: 3791
+    host: genkai0002
+    device: NVIDIA_H100
+    gpu_allocated: 1
+    max_vnode_memory_mib: 5334.9
+    records: 2350
+    images: 47
+    conditions: [text_homer_context_replay, latent_bridge]
+    trials: 5
+    candidates_per_image: 5
+    output: outputs/pilot/pretrained_public_bridge_comparison_20260910
+    generation_gate: outputs/pilot/pretrained_public_bridge_comparison_20260910/generation_gate.json
+    generation_sha256: d3d5ec8ebce0decb8e1eb04e0a12fc8e38aff5ea59f3458f69163b21b18c2327
+    caption_judgement_input: outputs/caption_judgement/pretrained_bridge_comparison_20260911/generations.jsonl
+    caption_judgement_input_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
+    scientific_status: generations_complete_judge_not_run
+
+native_full_gpu_fix:
+  scope: historical_p1_not_current
+  allocator: native
+  expandable_segments: false
+  device_map: {"": 0}
+  minimum_visible_memory_gib: 40
+  exact_formal_first_plus_max_image_smoke: required_in_same_job
+  smoke_clusters_expected: [nycc_415, nycc_888]
+  visual_token_budget: {min: 256, max: 1280, shared_across_conditions: true}
+  gradient_checkpointing: true
+  per_example_memory_provenance: current_example.json
+  smoke_failure_behavior: stop_before_training
+  code_commit: ef175638cfb1592f8801ed36aed4762da4eaef60
+
+program_risk_audit:
+  overall: medium_continue_with_evidence_gates
+  report: docs/PROGRAM_RISK_ASSESSMENT_ZH.md
+  tests_passed: all_locked_venv_tests_passed_2026-09-06
+  tests_scope: full_locked_venv_suite_including_a4_channel_isolation_contracts
+  full_suite_status: passed_2026-09-04
+  formal_preflight: results/preflight/formal_preflight.json
+  exhaustive_dataset_audit:
+    rows: 2846/2846
+    unique_images: 949/949
+    upstream_inputs: 367/367
+    clusters: 810
+  exhaustive_trace_audit: 666/666
+  deterministic_fixes:
+    - formal preflight now runs compile/tests/CLI smoke before exhaustive data and trace checks
+    - every dataset row, image byte hash/decode, source input hash, and Planner trace tensor is audited
+    - pilot evaluation is blocked until the current latent semantic gate passes
+    - monitor validates checkpoint, manifest, metrics, and finite completion fields
+    - blind packet IDs must match the private mapping exactly
+    - exact resource smoke and formal training now share the same torch seed
+    - A4 semantic recovery disables the image shortcut and masks all non-target channels
+    - A4 donor reconstruction requires a swapped channel to decode donor semantics
+  highest_open_risk: >-
+    The current public-release route and bridge-only training are complete.
+    The remaining risk is whether the trained bridge improves held-out caption
+    quality and whether receiver-side causal channel use is measurable; no
+    latent benefit is claimed before the HOMER-comparable caption evaluation.
+
+immediate_gate:
+  action: obtain_external_homer_primary_judgments_and_auxiliary_ratings
+  prerequisite_status: public_release_362_trace_context_and_bridge_view_ready
+  current_route_config: configs/pilot/cross_attention_caption_pretrained_public.yaml
+  population_manifest: manifests/homer_population_public_release_362.json
+  population_rows: data/processed/homer_pretrained_7b_public_release_362/population_rows.jsonl
+  trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  evaluator_manifest: manifests/homer_official_assets.json
+  required_resource: b-batch_gpu1_shared_native_allocator_scheduler_visible_cuda_after_real_generation_smoke
+  active_jobs: []
+  scientific_training: false
+  smoke_status: passed_job_6754567
+  success_requires:
+    - Use the verified public 362-ID HIA allow-list and source-aware key (dataset, contest, image_sha256).
+    - Keep the canonical 365 allow-list unresolved unless an authoritative source appears.
+    - Use the merged 362/362 adapter-free traces and post-trace HOMER context.
+    - Pass CPU public-code smoke, route check, bridge-input verifier and targeted tests.
+    - Run <=2-example real-trace Qwen bridge smoke before any bridge-only GPU pilot (passed: 6754049).
+  current_blockers:
+    - homer_primary_judge_results_pending
+    - auxiliary_blind_ratings_pending
+    - canonical_365_allowlist_unresolved_for_canonical_claim_only
+  automatic_continuation:
+    task_id: v35-complete-followup-v2
+    timer: auto-research-v35-complete-followup-v2.timer
+    generation_output: outputs/pilot/pretrained_public_bridge_comparison_20260910
+    generation_gate: generation_gate.json
+    required_records: 2350
+    required_per_condition: 1175
+    bounded_retries: 6
+  resource_request_note: >-
+    The short b-batch node=1 smoke 6754049 passed on a native full-device
+    allocation. The unstarted four-hour formal request 6754055 was canceled
+    because PJM estimated 2026-09-12 21:00. Historical 602-cluster/768-token
+    training used 1:32:27; the current 271-cluster/128-token view is therefore
+    submitted as job 6754067 with a 01:30:00 bound after a clean commit; it
+    completed on genkai0002 in 00:13:13 with exit code 0. Keep exactly one
+    formal/comparison copy; do not request MIG, duplicate reservations, or
+    unvalidated alternatives. Comparison attempt 6754510 was canceled before
+    execution after PJM estimated 2026-09-13 09:00 with no free b-batch node.
+    The c-batch shared read-only probe 6754523 was also canceled before
+    execution after PJM estimated 2026-09-11 18:00 with CPU FREE=0 on both
+    c-batch nodes.  A real b-batch shared gpu=1 comparison smoke 6754567 then
+    passed on genkai0002/H100 in 166 seconds; use that exact route for the sole
+    full generation attempt and do not override CUDA visibility.
+  historical_a4_smoke: results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/validation_contract.json
+  historical_a4_job_id: "6711109"
+  historical_a4_status: complete_pilot_inconclusive
+
+remaining_sequence_after_resource_gate:
+  - post_job_full_sha_provenance_audit
+  - require_generation_gate_47x5x5x2
+  - build_and_audit_blinded_caption_packets
+  - obtain_non_fabricated_independent_judgments
+  - compute_homer_pass_at_1_3_5_and_auxiliary_statistics
+  - publish_text_homer_vs_latent_comparison_report
+
+evaluation_packets:
+  status: ready_external_judgment_pending
+  primary:
+    directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/homer_primary
+    protocol: homer_official_humorAI_pairwise_reference
+    packet_builder: scripts/build_homer_primary_packets.py
+    evaluator_runner: scripts/run_homer_primary_openai.py
+    judgment_aggregator: scripts/aggregate_homer_primary_judgments.py
+    finalizer: scripts/finalize_homer_primary_evaluation.py
+    public_prompts: homer_primary_prompts.jsonl
+    private_mapping: homer_primary_private_mapping.jsonl
+    images: 47
+    conditions: [latent_bridge, text_homer_context_replay]
+    trials: 5
+    candidates_per_image: 5
+    reference_groups: ["1-9", "200-209", "1000-1009"]
+    references_per_group: 5
+    pairwise_requests: 35250
+    source_generations_sha256: a2135c7ba3019ee5c1668d18413b99a5f78cc7b4629c6979720cd07a42bb3ac2
+    provenance_code_commit: 98004c74448b50ace406c1fb5dc3431fd039e28e
+    provenance_sha256: bcd78811fe2a43fafcb0559f3c406c988b42147b53b73330e021db9d03320801
+    runner_status: local_protocol_smoke_passed_external_api_key_not_present
+  auxiliary:
+    directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/group10_auxiliary
+    protocol: project_group10_multi_rater_mirrored
+    packets: 94
+    images: 47
+    judges_required: 3
+  prohibition: no_quality_claim_before_complete_external_judgments
+
+eta:
+  scheduler_wait: external_homer_judgment_pending_no_gpu_job
+  a3_smoke: completed_in_4m20s
+  a3_semantic_pilot_after_smoke: completed_in_25m06s
+  outer_semantic_confirmation: historical_provenance_failure
+  a4_real_trace_smoke: completed_in_4m03s_job_6711052
+  a4_semantic_pilot: completed_approximately_30_to_60_minutes_after_gpu_start
+  pretrained_trace_and_full_population: complete_362_of_362
+  excluded: no_current_caption_generation_or_preference_learning
+
+next_agent_actions:
+  - Do not execute any DPO/preference scripts or resume old DPO tmux sessions.
+  - A3 replacement smoke 6706516 and formal A3 6707953 passed engineering checks; do not rerun them unless code/config changes.
+  - A4 smoke 6711052 passed on a node-exclusive b-batch allocation; retain its validator and hashes.
+  - Replacement smoke output must remain separate from terminated job 6711036.
+  - Never issue pjdel while pjstat is transiently empty; inspect pjstat -H and .stats terminal fields first.
+  - Do not treat the historical outer smoke 6708113 as an A4 gate; it used the A3 protocol.
+  - Preserve outer job 6708118 as an engineering/provenance failure; do not interpret it as a latent result.
+  - A4 job 6711109 is complete with `pilot_inconclusive`; do not describe it as queued or as a caption result.
+  - Do not submit `jobs/cross_attention_phase_a4.pjm` again unless a separate repair is explicitly approved.
+  - Public 362 allow-list and image/ranking joins are verified; do not relabel them as canonical 365.
+  - "Use the sealed current route: `trace_index` 362/362, context index 362/362, bridge view 1086 rows; do not substitute historical traces."
+  - Run `scripts/verify_pretrained_bridge_inputs.py` with both current bridge configs and retain its JSON evidence.
+  - CPU `scripts/engineering_smoke.py`, targeted public-route tests, and the 2-example real-trace GPU smoke 6754049 pass.
+  - Formal bridge job 6754067 completed successfully; retain its full-SHA post-job audit.
+  - Full comparison generation job 6754609 completed successfully; retain its terminal stats and exact 2350-row gate.
+  - Preserve the successful real generation smoke 6754567 as an engineering gate; it is not a quality result and must not be pooled with the 2350-row scientific output.
+  - Keep v1/v2 re-evaluation and A3 64/24 as mechanism evidence only; do not call either a caption result.
+  - Normalized generations passed Caption-judgement schema/image validation; primary and auxiliary blind packets are now built and audited. Obtain external HOMER-compatible judge results next, then aggregate. Preference learning remains disabled in v3.5.
+
+automation:
+  tmux_session: null
+  state: null
+  poll_seconds: null
+  behavior: scheduled_continuation_after_real_trace_gpu_smoke_passed
+
+verification_commands:
+  - pjstat
+  - .venv/bin/python scripts/homer_public_code_smoke.py
+  - .venv/bin/python scripts/check_pretrained_route.py
+  - .venv/bin/python scripts/verify_homer_evaluation_assets.py
+  - .venv/bin/python scripts/build_homer_population_manifest.py
+  - .venv/bin/python scripts/create_homer_public_release_362.py
+  - .venv/bin/python scripts/verify_homer_public_release_362.py
+  - .venv/bin/python scripts/check_trace_completion.py
+  - .venv/bin/python scripts/validate_phase_a3_smoke.py --config configs/pilot/cross_attention_semantic_phase_a3.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a3.json
+  - .venv/bin/python scripts/validate_phase_a4_smoke.py --config configs/pilot/cross_attention_semantic_phase_a4.yaml --report results/engineering_smoke/cross_attention_semantic_phase_a4_retry1/report.json
+  - .venv/bin/python scripts/validate_project_memory.py

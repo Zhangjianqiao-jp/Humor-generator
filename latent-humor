@@ -1,0 +1,1766 @@
+# Final Research & Engineering Plan
+
+## Structured Latent-Text Communication for Multimodal Humor Generation
+
+---
+
+# 0. Current Project State
+
+The project already has two SFT-trained 7B models:
+
+### Model P — Humor Planner / Joke-Point Extractor
+
+Input:
+
+```text
+image + instruction
+```
+
+Current function:
+
+```text
+image
+→ identify/extract humor-relevant idea or joke point
+→ textual planning information
+```
+
+The SFT checkpoint already exists.
+
+Do not retrain this model at the beginning of this project.
+
+---
+
+### Model G — Humorous Caption Generator
+
+Input currently includes:
+
+```text
+image + planner textual information
+```
+
+Output:
+
+```text
+humorous caption
+```
+
+The SFT checkpoint already exists.
+
+DPO training is currently in progress.
+
+The SFT Generator should be used to develop the latent communication architecture first.
+
+After DPO is complete, repeat only the final selected experiments with the DPO Generator.
+
+---
+
+# 1. Research Objective
+
+Do NOT treat this project as a general validation of latent communication.
+
+Existing work such as Interlat has already established that LLM agents can communicate through latent representations.
+
+Existing hybrid communication work such as HyLaT has also established that text and latent channels can be combined.
+
+Therefore, the main research problem is:
+
+[
+\boxed{
+\text{How should humor-specific intermediate information be allocated between text and latent channels?}
+}
+]
+
+More specifically:
+
+> Which parts of humor planning should be explicitly verbalized, and which parts should remain in continuous latent representations before caption generation?
+
+The target architecture is:
+
+[
+\text{Image}
+\rightarrow
+\text{Humor Planner}
+\rightarrow
+{
+\text{explicit text anchors},
+\text{continuous latent states}
+}
+\rightarrow
+\text{Caption Generator}.
+]
+
+---
+
+# 2. Main Scientific Hypothesis
+
+The central hypothesis is:
+
+> Explicit semantic commitments are well suited for textual communication, while divergent associative information is better preserved in latent space.
+
+For multimodal humor generation, use the following reduced cognitive decomposition:
+
+[
+\boxed{
+C
+\rightarrow
+A
+\rightarrow
+M
+}
+]
+
+where:
+
+### C — Conflict / Script Opposition
+
+What expectation is violated?
+
+What two semantic scripts conflict?
+
+Example:
+
+```text
+normal corporate meeting
+vs
+dog behaving like the manager
+```
+
+---
+
+### A — Association
+
+What remote concepts are activated by that conflict?
+
+Example:
+
+```text
+boss
+obedience
+training
+promotion
+corporate hierarchy
+HR
+workplace politics
+dog commands
+```
+
+This stage may represent multiple weak and competing semantic directions simultaneously.
+
+---
+
+### M — Humor Mechanism / Resolution
+
+How should the association become a joke?
+
+Examples:
+
+```text
+role reversal
+analogy
+exaggeration
+misunderstanding
+irony
+anthropomorphism
+```
+
+---
+
+The primary hypothesis is:
+
+[
+\boxed{
+C_{\text{text}}
++
+A_{\text{latent}}
++
+M_{\text{text}}
+}
+]
+
+will be more effective than representing all three stages entirely through natural language.
+
+This is a hypothesis, not an assumption.
+
+The experiments must test it.
+
+---
+
+# 3. Explicitly Out of Scope
+
+Do NOT implement the following during the core experiment.
+
+### Remove from current scope
+
+* 3B vs 7B comparison
+* culture steering
+* cultural subspaces
+* social-knowledge operator banks
+* RAG
+* additional specialist LLM agents
+* multi-agent debate
+* multi-round communication
+* latent residual decomposition
+* SAE
+* conceptors
+* Fisher analysis
+* full PCA representation analysis
+* intrinsic-dimension analysis
+* exhaustive layer × stage × pooling search
+* large hyperparameter sweeps
+* retraining the two 7B backbones
+* proving from scratch that latent communication can transmit information
+
+These may become follow-up work.
+
+Do not implement them unless explicitly requested later.
+
+---
+
+# 4. Why Visual Grounding Is NOT a Communication Stage
+
+Both Planner and Generator already receive the image.
+
+Therefore, the Planner does not need to transmit basic visual information such as:
+
+```text
+there is a dog
+there are two people
+this takes place in an office
+```
+
+through the communication channel.
+
+That information is already available to the Generator.
+
+Therefore:
+
+[
+V
+]
+
+should NOT be part of the primary latent communication study.
+
+Visual grounding remains an evaluation metric because latent humor planning must not cause image hallucination.
+
+This considerably simplifies the experiment.
+
+The primary communication problem is only:
+
+[
+\boxed{
+C,A,M
+}
+]
+
+rather than:
+
+[
+V,C,A,K,M,T,N,L.
+]
+
+---
+
+# 5. Why Target and Narrative Strategy Are Initially Removed
+
+Do not initially introduce explicit:
+
+```text
+Target
+Narrative Strategy
+Language Style
+```
+
+modules.
+
+The current Generator should remain responsible for these downstream realization decisions.
+
+Adding them now would introduce unnecessary engineering variables.
+
+Only introduce them later if experiments reveal that the Generator consistently makes failures specifically attributable to target or narrative strategy selection.
+
+---
+
+# 6. First Engineering Task — Repository Audit
+
+Before modifying model code, inspect the repository.
+
+Identify:
+
+```text
+Planner model class
+Planner checkpoint
+Generator model class
+Generator SFT checkpoint
+Generator DPO checkpoint/output location
+processor/tokenizer
+image preprocessing
+dataset classes
+train/validation/test splits
+current Planner prompt
+current Planner textual output
+current Generator prompt
+current evaluation pipeline
+current inference script
+```
+
+Create:
+
+```text
+docs/current_pipeline.md
+```
+
+Document the exact current system:
+
+```text
+Image
+  ↓
+Planner 7B SFT
+  ↓
+textual joke point
+  ↓
+Generator 7B SFT/DPO
+  ↓
+caption
+```
+
+Also document the source-code files responsible for each stage.
+
+Do not duplicate existing code unnecessarily.
+
+---
+
+# 7. Confirm Model Compatibility
+
+Automatically record:
+
+```python
+planner.config.hidden_size
+generator.config.hidden_size
+
+planner.config.num_hidden_layers
+generator.config.num_hidden_layers
+```
+
+Also determine:
+
+```text
+same original base checkpoint?
+same architecture?
+same tokenizer?
+same multimodal architecture?
+same hidden dimension?
+```
+
+Write:
+
+```text
+outputs/model_compatibility.json
+```
+
+Example:
+
+```json
+{
+  "planner_base": "...",
+  "generator_base": "...",
+  "same_family": true,
+  "same_hidden_size": true,
+  "planner_hidden_size": 3584,
+  "generator_hidden_size": 3584,
+  "planner_layers": 28,
+  "generator_layers": 28
+}
+```
+
+Do not hardcode these values.
+
+---
+
+# 8. Important Implementation Principle
+
+Do NOT assume that raw Planner hidden states can simply be inserted into the Generator.
+
+Interlat and related methods train communication mechanisms.
+
+Our research question is NOT the communication mechanism itself, so use the smallest reasonable latent bridge.
+
+Freeze:
+
+[
+\theta_P
+]
+
+and:
+
+[
+\theta_G.
+]
+
+Only allow a small communication module to be trained if necessary.
+
+Conceptually:
+
+[
+H_P
+\xrightarrow{B_\phi}
+Z
+\xrightarrow{}
+G.
+]
+
+where:
+
+[
+B_\phi
+]
+
+is a lightweight latent bridge.
+
+Possible implementation:
+
+```python
+Linear
+→ RMSNorm/LayerNorm
+→ optional gate
+```
+
+For example:
+
+\operatorname{Norm}(H_PW+b).
+]
+
+Do NOT introduce another large neural network.
+
+---
+
+# 9. Identity Bridge Baseline
+
+If Planner and Generator are independently fine-tuned from the same original 7B model and use the same hidden dimension, first test:
+
+[
+B(H)=H.
+]
+
+This is the simplest possible interface.
+
+If Generator clearly cannot utilize the representation, introduce a learned lightweight bridge.
+
+Do not spend substantial time attempting sophisticated mathematical alignment before determining whether it is needed.
+
+---
+
+# 10. Latent Injection Method
+
+Use latent prefix injection as the default implementation.
+
+If Planner produces latent sequence:
+
+[
+Z=
+[z_1,\ldots,z_K],
+]
+
+and Generator textual input embeddings are:
+
+[
+E(x),
+]
+
+construct:
+
+[
+X=
+[Z;E(x)].
+]
+
+Then run the Generator using:
+
+```python
+inputs_embeds=X
+```
+
+or the architecture-equivalent interface.
+
+Correctly extend:
+
+```text
+attention mask
+position IDs / RoPE positions
+multimodal token positions
+```
+
+Do not alter image token handling.
+
+Create:
+
+```python
+class LatentCommunicationAdapter:
+    def encode(...)
+    def align(...)
+    def inject(...)
+```
+
+Keep this separate from Planner and Generator implementations.
+
+---
+
+# 11. Minimum Sanity Check Only
+
+Do not make causal communication validation a major research experiment.
+
+However, perform one minimal implementation check.
+
+For a small subset:
+
+```text
+100–300 validation examples
+```
+
+compare:
+
+[
+G(I_i,z_i)
+]
+
+against:
+
+[
+G(I_i,z_j).
+]
+
+This is only used to ensure that:
+
+```text
+1. the bridge is not broken;
+2. the generator reacts to example-dependent latent inputs.
+```
+
+Do not build the paper around this result.
+
+Do not create:
+
+```text
+zero latent
+Gaussian latent
+covariance-matched latent
+many causal perturbations
+```
+
+unless debugging requires them.
+
+Matched vs shuffled is sufficient as an engineering sanity check.
+
+---
+
+# 12. Phase I — Establish the Basic Communication Baselines
+
+First implement only three communication protocols.
+
+## Baseline T — Existing Text Communication
+
+Current system:
+
+[
+t=P(I)
+]
+
+[
+Y=G(I,t).
+]
+
+This must reproduce existing results.
+
+---
+
+## Baseline L — Latent Communication
+
+Extract Planner hidden representation:
+
+[
+H_P.
+]
+
+Map through communication bridge:
+
+[
+Z=B(H_P).
+]
+
+Generator receives:
+
+[
+Y=G(I,Z).
+]
+
+No Planner textual joke point is given.
+
+---
+
+## Baseline H — Hybrid Communication
+
+Generator receives both:
+
+[
+t
+]
+
+and:
+
+[
+Z.
+]
+
+Therefore:
+
+[
+Y=G(I,t,Z).
+]
+
+---
+
+# 13. Do NOT Over-Optimize Phase I
+
+The purpose of Phase I is only to establish whether humor generation shows:
+
+[
+T,\quad L,\quad H
+]
+
+differences.
+
+Initially use only:
+
+### Planner representation
+
+```text
+final-layer hidden states associated with Planner output
+```
+
+### Pooling
+
+Use one simple method first:
+
+```text
+mean pooling
+```
+
+or:
+
+```text
+K latent tokens
+```
+
+depending on architecture.
+
+Do NOT initially test:
+
+```text
+10 pooling methods
+every transformer layer
+PCA
+attention pooling
+token selection
+```
+
+Those are unnecessary until latent communication shows promise.
+
+---
+
+# 14. Phase I Decision
+
+Compare:
+
+[
+Q_T,\quad Q_L,\quad Q_H.
+]
+
+Possible outcomes:
+
+### Outcome 1
+
+[
+Q_H>Q_T
+]
+
+Proceed.
+
+This suggests continuous Planner representation contains complementary information beyond explicit joke-point text.
+
+---
+
+### Outcome 2
+
+[
+Q_L>Q_T
+]
+
+Proceed.
+
+Pure latent communication may itself be useful.
+
+---
+
+### Outcome 3
+
+[
+Q_T\ge Q_H,Q_L.
+]
+
+Do NOT immediately abandon the project.
+
+Overall Planner hidden state may contain excessive irrelevant information.
+
+Proceed to stage-specific communication because the hypothesis is specifically about associative states, not arbitrary raw hidden states.
+
+---
+
+# 15. Phase II — Humor-Specific Stage Decomposition
+
+This is the main research experiment.
+
+Reduce humor planning to:
+
+[
+\boxed{
+Conflict
+\rightarrow
+Association
+\rightarrow
+Mechanism
+}
+]
+
+Do not introduce more stages yet.
+
+---
+
+# 16. Obtaining Stage-Specific Planner Representations
+
+First test whether the existing SFT Planner can reliably produce:
+
+```text
+<CONFLICT>
+...
+</CONFLICT>
+
+<ASSOCIATION>
+...
+</ASSOCIATION>
+
+<MECHANISM>
+...
+</MECHANISM>
+```
+
+using inference instructions only.
+
+Do NOT retrain initially.
+
+Evaluate approximately 100 examples manually/automatically.
+
+If the model reliably follows this format, use a single structured generation.
+
+Capture the hidden states corresponding to each section.
+
+---
+
+# 17. Fallback if Structured Output Is Unreliable
+
+If the existing Planner cannot reliably generate all three fields in one response, do NOT immediately perform new SFT.
+
+Instead use three controlled Planner calls:
+
+### Conflict call
+
+```text
+Given the image, identify the central expectation violation or script opposition.
+```
+
+### Association call
+
+```text
+Given the image and conflict, explore multiple remote but relevant concepts,
+social meanings, analogies, and semantic associations that could support humor.
+```
+
+### Mechanism call
+
+```text
+Given the image, conflict, and associations, identify an effective humor mechanism
+or resolution.
+```
+
+Use the same Planner checkpoint.
+
+This provides:
+
+[
+H_C,H_A,H_M
+]
+
+without changing Planner weights.
+
+---
+
+# 18. Stage-Specific Text Representations
+
+For each stage retain the generated explicit text:
+
+[
+t_C,t_A,t_M.
+]
+
+Therefore every stage has two possible representations:
+
+[
+t_s
+]
+
+and:
+
+[
+z_s.
+]
+
+where:
+
+[
+s\in{C,A,M}.
+]
+
+---
+
+# 19. Core Modality Allocation Experiment
+
+Do NOT test all:
+
+[
+3^3
+]
+
+possible combinations.
+
+Use hypothesis-driven conditions only.
+
+## E0 — Existing Planner Text
+
+Current system.
+
+---
+
+## E1 — Structured All-Text
+
+[
+C_t+A_t+M_t.
+]
+
+This determines whether structured humor planning itself improves results.
+
+---
+
+## E2 — All-Latent
+
+[
+C_z+A_z+M_z.
+]
+
+Useful as a latent-channel reference.
+
+---
+
+## E3 — Conflict Latent
+
+[
+C_z+A_t+M_t.
+]
+
+---
+
+## E4 — Association Latent
+
+[
+\boxed{
+C_t+A_z+M_t
+}
+]
+
+This is the primary proposed condition.
+
+---
+
+## E5 — Mechanism Latent
+
+[
+C_t+A_t+M_z.
+]
+
+---
+
+## E6 — Text + Association Latent Hybrid
+
+Use explicit association text AND its latent state:
+
+[
+C_t+(A_t+A_z)+M_t.
+]
+
+This tests whether latent association contains information complementary to explicit associations.
+
+---
+
+# 20. Primary Research Comparison
+
+The central comparison is:
+
+[
+E3,\quad E4,\quad E5.
+]
+
+If:
+
+[
+E4>E3,E5,
+]
+
+there is evidence that the advantage of continuous communication is concentrated specifically in associative humor reasoning.
+
+This is much more important than:
+
+[
+\text{latent}> \text{text}.
+]
+
+---
+
+# 21. Main Scientific Claim to Test
+
+The desired hypothesis is:
+
+[
+\boxed{
+Q(C_t,A_z,M_t)
+
+>
+
+Q(C_t,A_t,M_t)
+}
+]
+
+especially for:
+
+```text
+humor
+novelty
+semantic diversity
+remote association quality
+```
+
+while maintaining comparable image grounding.
+
+If supported, this becomes the core result:
+
+> Associative humor reasoning benefits from remaining in continuous representation space, while explicit conflict and mechanism information are better communicated symbolically.
+
+---
+
+# 22. What Counts as Association?
+
+Association must NOT simply mean:
+
+```text
+longer reasoning text
+```
+
+It should explicitly contain divergent semantic possibilities.
+
+Examples include:
+
+```text
+remote semantic concepts
+social situations
+analogies
+roles
+stereotypical situations
+unexpected mappings
+personal contradictions
+social contradictions
+possible reinterpretations
+weak semantic relations
+```
+
+The Planner should be encouraged to explore multiple possibilities rather than committing immediately to one caption.
+
+Association is conceptually:
+
+[
+A=
+{a_1,\ldots,a_n}.
+]
+
+The research motivation is that latent states may preserve this distributed candidate structure better than early linguistic commitment.
+
+---
+
+# 23. Social and Personal Contradictions
+
+Do NOT create a separate knowledge model or database yet.
+
+Social and personal contradictions should initially be considered part of:
+
+[
+A.
+]
+
+For example:
+
+```text
+boss vs employee
+parent vs child
+status vs competence
+appearance vs reality
+romance vs self-interest
+authority vs absurdity
+work expectations vs laziness
+```
+
+The Planner can activate these concepts through association.
+
+Only if later experiments show a clear need should a dedicated knowledge structure be developed.
+
+---
+
+# 24. Minimal Layer Search
+
+After identifying the best stage — expected to be Association — perform a limited layer search.
+
+Do NOT search every layer.
+
+Test only approximately:
+
+[
+0.50L,\quad0.75L,\quad0.90L,\quad L.
+]
+
+For example:
+
+```python
+layers = [
+    int(0.50 * L),
+    int(0.75 * L),
+    int(0.90 * L),
+    L
+]
+```
+
+Only test these for:
+
+[
+A_z.
+]
+
+The purpose is to determine whether useful associative representation is strongest before the final language-oriented layer.
+
+Do not perform full stage × layer combinatorial search.
+
+---
+
+# 25. Minimal Latent Capacity Experiment
+
+Only after Association latent proves useful.
+
+Test:
+
+[
+K\in{1,4,8,16}
+]
+
+latent tokens.
+
+Measure whether additional latent communication capacity primarily affects:
+
+```text
+funniness
+novelty
+semantic diversity
+```
+
+This experiment asks:
+
+[
+\boxed{
+\text{How much continuous communication capacity does humorous association require?}
+}
+]
+
+Do not initially test dozens of latent dimensions.
+
+---
+
+# 26. DPO Experiment
+
+DPO is not the novelty.
+
+Treat DPO Generator as the preference-aligned downstream decoder.
+
+After DPO training completes, do NOT repeat the entire experiment matrix.
+
+Select only:
+
+```text
+T — existing text baseline
+E1 — structured all-text
+best hybrid/latent configuration
+```
+
+For example, if E4 wins:
+
+[
+C_t+A_z+M_t.
+]
+
+Then compare:
+
+| Generator | Text | Structured Text | Best Hybrid |
+| --------- | ---: | --------------: | ----------: |
+| SFT       |    ✓ |               ✓ |           ✓ |
+| DPO       |    ✓ |               ✓ |           ✓ |
+
+---
+
+# 27. Communication Bridge and DPO
+
+If the latent bridge was calibrated/trained for the SFT Generator, do not automatically reuse it for the DPO Generator.
+
+Freeze the DPO backbone and re-fit only the lightweight communication bridge using the same calibration/training protocol.
+
+This isolates:
+
+[
+\text{Generator preference alignment}
+]
+
+from:
+
+[
+\text{communication interface alignment}.
+]
+
+---
+
+# 28. DPO Research Question
+
+The only DPO-related research question should be:
+
+[
+\boxed{
+\text{Does preference alignment complement latent humor planning?}
+}
+]
+
+Do not launch a separate DPO methodology study.
+
+Possible result:
+
+[
+\text{DPO}+\text{Hybrid}
+
+>
+
+\text{DPO}+\text{Text}.
+]
+
+That would show:
+
+> preference optimization improves humorous realization while latent communication improves humorous conception.
+
+This creates a clean division:
+
+\text{what joke to conceive}
+}
+]
+
+\text{how to realize/select a preferred joke}
+}
+]
+
+---
+
+# 29. Evaluation — Keep It Focused
+
+Do not create a huge metric zoo.
+
+Use four evaluation dimensions.
+
+## Metric 1 — Funniness / Human Preference
+
+Primary metric.
+
+Prefer pairwise comparison:
+
+[
+P(Y_A>Y_B).
+]
+
+Use the existing project judge pipeline.
+
+Human evaluation should be performed on an appropriate final subset if feasible.
+
+---
+
+## Metric 2 — Image Grounding
+
+Ensure captions still correspond to the actual image.
+
+Latent association should not simply encourage unrelated creativity.
+
+---
+
+## Metric 3 — Semantic Diversity
+
+Generate multiple captions per image and measure whether the method creates genuinely different joke concepts.
+
+Use embedding-space pairwise diversity in addition to lexical metrics.
+
+---
+
+## Metric 4 — Novelty / Associative Creativity
+
+Measure whether captions move beyond the obvious/default joke interpretation.
+
+This may use:
+
+```text
+judge-based novelty
+semantic distance
+mechanism diversity
+association-category diversity
+```
+
+depending on the existing evaluation pipeline.
+
+---
+
+# 30. Primary Result Table
+
+Generate one central table:
+
+| Method                    | Humor ↑ | Grounding ↑ | Diversity ↑ | Novelty ↑ |
+| ------------------------- | ------: | ----------: | ----------: | --------: |
+| Generator only            |         |             |             |           |
+| Existing Planner Text     |         |             |             |           |
+| Structured All-Text       |         |             |             |           |
+| All-Latent                |         |             |             |           |
+| Conflict Latent           |         |             |             |           |
+| **Association Latent**    |         |             |             |           |
+| Mechanism Latent          |         |             |             |           |
+| Text + Association Latent |         |             |             |           |
+
+This should become the primary ablation table.
+
+---
+
+# 31. Secondary Result Table — SFT vs DPO
+
+| Generator | Text | Best Hybrid |
+| --------- | ---: | ----------: |
+| SFT       |      |             |
+| DPO       |      |             |
+
+Report:
+
+```text
+humor preference
+grounding
+diversity
+```
+
+Do not repeat every stage allocation experiment for DPO.
+
+---
+
+# 32. Statistical Analysis
+
+Because each method generates captions for the same images, use paired analysis.
+
+At minimum:
+
+```text
+paired bootstrap confidence intervals
+```
+
+and/or:
+
+```text
+paired permutation test
+```
+
+For pairwise preference judgments, report:
+
+```text
+win
+tie
+loss
+```
+
+plus confidence intervals.
+
+Do not rely only on average judge scores.
+
+---
+
+# 33. Reproducibility
+
+Every experiment must record:
+
+```text
+planner checkpoint
+generator checkpoint
+communication type
+planner layer
+latent token count
+bridge checkpoint
+prompt version
+generation parameters
+random seed
+dataset split
+git commit
+```
+
+Use config files.
+
+Suggested structure:
+
+```text
+configs/
+    text.yaml
+    latent.yaml
+    hybrid.yaml
+    stages.yaml
+    dpo.yaml
+```
+
+Results:
+
+```text
+outputs/
+    run_id/
+        config.yaml
+        predictions.jsonl
+        metrics.json
+        summary.md
+```
+
+---
+
+# 34. Suggested Code Modules
+
+Do not rebuild the full project.
+
+Add only:
+
+```text
+latent_comm/
+    extractor.py
+    bridge.py
+    injector.py
+    stage_parser.py
+
+experiments/
+    baseline.py
+    modality_allocation.py
+    layer_ablation.py
+    latent_capacity.py
+    dpo_comparison.py
+
+evaluation/
+    evaluate.py
+```
+
+Reuse all existing:
+
+```text
+model loaders
+dataset code
+evaluation code
+DPO code
+SFT code
+```
+
+where possible.
+
+---
+
+# 35. Required Tests
+
+Add only essential tests:
+
+```text
+planner hidden-state extraction shape
+stage span extraction
+latent bridge output shape
+latent prefix injection
+attention-mask handling
+generator forward pass
+checkpoint/config reproducibility
+```
+
+Also run the small matched-vs-shuffled sanity check.
+
+Do not build an extensive causal-analysis package.
+
+---
+
+# 36. Experimental Execution Order
+
+Follow this exact order.
+
+## Step 1
+
+Audit repository and document existing system.
+
+## Step 2
+
+Reproduce current:
+
+[
+Planner_{\text{text}}
+\rightarrow Generator.
+]
+
+## Step 3
+
+Implement the minimal latent bridge.
+
+## Step 4
+
+Run:
+
+[
+Text,\ Latent,\ Hybrid.
+]
+
+## Step 5
+
+Implement:
+
+[
+Conflict,\ Association,\ Mechanism
+]
+
+stage extraction.
+
+## Step 6
+
+Run only:
+
+[
+E0-E6.
+]
+
+## Step 7
+
+Determine which stage benefits most from latent representation.
+
+## Step 8
+
+Only for the winning stage, run four-layer ablation.
+
+## Step 9
+
+Only if latent is useful, test:
+
+[
+K=1,4,8,16.
+]
+
+## Step 10
+
+When DPO finishes, repeat only the best 2–3 communication conditions.
+
+---
+
+# 37. Decision Gates
+
+## Gate 1 — Communication Architecture
+
+If Hybrid or Latent is completely unstable:
+
+debug the communication bridge.
+
+Do not redesign humor reasoning yet.
+
+---
+
+## Gate 2 — Stage Allocation
+
+If:
+
+[
+AssociationLatent
+
+>
+
+AssociationText,
+]
+
+focus the paper on latent associative reasoning.
+
+If:
+
+[
+ConflictLatent
+]
+
+wins instead, modify the scientific interpretation accordingly.
+
+Do not force the original hypothesis.
+
+---
+
+## Gate 3 — Hybrid
+
+If:
+
+[
+C_t+A_z+M_t
+]
+
+wins:
+
+make structured hybrid communication the final method.
+
+If:
+
+[
+A_t+A_z
+]
+
+further improves results:
+
+retain explicit association text plus latent state.
+
+Otherwise use latent association only.
+
+---
+
+# 38. Do Not Implement These Unless Requested
+
+After completing the above, STOP.
+
+Do not automatically continue into:
+
+```text
+culture
+latent cultural operators
+social knowledge subspaces
+PCA geometry
+SAE
+conceptor
+latent residual
+additional agents
+external databases
+multi-round reasoning
+3B experiments
+new DPO methods
+GRPO
+```
+
+These are separate research directions.
+
+They should only be introduced after the core paper question is answered.
+
+---
+
+# 39. Intended Paper-Level Research Questions
+
+The final experiments should answer only the following.
+
+### RQ1
+
+Does replacing textual Planner communication with latent/hybrid communication improve multimodal humor generation?
+
+### RQ2
+
+Which humor reasoning stage benefits most from continuous communication?
+
+[
+Conflict,\ Association,\ Mechanism?
+]
+
+### RQ3
+
+Is the best protocol:
+
+[
+text,
+latent,
+\text{or hybrid}?
+]
+
+### RQ4
+
+Does Association require more communication capacity than explicit symbolic decisions?
+
+### RQ5
+
+Does DPO-based preference alignment complement the best latent/hybrid planning architecture?
+
+Nothing else is required for the core project.
+
+---
+
+# 40. Intended Scientific Story
+
+The project should NOT claim:
+
+> We invented latent communication.
+
+It should NOT claim:
+
+> LLMs can transmit information using hidden states.
+
+Those are established directions.
+
+The desired contribution is:
+
+> Existing multimodal humor systems verbalize intermediate reasoning, while latent-communication systems have not studied how different components of humorous cognition should be represented. We investigate modality allocation for humor reasoning and distinguish explicit semantic commitments from distributed associative states.
+
+The strongest expected result would be:
+
+[
+\boxed{
+Conflict_{\text{text}}
++
+Association_{\text{latent}}
++
+Mechanism_{\text{text}}
+}
+]
+
+outperforming:
+
+[
+Conflict_{\text{text}}
++
+Association_{\text{text}}
++
+Mechanism_{\text{text}}.
+]
+
+If supported, the central conclusion becomes:
+
+> **Humorous association benefits from remaining latent, whereas explicit conflict and humor-mechanism decisions are effectively communicated through language.**
+>
+> 你这个计划用的是
+
+---
+
+# 41. Final Engineering Deliverable
+
+After completing the core plan, produce:
+
+```text
+docs/final_experiment_report.md
+```
+
+containing:
+
+## Architecture
+
+Exact Planner → communication → Generator implementation.
+
+## Main experiment
+
+Text vs Latent vs Hybrid.
+
+## Stage allocation
+
+Conflict vs Association vs Mechanism.
+
+## Best architecture
+
+Exact final communication configuration.
+
+## Layer result
+
+Best Planner layer for the useful latent stage.
+
+## Capacity result
+
+Best number of latent tokens if tested.
+
+## DPO interaction
+
+SFT vs DPO comparison.
+
+## Failure cases
+
+At least representative examples of:
+
+```text
+text succeeds / latent fails
+latent succeeds / text fails
+hybrid succeeds
+grounding failure
+creative association success
+```
+
+## Research conclusion
+
+State clearly which hypotheses were supported and which were rejected.
+
+Do not hide negative results.
+
+---
+
+# 42. Immediate Task for Codex
+
+Do not implement the entire plan immediately.
+
+Start with these four deliverables only:
+
+### Deliverable 1
+
+```text
+docs/current_pipeline.md
+```
+
+Repository and checkpoint audit.
+
+### Deliverable 2
+
+```text
+docs/latent_interface_design.md
+```
+
+Exact technical design for extracting Planner states and injecting them into Generator.
+
+### Deliverable 3
+
+Minimal working prototype supporting:
+
+```text
+Text
+Latent
+Hybrid
+```
+
+on a small validation subset.
+
+### Deliverable 4
+
+Short report containing:
+
+```text
+tensor shapes
+memory usage
+example planner text
+example latent statistics
+text caption
+latent caption
+hybrid caption
+```
+
+Do not begin the full stage-allocation experiment until these four deliverables are working correctly.
+
+The overall implementation must prioritize scientific interpretability, minimal modification of the existing trained models, and clean isolation of communication modality as the primary experimental variable.

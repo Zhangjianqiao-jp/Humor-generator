@@ -1,0 +1,71 @@
+experiment:
+  name: pilot_phase_a4_channel_isolated_functional_recovery
+  baseline: receiver_cross_attention
+  receiver: sft_qwen_7b
+  protocol: >-
+    Channel-isolated semantic recovery with no-image receiver prompts and
+    donor-side counterfactual reconstruction. This is a new protocol; A3 is
+    retained unchanged for historical comparison.
+model:
+  name: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+  adapter: artifacts/checkpoints/generator_sft
+  frozen: true
+  min_visual_tokens: 256
+  max_visual_tokens: 1280
+data:
+  dataset: data/processed/latent_bridge_v35
+  trace_index: data/cache/planner_traces_homer_strict_v35/index.jsonl
+bridge:
+  layer_indices: [6, 13, 20, 27]
+  bottleneck_dim: 48
+  heads: 4
+  gate_init: 0.1
+  # The bridge computes independent attention per channel. In A4 the
+  # receiver-side mask activates only the target channel for each loss term.
+  channel_fusion: fixed_equal
+  memory_policy: full_typed_states_no_truncation
+loss:
+  semantic_objective: channel_isolated_v4
+  alignment_teacher: receiver_contextual_final_hidden
+  channel_visibility: target_only
+  caption_nll: 1.0
+  text_teacher_forward_kl: 0.0
+  # The original target must remain more probable than the swapped target.
+  matched_shuffled_margin: 1.0
+  margin: 0.2
+  # The swapped channel must decode the donor semantics under the same prompt.
+  # This prevents a bridge from satisfying the margin only by making the
+  # counterfactual arbitrary.
+  counterfactual_reconstruction: 0.75
+  info_nce: 0.5
+  info_nce_temperature: 0.07
+  variance_floor: 0.05
+  temperature: 1.0
+training:
+  stage: semantic_reconstruction
+  # No image is supplied to the semantic receiver. The image remains part of
+  # the later caption task, but cannot be a semantic-recovery shortcut here.
+  semantic_prompt_include_image: false
+  seed: 20260830
+  epochs: 5
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  gradient_accumulation: 4
+  max_grad_norm: 1.0
+  max_target_tokens: 768
+  early_stopping_patience: 2
+  early_stopping_min_delta: 0.002
+  log_every_examples: 8
+  max_train_clusters: 64
+  max_validation_clusters: 24
+gate:
+  # These remain mechanism-pilot thresholds. A4 must expose channel-specific
+  # use; it is not a caption-quality claim.
+  min_channel_validation_gap: 0.01
+  min_channel_fraction_gap_gt_0: 0.60
+  min_channel_retrieval_at_1: 0.125
+  min_counterfactual_nll_improvement: 0.01
+  min_nll_improvement: 0.0
+  max_relative_update_norm: 0.25
+  equal_channel_weight_tolerance: 0.0001

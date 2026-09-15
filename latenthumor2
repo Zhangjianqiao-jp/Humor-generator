@@ -1,0 +1,1884 @@
+# Final Research & Engineering Plan
+
+## Latent Imagination for Multimodal Humor Generation
+
+---
+
+# 0. Current Project State
+
+The project already has two SFT-trained 7B models.
+
+## Model P — Humor Planner / Joke-Point Extractor
+
+Current input:
+
+```text
+image + instruction
+```
+
+Current function:
+
+```text
+image
+→ identify/extract humor-relevant joke point
+→ textual planning information
+```
+
+The SFT checkpoint already exists.
+
+Do **not** discard or retrain this model at the beginning of the project.
+
+Instead, reinterpret it as a general **Humor Reasoner** that can perform two inference stages:
+
+```text
+Conflict Extraction
+→ Imagination / Association
+```
+
+using the same existing 7B checkpoint.
+
+---
+
+## Model G — Humorous Caption Generator
+
+Current input:
+
+```text
+image + planner textual information
+```
+
+Current output:
+
+```text
+humorous caption
+```
+
+The SFT checkpoint already exists.
+
+DPO training is currently in progress.
+
+Use the SFT Generator to develop and validate the latent-communication architecture first.
+
+After the final communication architecture is selected, repeat only the important experiments using the DPO Generator.
+
+---
+
+# 1. Research Positioning
+
+Do **not** frame this project as:
+
+> Can LLM agents communicate through latent representations?
+
+That has already been studied by latent-communication work.
+
+Do **not** frame this project as:
+
+> Can a Planner improve humorous caption generation?
+
+Existing multimodal humor systems already use explicit intermediate reasoning, conflict extraction, imagination, association, and multi-stage generation.
+
+The actual research question is:
+
+[
+\boxed{
+\text{Should the imagination stage of multimodal humor generation be verbalized?}
+}
+]
+
+More formally:
+
+> **Can continuous latent communication preserve richer associative/imaginative information than explicit textual intermediate reasoning in multimodal humor generation?**
+
+The project investigates the communication representation of the **imagination stage**, not latent communication in general.
+
+---
+
+# 2. Humor-Generation Architecture
+
+Use a modern humor-generation decomposition inspired by current conflict/imagination-based systems:
+
+[
+\boxed{
+I
+\rightarrow
+C
+\rightarrow
+A
+\rightarrow
+G
+\rightarrow
+Y
+}
+]
+
+where:
+
+* (I): image;
+* (C): conflict / script opposition;
+* (A): imagination / divergent association;
+* (G): caption Generator;
+* (Y): humorous caption.
+
+The key conceptual decomposition is therefore:
+
+```text
+Image
+  ↓
+Conflict Extraction
+  ↓
+Imagination / Association
+  ↓
+Caption Realization
+```
+
+This decomposition must be implemented using the **existing two-model architecture**:
+
+```text
+Planner 7B
+    ├── Conflict Extraction
+    └── Imagination / Association
+
+Generator 7B
+    └── Caption Realization
+```
+
+Do **not** create separate 7B models for Conflict and Imagination.
+
+The same Planner checkpoint should perform both reasoning stages.
+
+---
+
+# 3. Core Scientific Hypothesis
+
+The main hypothesis is:
+
+> Conflict is an explicit semantic commitment and can be efficiently communicated through natural language, while imagination is a high-dimensional, divergent associative state that may lose useful information when forced into a single textual representation.
+
+Therefore, the primary proposed architecture is:
+
+[
+\boxed{
+I
+\rightarrow
+C_{\text{text}}
+\rightarrow
+A_{\text{latent}}
+\rightarrow
+G
+\rightarrow
+Y
+}
+]
+
+instead of the conventional fully textual pipeline:
+
+[
+I
+\rightarrow
+C_{\text{text}}
+\rightarrow
+A_{\text{text}}
+\rightarrow
+G
+\rightarrow
+Y.
+]
+
+The primary research comparison is therefore:
+
+[
+\boxed{
+A_{\text{text}}
+\quad\text{vs}\quad
+A_{\text{latent}}
+\quad\text{vs}\quad
+A_{\text{text}}+A_{\text{latent}}
+}
+]
+
+while keeping conflict representation fixed as text.
+
+---
+
+# 4. Why Conflict Should Remain Textual
+
+Conflict / script opposition is an explicit semantic decision.
+
+Examples:
+
+```text
+formal office hierarchy
+vs
+dog behaving like the manager
+```
+
+or:
+
+```text
+expected human behavior
+vs
+absurd object behavior
+```
+
+Conflict must remain:
+
+* interpretable;
+* debuggable;
+* visually grounded;
+* easy to evaluate;
+* easy to correct.
+
+Therefore, use:
+
+[
+\boxed{
+C_{\text{text}}
+}
+]
+
+as the fixed semantic anchor in all primary experiments.
+
+Do **not** spend the main experimental budget comparing:
+
+```text
+Conflict Text
+vs
+Conflict Latent
+```
+
+unless later results give a strong reason to revisit this assumption.
+
+---
+
+# 5. Why Imagination / Association Is the Main Latent Candidate
+
+Given conflict (C), humor generation often requires divergent associative search:
+
+[
+A=
+{
+a_1,a_2,\dots,a_n
+}.
+]
+
+Possible associations may simultaneously involve:
+
+```text
+social roles
+remote semantic concepts
+unexpected analogies
+personal contradictions
+social contradictions
+status relationships
+workplace norms
+cultural references
+object-person mappings
+possible reinterpretations
+weak semantic relations
+```
+
+For example:
+
+```text
+dog as manager
+→ obedience
+→ dog training
+→ employees
+→ corporate hierarchy
+→ promotion
+→ authority
+→ workplace politics
+→ HR
+→ commands
+```
+
+A textual Planner must eventually commit to a limited sequence of tokens.
+
+A continuous hidden representation may preserve a richer distribution of candidate associations before such commitment.
+
+Therefore:
+
+[
+\boxed{
+A_{\text{latent}}
+}
+]
+
+is the only main latent reasoning object in the core study.
+
+---
+
+# 6. Mechanism Is No Longer a Separate Communication Stage
+
+Do **not** explicitly create:
+
+```text
+Humor Mechanism
+Logical Mechanism
+Narrative Strategy
+Target
+Language Style
+```
+
+as independent communication modules in the core project.
+
+These downstream decisions should remain primarily inside the Generator.
+
+The Generator receives:
+
+```text
+image
++
+explicit conflict
++
+imagination representation
+```
+
+and is responsible for selecting:
+
+* analogy;
+* role reversal;
+* exaggeration;
+* irony;
+* misunderstanding;
+* anthropomorphism;
+* target;
+* wording;
+* narrative strategy;
+* punchline realization.
+
+This avoids unnecessary decomposition and keeps the research focused on the representation of imagination.
+
+---
+
+# 7. Visual Grounding Is Not a Communication Variable
+
+Both Planner and Generator already receive the image.
+
+Therefore, do not transmit redundant factual visual information such as:
+
+```text
+there is a dog
+two people are standing nearby
+the scene is an office
+```
+
+as a separate latent communication stage.
+
+Visual understanding remains essential for evaluation, but it is **not** part of the communication-modality research question.
+
+Use image grounding as an output metric to ensure that stronger imagination does not cause hallucination.
+
+---
+
+# 8. Final Core Architecture
+
+The intended system is:
+
+```text
+                    Image
+                      │
+                      ▼
+                Planner 7B
+                      │
+              Conflict Extraction
+                      │
+                C_text anchor
+                      │
+                      ▼
+          Imagination / Association
+                      │
+              ┌───────┴────────┐
+              │                │
+           A_text           A_latent
+              │                │
+              └───────┬────────┘
+                      │
+                      ▼
+                Generator 7B
+                      │
+                      ▼
+              Humorous Caption
+```
+
+The experiment changes only how the imagination state is communicated.
+
+---
+
+# 9. Explicitly Out of Scope
+
+Do **not** implement the following during the core research project:
+
+* 3B vs 7B comparison;
+* culture steering;
+* cultural latent operators;
+* cultural subspaces;
+* social-knowledge databases;
+* separate social-knowledge models;
+* RAG;
+* extra specialist LLMs;
+* multi-agent debate;
+* multi-round agent communication;
+* explicit Mechanism module;
+* explicit Target module;
+* explicit Narrative Strategy module;
+* SAE;
+* Conceptor;
+* Fisher analysis;
+* latent residual decomposition;
+* full latent geometry analysis;
+* exhaustive PCA analysis;
+* intrinsic-dimension research;
+* every-layer exhaustive sweeps;
+* large hyperparameter searches;
+* new DPO algorithms;
+* GRPO;
+* retraining both 7B backbones from scratch;
+* re-proving that latent communication itself is possible.
+
+These are possible follow-up directions.
+
+They are not part of the core experiment.
+
+---
+
+# 10. First Engineering Task — Repository Audit
+
+Before modifying code, inspect the current repository.
+
+Identify:
+
+```text
+Planner model class
+Planner checkpoint
+Generator model class
+Generator SFT checkpoint
+Generator DPO checkpoint/output location
+processor/tokenizer
+image preprocessing
+dataset classes
+train/validation/test splits
+current Planner prompt
+current Planner output format
+current Generator prompt
+current evaluation pipeline
+current inference script
+```
+
+Create:
+
+```text
+docs/current_pipeline.md
+```
+
+Document the exact current system:
+
+```text
+Image
+  ↓
+Planner 7B SFT
+  ↓
+textual joke point
+  ↓
+Generator 7B SFT/DPO
+  ↓
+caption
+```
+
+Also document which files implement each stage.
+
+Reuse existing model loading, dataset, evaluation, SFT, and DPO infrastructure wherever possible.
+
+---
+
+# 11. Check Planner and Generator Compatibility
+
+Automatically record:
+
+```python
+planner.config.hidden_size
+generator.config.hidden_size
+
+planner.config.num_hidden_layers
+generator.config.num_hidden_layers
+```
+
+Determine:
+
+```text
+same original base model?
+same architecture?
+same tokenizer?
+same multimodal architecture?
+same hidden dimension?
+```
+
+Write:
+
+```text
+outputs/model_compatibility.json
+```
+
+Do not hardcode architecture-specific dimensions.
+
+---
+
+# 12. Planner Inference Redesign
+
+Do **not** change Planner weights initially.
+
+Use the existing Planner checkpoint in two controlled inference stages.
+
+## Stage 1 — Conflict Extraction
+
+Prompt the Planner to produce a concise conflict / script opposition.
+
+Example format:
+
+```text
+<CONFLICT>
+The scene resembles a formal corporate hierarchy, but a dog occupies the manager's role.
+</CONFLICT>
+```
+
+This output becomes:
+
+[
+C_{\text{text}}.
+]
+
+---
+
+## Stage 2 — Imagination / Association
+
+Condition on:
+
+```text
+image + C_text
+```
+
+and instruct the same Planner to explore multiple relevant but non-obvious associations.
+
+The textual form may resemble:
+
+```text
+<ASSOCIATION>
+authority
+obedience
+dog training
+employees following orders
+promotion
+corporate hierarchy
+HR
+workplace politics
+managerial commands
+</ASSOCIATION>
+```
+
+However, the primary object of interest is not the text itself.
+
+Capture Planner hidden representations associated with this imagination process:
+
+[
+H_A.
+]
+
+---
+
+# 13. Association Generation Requirements
+
+The association prompt must explicitly encourage **divergent exploration**, not immediate caption generation.
+
+It should discourage:
+
+```text
+writing the final joke
+selecting one punchline too early
+turning every association into a full sentence
+```
+
+It should encourage:
+
+```text
+multiple remote associations
+multiple interpretations
+social relations
+analogies
+semantic jumps
+possible humorous reinterpretations
+weak but potentially useful connections
+```
+
+Conceptually:
+
+[
+C
+\rightarrow
+{a_1,\ldots,a_n}
+]
+
+rather than:
+
+[
+C
+\rightarrow
+\text{one final explanation}.
+]
+
+---
+
+# 14. Latent Representation Extraction
+
+Extract hidden states from the Planner during the Imagination stage.
+
+Initially use one simple representation.
+
+Do **not** begin with a large representation-search project.
+
+Start with:
+
+```text
+final-layer association-token hidden states
+```
+
+and either:
+
+### Option A — Mean-Pooled Association State
+
+[
+z_A=
+\frac{1}{T_A}
+\sum_{t\in A}
+h_t
+]
+
+or:
+
+### Option B — Small Latent Token Sequence
+
+[
+Z_A=
+[z_1,\ldots,z_K].
+]
+
+Prefer preserving a small latent sequence if technically straightforward.
+
+Avoid immediately collapsing everything into a single vector if the existing latent-communication implementation naturally supports multiple pseudo-tokens.
+
+---
+
+# 15. Communication Bridge
+
+Do **not** assume Planner hidden states can always be inserted directly into the Generator.
+
+Freeze:
+
+[
+\theta_P
+]
+
+and:
+
+[
+\theta_G.
+]
+
+Use the smallest reasonable communication bridge:
+
+[
+H_A
+\xrightarrow{B_\phi}
+Z_A.
+]
+
+Possible bridge:
+
+```text
+Linear
+→ RMSNorm / LayerNorm
+→ optional scalar/vector gate
+```
+
+For example:
+
+[
+Z_A=
+\operatorname{Norm}(H_AW+b).
+]
+
+If Planner and Generator originate from the same base model and identity transfer works, retain identity as a baseline.
+
+Do not introduce another large network.
+
+Communication alignment is an engineering component, not the research novelty.
+
+---
+
+# 16. Latent Injection
+
+Use latent-prefix injection unless the existing architecture strongly suggests another compatible method.
+
+If:
+
+[
+Z_A\in\mathbb R^{K\times d}
+]
+
+and Generator embeddings are:
+
+[
+E(x),
+]
+
+construct an architecture-compatible sequence containing:
+
+```text
+latent association tokens
++
+textual conflict
++
+generator prompt
++
+image context
+```
+
+The exact ordering must be fixed and documented.
+
+Correctly handle:
+
+```text
+attention masks
+position IDs
+RoPE positions
+multimodal image-token structure
+```
+
+Create a reusable module:
+
+```python
+class LatentImaginationAdapter:
+    def extract(...)
+    def bridge(...)
+    def inject(...)
+```
+
+Do not modify the original Generator checkpoint.
+
+---
+
+# 17. Minimal Engineering Sanity Check
+
+Do not make communication feasibility a research contribution.
+
+Before large experiments, run a small check on approximately:
+
+```text
+100–300 validation examples
+```
+
+Verify that:
+
+```text
+1. Planner association latents can be extracted reliably;
+2. Generator output/logits respond to latent input;
+3. tensor shapes and attention masks are correct;
+4. GPU memory remains manageable.
+```
+
+Optionally compare matched vs shuffled association latents once as an implementation sanity check.
+
+Do not build a large causal-communication experiment suite.
+
+---
+
+# 18. Phase I — Reproduce Existing Baseline
+
+First reproduce the existing system exactly.
+
+## B0 — Generator Only
+
+[
+Y=G(I).
+]
+
+---
+
+## B1 — Existing Planner Text
+
+Current system:
+
+[
+t_{\text{current}}=P(I)
+]
+
+[
+Y=G(I,t_{\text{current}}).
+]
+
+This verifies that the new experimental code reproduces the current pipeline.
+
+---
+
+# 19. Phase II — Establish the Conflict–Imagination Text Baseline
+
+Before testing latent imagination, construct the modernized fully textual pipeline.
+
+## T — Conflict + Textual Imagination
+
+[
+C_t=P_C(I)
+]
+
+[
+A_t=P_A(I,C_t)
+]
+
+[
+Y=
+G(I,C_t,A_t).
+]
+
+This is the primary fully textual reasoning baseline.
+
+It represents the standard assumption:
+
+```text
+Conflict
+→ verbalized imagination
+→ caption
+```
+
+The latent method must primarily be compared against this condition.
+
+---
+
+# 20. Phase III — Core Experiment
+
+Only three imagination communication protocols are required.
+
+## T — Textual Imagination
+
+[
+Y_T=
+G(I,C_t,A_t).
+]
+
+---
+
+## L — Latent Imagination
+
+Do not provide textual associations.
+
+[
+Y_L=
+G(I,C_t,Z_A).
+]
+
+This tests:
+
+> Can the imagination stage remain entirely latent?
+
+---
+
+## H — Hybrid Imagination
+
+Provide both representations:
+
+[
+Y_H=
+G(I,C_t,A_t,Z_A).
+]
+
+This tests:
+
+> Are explicit associations and continuous associative states complementary?
+
+---
+
+# 21. The Core Comparison
+
+The main paper-level experiment is:
+
+[
+\boxed{
+T
+\quad vs\quad
+L
+\quad vs\quad
+H
+}
+]
+
+with everything else fixed:
+
+```text
+same image
+same conflict
+same Planner checkpoint
+same Generator checkpoint
+same decoding settings
+same evaluation set
+```
+
+This is the central experiment.
+
+Do not dilute it with dozens of unrelated conditions.
+
+---
+
+# 22. Main Scientific Interpretations
+
+## Case 1
+
+[
+L>T.
+]
+
+Interpretation:
+
+> Explicitly verbalizing imagination creates a bottleneck; continuous association states are more effective for humorous generation.
+
+---
+
+## Case 2
+
+[
+H>T
+]
+
+and:
+
+[
+H>L.
+]
+
+This is potentially the strongest result.
+
+Interpretation:
+
+> Explicit semantic associations and continuous associative states contain complementary information.
+
+The final architecture becomes:
+
+[
+\boxed{
+C_{\text{text}}
++
+A_{\text{text}}
++
+A_{\text{latent}}
+}
+]
+
+---
+
+## Case 3
+
+[
+T>L.
+]
+
+Interpretation:
+
+> Textualization may act as a useful semantic bottleneck, filtering irrelevant Planner activation.
+
+This is still scientifically informative.
+
+---
+
+## Case 4
+
+[
+T\approx L\approx H.
+]
+
+Interpretation:
+
+> Under the current Planner/Generator architecture, representation modality may not be the dominant limitation.
+
+Do not artificially force a positive result.
+
+---
+
+# 23. Primary Hypothesis
+
+The strongest expected outcome is:
+
+[
+\boxed{
+Q(G(I,C_t,A_z))
+
+>
+
+Q(G(I,C_t,A_t))
+}
+]
+
+or:
+
+[
+\boxed{
+Q(G(I,C_t,A_t,A_z))
+
+>
+
+Q(G(I,C_t,A_t)).
+}
+]
+
+The improvement should ideally be strongest in:
+
+```text
+funniness
+novelty
+semantic diversity
+associative creativity
+```
+
+while maintaining comparable:
+
+```text
+image grounding
+```
+
+---
+
+# 24. Do Not Compare Conflict Modalities Initially
+
+The core project does **not** require:
+
+```text
+Conflict Text
+Conflict Latent
+Conflict Hybrid
+```
+
+comparisons.
+
+Keep:
+
+[
+C=C_{\text{text}}
+]
+
+fixed.
+
+Only revisit conflict representation if the main imagination experiment fails and failure analysis suggests that textual conflict itself is the bottleneck.
+
+---
+
+# 25. Minimal Layer Ablation
+
+Only if latent imagination is useful.
+
+Do not search every Planner layer.
+
+Test approximately:
+
+[
+0.50L,\quad
+0.75L,\quad
+0.90L,\quad
+L.
+]
+
+Only for:
+
+[
+A_{\text{latent}}.
+]
+
+Research question:
+
+> Is useful imaginative/associative information strongest before the Planner's final language-oriented layer?
+
+This is a secondary analysis.
+
+---
+
+# 26. Minimal Communication-Capacity Experiment
+
+Only after latent/hybrid imagination demonstrates value.
+
+Test a small number of latent token capacities:
+
+[
+K\in{1,4,8,16}.
+]
+
+Measure:
+
+```text
+funniness
+novelty
+semantic diversity
+grounding
+```
+
+Research question:
+
+[
+\boxed{
+\text{How much continuous bandwidth does humorous imagination require?}
+}
+]
+
+Do not perform large dimensionality sweeps.
+
+---
+
+# 27. DPO Integration
+
+DPO is not the methodological novelty.
+
+Treat it as preference optimization for caption realization.
+
+Develop the latent architecture using:
+
+[
+G_{\text{SFT}}
+]
+
+first.
+
+After selecting the best protocol among:
+
+[
+T,L,H,
+]
+
+repeat only:
+
+```text
+Textual Imagination baseline
+Best Latent/Hybrid Imagination method
+```
+
+using:
+
+[
+G_{\text{DPO}}.
+]
+
+---
+
+# 28. DPO Research Question
+
+Only answer:
+
+[
+\boxed{
+\text{Does preference-aligned caption realization complement latent imagination?}
+}
+]
+
+For example:
+
+[
+G_{\text{DPO}}(I,C_t,A_z)
+]
+
+versus:
+
+[
+G_{\text{DPO}}(I,C_t,A_t).
+]
+
+Do not launch another DPO-methodology project.
+
+---
+
+# 29. DPO Interpretation
+
+The desired conceptual separation is:
+
+[
+\boxed{
+\text{Planner / Imagination}
+============================
+
+\text{what humorous possibilities to consider}
+}
+]
+
+while:
+
+[
+\boxed{
+\text{DPO Generator}
+====================
+
+\text{which realization humans prefer}
+}
+]
+
+This allows latent planning and preference optimization to occupy distinct roles in the final system.
+
+---
+
+# 30. Evaluation
+
+Keep evaluation focused.
+
+Use four primary dimensions.
+
+## 30.1 Funniness / Human Preference
+
+Primary metric.
+
+Prefer pairwise comparison:
+
+[
+P(Y_A>Y_B).
+]
+
+Use the current project judge pipeline.
+
+Use human evaluation for a final representative subset if feasible.
+
+---
+
+## 30.2 Image Grounding
+
+Verify that latent imagination does not create irrelevant or hallucinated jokes.
+
+---
+
+## 30.3 Semantic Diversity
+
+For multiple captions per image, measure whether the method produces different joke concepts rather than surface paraphrases.
+
+Use semantic embedding diversity in addition to lexical diversity.
+
+---
+
+## 30.4 Novelty / Associative Creativity
+
+Evaluate whether captions exploit less-obvious, relevant associations.
+
+Possible evaluation components:
+
+```text
+judge-based novelty
+remote-association quality
+semantic distance
+association-category diversity
+humor-mechanism diversity
+```
+
+Do not create a large metric zoo.
+
+---
+
+# 31. Main Result Table
+
+The central paper table should be compact.
+
+| Method                                   | Humor ↑ | Grounding ↑ | Diversity ↑ | Novelty ↑ |
+| ---------------------------------------- | ------: | ----------: | ----------: | --------: |
+| Generator Only                           |         |             |             |           |
+| Existing Planner Text                    |         |             |             |           |
+| Conflict + Text Imagination              |         |             |             |           |
+| **Conflict + Latent Imagination**        |         |             |             |           |
+| **Conflict + Text + Latent Imagination** |         |             |             |           |
+
+This should be the primary result table.
+
+---
+
+# 32. Secondary Ablation Table
+
+Only if latent imagination works.
+
+| Association Representation | Humor ↑ | Diversity ↑ | Novelty ↑ |
+| -------------------------- | ------: | ----------: | --------: |
+| Layer 0.50L                |         |             |           |
+| Layer 0.75L                |         |             |           |
+| Layer 0.90L                |         |             |           |
+| Final Layer                |         |             |           |
+
+Then optionally:
+
+| Latent Tokens | Humor ↑ | Diversity ↑ | Novelty ↑ |
+| ------------: | ------: | ----------: | --------: |
+|             1 |         |             |           |
+|             4 |         |             |           |
+|             8 |         |             |           |
+|            16 |         |             |           |
+
+---
+
+# 33. DPO Result Table
+
+Only compare the important conditions.
+
+| Generator | Text Imagination | Best Latent/Hybrid |
+| --------- | ---------------: | -----------------: |
+| SFT       |                  |                    |
+| DPO       |                  |                    |
+
+Report primarily:
+
+```text
+humor preference
+grounding
+semantic diversity
+```
+
+---
+
+# 34. Statistical Analysis
+
+Because methods are evaluated on the same images, use paired statistics.
+
+At minimum:
+
+```text
+paired bootstrap confidence intervals
+```
+
+and/or:
+
+```text
+paired permutation tests
+```
+
+For pairwise judgments report:
+
+```text
+win
+tie
+loss
+confidence interval
+```
+
+Do not rely solely on average judge scores.
+
+---
+
+# 35. Failure Analysis
+
+Inspect representative examples of:
+
+```text
+text imagination succeeds / latent fails
+latent imagination succeeds / text fails
+hybrid succeeds over both
+latent produces irrelevant association
+text causes generic obvious joke
+image grounding failure
+novel remote association success
+```
+
+The key qualitative question is:
+
+> Does latent imagination actually change the conceptual source of the joke, rather than merely changing wording?
+
+---
+
+# 36. Reproducibility
+
+Every experiment must record:
+
+```text
+Planner checkpoint
+Generator checkpoint
+Planner prompts
+Conflict text
+Association text
+association layer
+latent token count
+communication bridge checkpoint
+communication mode
+generation parameters
+random seed
+dataset split
+git commit
+```
+
+Suggested config files:
+
+```text
+configs/
+    generator_only.yaml
+    existing_text.yaml
+    imagination_text.yaml
+    imagination_latent.yaml
+    imagination_hybrid.yaml
+    dpo_comparison.yaml
+```
+
+Results:
+
+```text
+outputs/
+    run_id/
+        config.yaml
+        predictions.jsonl
+        metrics.json
+        summary.md
+```
+
+---
+
+# 37. Suggested Code Additions
+
+Do not rebuild the project.
+
+Add only:
+
+```text
+latent_comm/
+    extractor.py
+    bridge.py
+    injector.py
+
+humor_reasoning/
+    conflict.py
+    imagination.py
+
+experiments/
+    baseline.py
+    imagination_modality.py
+    layer_ablation.py
+    latent_capacity.py
+    dpo_comparison.py
+
+evaluation/
+    evaluate.py
+```
+
+Reuse existing:
+
+```text
+model loaders
+dataset code
+image preprocessing
+SFT code
+DPO code
+evaluation code
+```
+
+where possible.
+
+---
+
+# 38. Essential Tests Only
+
+Add tests for:
+
+```text
+Planner conflict generation
+Planner association generation
+association token span detection
+hidden-state extraction shape
+latent bridge output shape
+latent injection
+attention-mask correctness
+Generator forward pass
+checkpoint/config reproducibility
+```
+
+Do not build an extensive generic latent-communication testing framework.
+
+---
+
+# 39. Final Experimental Execution Order
+
+Follow this order strictly.
+
+## Step 1 — Repository Audit
+
+Document existing Planner → Generator system.
+
+---
+
+## Step 2 — Baseline Reproduction
+
+Run:
+
+```text
+Generator Only
+Existing Planner Text
+```
+
+---
+
+## Step 3 — Conflict–Imagination Text Pipeline
+
+Implement:
+
+[
+I
+\rightarrow
+C_t
+\rightarrow
+A_t
+\rightarrow
+G.
+]
+
+Verify that the existing Planner can perform both stages without retraining.
+
+---
+
+## Step 4 — Latent Interface
+
+Extract:
+
+[
+A_z
+]
+
+and inject it into the Generator.
+
+---
+
+## Step 5 — Core Experiment
+
+Run only:
+
+[
+\boxed{
+T,\quad L,\quad H
+}
+]
+
+where:
+
+```text
+T = Conflict Text + Association Text
+L = Conflict Text + Association Latent
+H = Conflict Text + Association Text + Association Latent
+```
+
+---
+
+## Step 6 — Evaluate
+
+Measure:
+
+```text
+Humor
+Grounding
+Semantic Diversity
+Novelty / Associative Creativity
+```
+
+Run paired statistical analysis.
+
+---
+
+## Step 7 — Limited Layer Ablation
+
+Only if L or H is useful.
+
+---
+
+## Step 8 — Limited Latent Capacity Ablation
+
+Only if latent imagination remains useful.
+
+---
+
+## Step 9 — DPO Comparison
+
+After DPO finishes, run only:
+
+```text
+Text Imagination
+Best Latent/Hybrid Imagination
+```
+
+with the DPO Generator.
+
+---
+
+## Step 10 — Stop
+
+Do not automatically expand into culture, social operators, new agents, or other research directions.
+
+First write the result.
+
+---
+
+# 40. Decision Gates
+
+## Gate 1
+
+If Conflict–Imagination textual decomposition itself cannot reliably be produced by the existing Planner:
+
+improve inference prompting first.
+
+Do not immediately retrain.
+
+---
+
+## Gate 2
+
+If:
+
+[
+L>T
+]
+
+focus on:
+
+> **Latent Imagination**
+
+---
+
+## Gate 3
+
+If:
+
+[
+H>T,L
+]
+
+focus on:
+
+> **Hybrid Explicit–Latent Imagination**
+
+This may be the strongest final architecture.
+
+---
+
+## Gate 4
+
+If:
+
+[
+T>L,H,
+]
+
+analyze whether verbalization acts as beneficial semantic compression.
+
+Do not force latent communication into the final method.
+
+---
+
+# 41. Intended Paper-Level Research Questions
+
+The core paper should answer only:
+
+### RQ1
+
+Does multimodal humorous imagination benefit from continuous latent communication compared with explicit textual imagination?
+
+### RQ2
+
+Are textual and latent imagination representations complementary?
+
+### RQ3
+
+Where in the Planner does the most useful associative representation occur?
+
+### RQ4
+
+How much latent communication capacity is required for humorous imagination?
+
+### RQ5
+
+Does DPO-based preference optimization complement latent imagination?
+
+No additional research questions are required for the core project.
+
+---
+
+# 42. Intended Scientific Story
+
+Do **not** claim:
+
+> We invented latent communication.
+
+Do **not** claim:
+
+> We invented multi-stage humor generation.
+
+Do **not** claim:
+
+> Planner + Generator is new.
+
+Instead, the scientific story should be:
+
+> Recent multimodal humor systems explicitly verbalize conflict-driven imagination before caption generation. However, humorous imagination is inherently divergent and associative, potentially involving multiple weak and competing semantic directions. We investigate whether this stage should be represented and communicated in continuous latent space rather than forced through a textual bottleneck.
+
+The strongest expected result is:
+
+[
+\boxed{
+G(I,C_{\text{text}},A_{\text{latent}})
+
+>
+
+G(I,C_{\text{text}},A_{\text{text}})
+}
+]
+
+or:
+
+[
+\boxed{
+G(I,C_{\text{text}},A_{\text{text}},A_{\text{latent}})
+
+>
+
+G(I,C_{\text{text}},A_{\text{text}}).
+}
+]
+
+If supported, the core conclusion becomes:
+
+> **Multimodal humor benefits from keeping divergent imagination partially unspoken: explicit conflict provides a grounded semantic anchor, while continuous latent representations preserve richer associative information for humorous realization.**
+
+---
+
+# 43. Immediate Codex Deliverables
+
+Do not implement the complete project at once.
+
+First complete only these deliverables.
+
+## Deliverable 1 — Repository Audit
+
+Create:
+
+```text
+docs/current_pipeline.md
+```
+
+Document:
+
+* existing checkpoints;
+* current prompts;
+* model classes;
+* dataset flow;
+* Generator inputs;
+* evaluation pipeline;
+* DPO status.
+
+---
+
+## Deliverable 2 — Proposed Conflict–Imagination Pipeline
+
+Create:
+
+```text
+docs/conflict_imagination_design.md
+```
+
+Explain exactly how the current Planner checkpoint will be reused for:
+
+```text
+Conflict Extraction
+→ Imagination / Association
+```
+
+without retraining.
+
+Provide example prompts and expected outputs.
+
+---
+
+## Deliverable 3 — Latent Interface Design
+
+Create:
+
+```text
+docs/latent_imagination_interface.md
+```
+
+Specify:
+
+* which association tokens/states are extracted;
+* which Planner layer is initially used;
+* pooling/token strategy;
+* bridge architecture;
+* Generator injection location;
+* attention-mask handling;
+* expected tensor shapes.
+
+---
+
+## Deliverable 4 — Minimal Prototype
+
+Implement a small-validation-set prototype supporting exactly:
+
+```text
+T — Text Imagination
+L — Latent Imagination
+H — Hybrid Imagination
+```
+
+Do not implement additional ablations yet.
+
+---
+
+## Deliverable 5 — Prototype Report
+
+Create:
+
+```text
+docs/prototype_report.md
+```
+
+Include:
+
+```text
+tensor shapes
+GPU memory usage
+example conflict text
+example association text
+latent statistics
+text-imagination caption
+latent-imagination caption
+hybrid-imagination caption
+implementation limitations
+```
+
+Only after these five deliverables are correct should the full evaluation begin.
+
+---
+
+# 44. Final Engineering Principle
+
+The project must preserve the already trained two-model system while modernizing its reasoning structure.
+
+The final conceptual architecture is:
+
+[
+\boxed{
+\text{Existing Planner 7B}
++
+\text{Conflict–Imagination decomposition}
++
+\text{Latent/Hybrid Imagination}
++
+\text{Existing Generator 7B}
++
+\text{optional DPO realization}
+}
+]
+
+The main research variable is:
+
+[
+\boxed{
+\text{representation of imagination}
+}
+]
+
+not:
+
+```text
+number of agents
+number of reasoning stages
+model size
+communication feasibility
+culture
+RAG
+or preference-learning algorithm.
+```
+
+Keep the implementation focused on this single scientific question.

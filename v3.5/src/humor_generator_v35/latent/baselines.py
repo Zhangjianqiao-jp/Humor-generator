@@ -10,6 +10,7 @@ class Baseline(str, Enum):
     STATEBRIDGE = "statebridge"
     LEARNED = "learned_latent"
     TYPED = "typed_learned_latent"
+    RECEIVER_CROSS_ATTENTION = "receiver_cross_attention"
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,11 @@ BASELINES = {
     ),
     Baseline.TYPED: BaselineSpec(
         Baseline.TYPED, True, ("conflicts", "local", "global"), "typed_continuous_prefix"
+    ),
+    Baseline.RECEIVER_CROSS_ATTENTION: BaselineSpec(
+        Baseline.RECEIVER_CROSS_ATTENTION, True,
+        ("grounding_anchor", "full_conflict_states", "full_local_states", "full_global_states"),
+        "gated_cross_attention",
     ),
 }
 

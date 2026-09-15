@@ -1,0 +1,90 @@
+experiment:
+  name: pretrained_7b_cross_attention_caption_public_homer
+  route: homer_public_code_bridge
+  baseline: receiver_cross_attention
+  receiver: pretrained_qwen_7b
+  model_route: pretrained_only
+  trainable_components: [bridge]
+
+# This config is intentionally separate from the historical A5 config.  It is
+# the only caption-stage config allowed to consume the current 362-contest
+# adapter-free trace/context route.
+protocol:
+  bridge_prompt_track: public_code_exact_caption_latent_plan_replacement_v1
+  upstream_homer_prompt_track: public_code_exact_text
+  stage_order:
+    - extractor.conflict
+    - imaginator.global
+    - imaginator.local
+    - imaginator.summary
+    - retrieval.offline
+    - generator.select_conflict
+    - generator.select_entities
+    - generator.seeded_dfs_path
+    - generator.caption
+  caption_contract: ["##Caption", "##Explanation"]
+  training_target_policy: source_caption_only_no_fabricated_explanation
+  planner_generator_context: same_cached_homer_context
+
+model:
+  name: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+  model_manifest: manifests/local_qwen2_5_vl_7b.json
+  adapter: null
+  planner_adapter: null
+  generator_adapter: null
+  frozen: true
+  min_visual_tokens: 256
+  max_visual_tokens: 1280
+
+data:
+  data_version: homer_pretrained_7b_public_release_362
+  dataset: data/processed/homer_pretrained_7b_bridge_362
+  population_manifest: manifests/homer_population_public_release_362.json
+  trace_input_manifest: data/processed/homer_pretrained_7b_public_release_362/trace_inputs.jsonl
+  trace_index: data/cache/homer_pretrained_7b_planner_traces/index.jsonl
+  context_index: data/cache/homer_pretrained_7b_homer_context/index.jsonl
+  caption_view_policy: public_release_source_rows_top3_for_bridge_training_only
+  target_policy: source_caption_only_no_fabricated_explanation
+
+bridge:
+  layer_indices: [6, 13, 20, 27]
+  bottleneck_dim: 48
+  heads: 4
+  gate_init: 0.1
+  memory_policy: full_typed_states_no_truncation
+  channel_fusion: learned
+  projection_mode: per_channel
+
+loss:
+  caption_nll: 1.0
+  text_teacher_forward_kl: 0.5
+  matched_shuffled_margin: 0.5
+  margin: 0.2
+  temperature: 1.0
+
+training:
+  stage: caption
+  planner_route: pretrained_7b
+  generator_route: pretrained_7b
+  bridge_only: true
+  planner_frozen: true
+  generator_frozen: true
+  seed: 20260906
+  epochs: 5
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  gradient_accumulation: 4
+  max_grad_norm: 1.0
+  max_target_tokens: 128
+  early_stopping_patience: 2
+  early_stopping_min_delta: 0.002
+  log_every_examples: 16
+  max_train_clusters: null
+  max_validation_clusters: null
+
+gate:
+  min_validation_gap: 0.02
+  min_fraction_gap_gt_0: 0.60
+  min_nll_improvement: 0.01
+  max_relative_update_norm: 0.25

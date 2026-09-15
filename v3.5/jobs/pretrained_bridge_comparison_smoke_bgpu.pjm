@@ -1,0 +1,115 @@
+#!/bin/sh
+# Real caption-generation engineering smoke for the current public-HOMER route.
+# It exercises both conditions on two official test images, one trial and one
+# candidate.  It does not train or call a judge and is not a quality result.
+# b-batch shared GPU was validated by v35bgpu5; the scheduler supplies CUDA
+# visibility, so this script intentionally does not set CUDA_VISIBLE_DEVICES.
+#PJM -L rscgrp=b-batch
+#PJM -L gpu=1
+#PJM -L elapse=00:20:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+SMOKE_OUTPUT="${SMOKE_OUTPUT:?submit with -x SMOKE_OUTPUT=...}"
+BRIDGE_CHECKPOINT="${BRIDGE_CHECKPOINT:?submit with -x BRIDGE_CHECKPOINT=...}"
+mkdir -p "$SMOKE_OUTPUT"
+
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+CONFIG=configs/pilot/cross_attention_caption_pretrained_public.yaml
+DATA=data/processed/homer_pretrained_7b_public_release_362
+
+test "${PJM_EXEC_POLICY:-}" = share
+python scripts/check_cuda_resource.py > "$SMOKE_OUTPUT/cuda_resource.json"
+python scripts/check_pretrained_route.py \
+  --require-data-ready --require-context-ready --require-bridge-data-ready \
+  > "$SMOKE_OUTPUT/route_gate.json"
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config "$CONFIG" \
+  --output "$SMOKE_OUTPUT/bridge_input_gate.json"
+
+python scripts/generate_pretrained_bridge_comparison.py \
+  --config "$CONFIG" --dataset "$DATA" --split test \
+  --condition text_homer_context_replay \
+  --trials 1 --candidates 1 --base-seed 20260910 --trial-stride 100 \
+  --max-new-tokens 32 --max-rows 2 \
+  --output "$SMOKE_OUTPUT/text_homer_context_replay.jsonl"
+
+python scripts/generate_pretrained_bridge_comparison.py \
+  --config "$CONFIG" --dataset "$DATA" --split test \
+  --condition latent_bridge --checkpoint "$BRIDGE_CHECKPOINT" \
+  --trials 1 --candidates 1 --base-seed 20260910 --trial-stride 100 \
+  --max-new-tokens 32 --max-rows 2 \
+  --output "$SMOKE_OUTPUT/latent_bridge.jsonl"
+
+cat "$SMOKE_OUTPUT/text_homer_context_replay.jsonl" \
+    "$SMOKE_OUTPUT/latent_bridge.jsonl" > "$SMOKE_OUTPUT/generations.jsonl"
+python - "$SMOKE_OUTPUT/cuda_resource.json" \
+  "$SMOKE_OUTPUT/route_gate.json" \
+  "$SMOKE_OUTPUT/bridge_input_gate.json" \
+  "$SMOKE_OUTPUT/generations.jsonl" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+cuda, route, bridge = [json.loads(Path(path).read_text()) for path in sys.argv[1:4]]
+rows = [json.loads(line) for line in Path(sys.argv[4]).read_text().splitlines() if line.strip()]
+if cuda.get("status") != "pass":
+    raise SystemExit(f"CUDA resource gate did not pass: {cuda}")
+if route.get("status") != "pass":
+    raise SystemExit(f"public route gate did not pass: {route}")
+if bridge.get("status") != "pass":
+    raise SystemExit(f"bridge input gate did not pass: {bridge}")
+if len(rows) != 4:
+    raise SystemExit(f"expected 4 smoke rows, got {len(rows)}")
+systems = {row.get("system_id") for row in rows}
+if systems != {"text_homer_context_replay", "latent_bridge"}:
+    raise SystemExit(f"unexpected systems: {systems}")
+keys = set()
+for row in rows:
+    required = {"system_id", "image_id", "image_sha256", "split", "generation_seed",
+                "trial", "candidate_index", "candidate_count", "caption"}
+    missing = sorted(required - set(row))
+    if missing:
+        raise SystemExit(f"row missing fields {missing}: {row}")
+    if row["split"] != "test" or row["trial"] != 0 or row["candidate_index"] != 0:
+        raise SystemExit(f"invalid smoke schedule row: {row}")
+    if row["generation_seed"] != 20260910 or row["candidate_count"] != 1:
+        raise SystemExit(f"invalid smoke seed/count: {row}")
+    if not isinstance(row["caption"], str) or not row["caption"].strip():
+        raise SystemExit(f"empty smoke caption: {row}")
+    key = (row["system_id"], row["image_id"])
+    if key in keys:
+        raise SystemExit(f"duplicate smoke key: {key}")
+    keys.add(key)
+if len({row["image_id"] for row in rows}) != 2:
+    raise SystemExit("smoke did not cover two images")
+if any(row["system_id"] == "latent_bridge" and not row.get("checkpoint_sha256") for row in rows):
+    raise SystemExit("latent smoke rows lack checkpoint provenance")
+if any(row["system_id"] == "text_homer_context_replay" and row.get("checkpoint_sha256") for row in rows):
+    raise SystemExit("text smoke rows unexpectedly carry checkpoint provenance")
+Path(sys.argv[4]).with_name("smoke_gate.json").write_text(json.dumps({
+    "status": "pass",
+    "scientific_training": False,
+    "records": len(rows),
+    "images": 2,
+    "conditions": sorted(systems),
+    "trials": 1,
+    "candidates_per_image": 1,
+    "judge": "not_run",
+}, indent=2, sort_keys=True) + "\n")
+PY
+
+touch "$SMOKE_OUTPUT/complete.json"

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import random
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import torch
 from torch import nn
@@ -25,6 +25,14 @@ from .memory_safe import (
     caption_only_logits,
     inject_latent_slots,
     inject_position_ids,
+)
+from .public_bridge import (
+    PUBLIC_BRIDGE_PROMPT_TRACK,
+    PublicHomerContext,
+    public_latent_caption_messages,
+    public_text_caption_messages,
+    target_caption_text,
+    validate_row_context,
 )
 
 
@@ -112,6 +120,132 @@ def hard_negative_cluster_map(
     }
 
 
+def length_matched_channel_donors(
+    target_rows: list[dict[str, Any]],
+    donor_rows: list[dict[str, Any]],
+    *,
+    root: Path,
+    trace_index: dict[str, dict[str, Any]],
+    allow_target_donor_overlap: bool = False,
+) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
+    """Select per-channel hard negatives while controlling state length.
+
+    The semantic channel objective compares sequence log-probabilities after a
+    channel swap.  A donor with a different number of memory tokens changes
+    the attention candidates (and, for a flat softmax, its denominator), so a
+    raw gap would mix semantic and length effects.  Length is therefore the
+    primary matching key; only ties use same-source and description TF-IDF
+    similarity.  ``allow_target_donor_overlap`` is used for training, where
+    the donor pool is the same split: the target cluster itself is still
+    excluded from its candidate list.
+    """
+    channels = tuple(TypedLatentBridge.channel_order)
+    target_clusters = sorted({str(row["cluster_id"]) for row in target_rows})
+    donor_clusters = sorted({str(row["cluster_id"]) for row in donor_rows})
+    if not target_clusters or not donor_clusters:
+        raise ValueError("channel donor selection requires non-empty target and donor clusters")
+    if not allow_target_donor_overlap and set(target_clusters) & set(donor_clusters):
+        raise ValueError("target and donor clusters overlap")
+    missing = sorted(set(target_clusters + donor_clusters) - set(trace_index))
+    if missing:
+        raise ValueError(f"channel donor traces missing: {missing[:5]}")
+
+    grouped: dict[str, set[str]] = defaultdict(set)
+    for row in target_rows + donor_rows:
+        grouped[str(row["cluster_id"])].add(str(row["standard_description"]))
+    descriptions = {
+        cluster: " ".join(sorted(grouped[cluster]))
+        for cluster in target_clusters + donor_clusters
+    }
+    # Keep the target and donor blocks separate even when training uses the
+    # same split for both.  Duplicate cluster IDs are intentional here: the
+    # donor similarity matrix must retain one column per donor candidate.
+    all_clusters = target_clusters + donor_clusters
+    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+    matrix = vectorizer.fit_transform([descriptions[cluster] for cluster in all_clusters])
+    target_matrix = matrix[: len(target_clusters)]
+    donor_matrix = matrix[len(target_clusters):]
+    similarity = linear_kernel(target_matrix, donor_matrix)
+
+    def conflict_signature(cluster: str) -> tuple[str, ...]:
+        plan = plan_from_record(trace_index[cluster]["plan"])
+        return tuple(sorted(item.render().casefold() for item in plan.conflicts))
+
+    signatures = {cluster: conflict_signature(cluster) for cluster in all_clusters}
+    lengths: dict[str, dict[str, int]] = {}
+    for cluster in set(all_clusters):
+        loaded = load_trace(
+            root / trace_index[cluster]["trace_path"],
+            expected_sha256=trace_index[cluster]["trace_sha256"],
+        )
+        lengths[cluster] = {
+            channel: int(loaded[channel].states.shape[1]) for channel in channels
+        }
+    source_sets = {
+        cluster: {
+            str(row.get("dataset", ""))
+            for row in target_rows + donor_rows
+            if str(row["cluster_id"]) == cluster
+        }
+        for cluster in all_clusters
+    }
+
+    result: dict[str, dict[str, str]] = {}
+    diagnostics: dict[str, dict[str, float]] = {
+        channel: {"exact_length": 0.0, "length_delta_sum": 0.0}
+        for channel in channels
+    }
+    donor_index = {cluster: index for index, cluster in enumerate(donor_clusters)}
+    for target_index, target in enumerate(target_clusters):
+        candidates = [
+            donor for donor in donor_clusters
+            if donor != target and signatures[donor] != signatures[target]
+        ]
+        if not candidates:
+            raise RuntimeError(f"no different-conflict donor for {target}")
+        result[target] = {}
+        for channel in channels:
+            target_length = lengths[target][channel]
+            min_delta = min(
+                abs(lengths[donor][channel] - target_length) for donor in candidates
+            )
+            length_pool = [
+                donor for donor in candidates
+                if abs(lengths[donor][channel] - target_length) == min_delta
+            ]
+            shared_source_pool = [
+                donor for donor in length_pool
+                if source_sets[target] & source_sets[donor]
+            ]
+            ranking_pool = shared_source_pool or length_pool
+            donor = max(
+                ranking_pool,
+                key=lambda candidate: (
+                    float(similarity[target_index, donor_index[candidate]])
+                    if candidate in donor_index else 0.0,
+                    candidate,
+                ),
+            )
+            result[target][channel] = donor
+            diagnostics[channel]["exact_length"] += float(min_delta == 0)
+            diagnostics[channel]["length_delta_sum"] += float(min_delta)
+
+    count = float(len(target_clusters))
+    return result, {
+        "policy": "different_conflict_length_priority_per_channel_same_source_tfidf",
+        "allow_target_donor_overlap": bool(allow_target_donor_overlap),
+        "target_clusters": count,
+        "donor_pool_clusters": float(len(donor_clusters)),
+        "channels": {
+            channel: {
+                "exact_length_fraction": values["exact_length"] / count,
+                "mean_absolute_length_delta": values["length_delta_sum"] / count,
+            }
+            for channel, values in diagnostics.items()
+        },
+    }
+
+
 def prepare_example(row: dict[str, Any], trace_record: dict[str, Any], *, seed: int) -> PreparedExample:
     del seed  # Retained in the public call signature for deterministic callers.
     plan = plan_from_record(trace_record["plan"])
@@ -171,6 +305,8 @@ class FrozenReceiverBridgeTask:
         trace_index: dict[str, dict[str, Any]],
         loss_config: dict[str, float],
         max_caption_tokens: int,
+        prompt_mode: str = "legacy",
+        context_index: Mapping[str, PublicHomerContext] | None = None,
     ) -> None:
         self.backend = backend
         self.bridge = bridge
@@ -178,6 +314,12 @@ class FrozenReceiverBridgeTask:
         self.trace_index = trace_index
         self.loss_config = loss_config
         self.max_caption_tokens = max_caption_tokens
+        self.prompt_mode = str(prompt_mode)
+        if self.prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
+            raise ValueError(f"unsupported bridge prompt_mode: {self.prompt_mode}")
+        self.context_index = dict(context_index or {})
+        if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK and not self.context_index:
+            raise ValueError("current HOMER bridge mode requires a non-empty context index")
         for parameter in backend.model.parameters():
             parameter.requires_grad_(False)
         if any(parameter.requires_grad for parameter in backend.model.parameters()):
@@ -206,6 +348,38 @@ class FrozenReceiverBridgeTask:
             )
             return self.bridge(joined)
         raise TypeError(f"unsupported bridge: {type(self.bridge).__name__}")
+
+    def _caption_prompts(
+        self, example: PreparedExample, states: dict[str, AlignedMessageStates]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+        """Return latent prompt, text-teacher prompt and identical target.
+
+        The public route keeps the official HOMER caption system prompt and
+        selected conflict/path block.  The latent student receives the same
+        request with that block removed; the bridge carries the cached
+        Planner plan instead of a second textual copy.
+        """
+        if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK:
+            cluster = str(example.row["cluster_id"])
+            context = self.context_index.get(cluster)
+            if context is None:
+                raise ValueError(f"missing current HOMER context for {cluster}")
+            validate_row_context(example.row, context)
+            target = target_caption_text(example.row)
+            return (
+                public_latent_caption_messages(context),
+                public_text_caption_messages(context),
+                target,
+            )
+        target = example.row["caption"]
+        return (
+            latent_messages(example.row["image"]),
+            full_plan_text_messages(
+                example.row["image"],
+                {name: states[name].semantics for name in TypedLatentBridge.channel_order},
+            ),
+            target,
+        )
 
     def _latent_logits(
         self,
@@ -238,11 +412,7 @@ class FrozenReceiverBridgeTask:
     def prepare(self, example: PreparedExample) -> tuple[Any, ...]:
         caption = example.row["caption"]
         matched_states = self._states(example.row["cluster_id"])
-        text_prompt = full_plan_text_messages(
-            example.row["image"],
-            {name: matched_states[name].semantics for name in TypedLatentBridge.channel_order},
-        )
-        latent_prompt = latent_messages(example.row["image"])
+        latent_prompt, text_prompt, caption = self._caption_prompts(example, matched_states)
         latent_prefix, latent_full, latent_targets = _prompt_and_full(
             self.backend, latent_prompt, caption
         )
@@ -315,6 +485,9 @@ class FrozenReceiverBridgeTask:
             )
             coefficient = torch.sigmoid(-matched0 + shuffled0 + margin).detach()
             margin_value = F.softplus(-matched0 + shuffled0 + margin).mean()
+            gap_value = (matched0 - shuffled0).mean()
+            fraction_gap_positive = (matched0 > shuffled0).float().mean()
+            fraction_gap_over_margin = ((matched0 - shuffled0) > margin).float().mean()
 
         matched_logits = self._latent_logits(
             embeddings, attention_mask, positions,
@@ -330,13 +503,15 @@ class FrozenReceiverBridgeTask:
                 temperature=float(self.loss_config["temperature"]),
             )
         matched_logp = sequence_log_probability(matched_logits, targets)
+        metric_caption_nll = caption_nll.detach()
+        metric_teacher_kl = teacher_kl.detach()
         matched_loss = (
             float(self.loss_config["caption_nll"]) * caption_nll
             + float(self.loss_config["text_teacher_forward_kl"]) * teacher_kl
             - shuffled_weight * (coefficient * matched_logp).mean()
         )
         (loss_scale * matched_loss).backward()
-        del matched_logits, matched_loss
+        del caption_nll, teacher_kl, matched_logp, matched_logits, matched_loss
 
         shuffled_logits = self._latent_logits(
             embeddings, attention_mask, positions,
@@ -345,15 +520,20 @@ class FrozenReceiverBridgeTask:
         shuffled_logp = sequence_log_probability(shuffled_logits, targets)
         (loss_scale * shuffled_weight * (coefficient * shuffled_logp).mean()).backward()
         total = (
-            float(self.loss_config["caption_nll"]) * caption_nll.detach()
-            + float(self.loss_config["text_teacher_forward_kl"]) * teacher_kl.detach()
+            float(self.loss_config["caption_nll"]) * metric_caption_nll
+            + float(self.loss_config["text_teacher_forward_kl"]) * metric_teacher_kl
             + shuffled_weight * margin_value
         )
         return {
             "total": float(total.cpu()),
-            "caption_nll": float(caption_nll.detach().cpu()),
-            "teacher_kl": float(teacher_kl.detach().cpu()),
+            "caption_nll": float(metric_caption_nll.cpu()),
+            "teacher_kl": float(metric_teacher_kl.cpu()),
             "shuffled_margin": float(margin_value.cpu()),
+            "matched_logp": float(matched0.mean().cpu()),
+            "shuffled_logp": float(shuffled0.mean().cpu()),
+            "matched_minus_shuffled_logp": float(gap_value.cpu()),
+            "fraction_gap_gt_0": float(fraction_gap_positive.cpu()),
+            "fraction_gap_gt_margin": float(fraction_gap_over_margin.cpu()),
         }
 
     @torch.no_grad()
@@ -393,6 +573,7 @@ class FrozenReceiverBridgeTask:
         margin_loss = F.softplus(
             -matched_logp + shuffled_logp + float(self.loss_config["margin"])
         ).mean()
+        gap = (matched_logp - shuffled_logp).mean()
         total = (
             float(self.loss_config["caption_nll"]) * nll
             + float(self.loss_config["text_teacher_forward_kl"]) * kl
@@ -403,6 +584,14 @@ class FrozenReceiverBridgeTask:
             "caption_nll": float(nll.cpu()),
             "teacher_kl": float(kl.cpu()),
             "shuffled_margin": float(margin_loss.cpu()),
+            "matched_logp": float(matched_logp.mean().cpu()),
+            "shuffled_logp": float(shuffled_logp.mean().cpu()),
+            "matched_minus_shuffled_logp": float(gap.cpu()),
+            "fraction_gap_gt_0": float((matched_logp > shuffled_logp).float().mean().cpu()),
+            "fraction_gap_gt_margin": float(
+                ((matched_logp - shuffled_logp) > float(self.loss_config["margin"]))
+                .float().mean().cpu()
+            ),
         }
 
 

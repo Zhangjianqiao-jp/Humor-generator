@@ -1,0 +1,46 @@
+#!/bin/sh
+# Current HOMER + latent-bridge caption training.
+# This job is deliberately separate from the historical v3.5/A5 trainer.
+# Submit only after the trace/context/data gates in the preceding job pass.
+#PJM -L rscgrp=c-batch
+#PJM -L gpu=1
+#PJM -L elapse=04:00:00
+#PJM -j
+#PJM -S
+
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+
+config=configs/pilot/cross_attention_caption_pretrained_public.yaml
+output="${BRIDGE_OUTPUT:?submit with -x BRIDGE_OUTPUT=...}"
+
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config "$config" \
+  --output "$output/bridge_input_gate.json"
+python scripts/verify_pretrained_homer_traces.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --cache data/cache/homer_pretrained_7b_planner_traces \
+  --output "$output/trace_gate.json"
+python scripts/build_pretrained_bridge_dataset.py \
+  --dataset data/processed/homer_pretrained_7b_public_release_362 \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --context-index data/cache/homer_pretrained_7b_homer_context/index.jsonl \
+  --output data/processed/homer_pretrained_7b_bridge_362 \
+  --force
+python scripts/verify_pretrained_bridge_inputs.py \
+  --config "$config" \
+  --output "$output/bridge_input_gate_after_rebuild.json"
+python scripts/train_bridge.py --config "$config" --output "$output"
+test -s "$output/complete.json"

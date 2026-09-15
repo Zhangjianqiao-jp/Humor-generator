@@ -144,3 +144,35 @@ def test_five_shot_calibration_is_validated_and_hashed() -> None:
     )
     assert packets[0]["calibration_examples"] == examples
     assert len(mapping[0]["calibration_sha256"]) == 64
+
+
+def test_mirrored_packets_are_collapsed_before_statistical_inference() -> None:
+    packets, mapping = build_group3_packets(
+        generations(), comparisons=[("text_homer", "learned_latent")],
+        seed=11, mirror_sides=True,
+    )
+    decisions = {}
+    for packet, hidden in zip(packets, mapping):
+        # Always click A. Each mirror pair therefore collapses to a tie rather
+        # than being counted as two independent, contradictory observations.
+        decisions[packet["blind_id"]] = {
+            "overall": "A", "best_pick": "A", "absolute_A": "good",
+            "absolute_B": "weak", "best_A_index": 1, "best_B_index": 1,
+            "candidate_labels_A": ["good"] * 3,
+            "candidate_labels_B": ["weak"] * 3,
+        }
+    report = aggregate_group3(mapping, [{
+        "rater_id": "position-biased-judge",
+        "judge_metadata": {
+            "provider": "test", "model": "test", "version_or_date": "1",
+            "temperature": 0, "prompt_sha256": "0" * 64,
+        },
+        "decisions": decisions,
+    }])
+    comparison = report["comparisons"][0]
+    assert comparison["relative_metrics"]["overall"]["rater_averaged_win_rate_ties_half"] == 0.5
+    assert all(
+        summary["candidate_mirror_disagreement_rate"] == 1.0
+        for summary in comparison["absolute_quality"].values()
+    )
+    assert report["mirror_policy"].startswith("collapse A/B orientations")

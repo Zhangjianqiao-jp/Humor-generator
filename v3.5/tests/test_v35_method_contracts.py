@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
+import yaml
 
 from humor_generator_v35.evaluation.diversity import candidate_set_metrics, summarize_diversity
 from humor_generator_v35.latent.budget import channel_causal_tail, concatenate_budgeted
 from humor_generator_v35.latent.state_capture import AlignedMessageStates
+from humor_generator_v35.latent.bridges import nearest_vocabulary_embeddings
 from humor_generator_v35.training.formal_bridge import (
     full_plan_text_messages, hard_negative_cluster_map, latent_messages,
 )
+from humor_generator_v35.training.cross_attention_bridge import semantic_recovery_messages
+from humor_generator_v35.data.clustered import _finalists
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _states(length: int, offset: int) -> AlignedMessageStates:
@@ -26,6 +35,21 @@ def test_channel_budget_never_erases_an_early_channel() -> None:
     assert joined.token_ids[0, :3].tolist() == [11, 12, 13]
 
 
+def test_unknown_electronic_sheep_finalists_are_not_split_into_characters() -> None:
+    assert _finalists({"official_newyorker_finalists": "UNKNOWN"}, 3) == []
+    assert _finalists({"official_newyorker_finalists": ["nan", "A real caption"]}, 3) == [
+        {"caption": "A real caption", "caption_rank": 1, "caption_score": None}
+    ]
+
+
+def test_nearest_vocabulary_control_preserves_shape_and_uses_exact_rows() -> None:
+    embeddings = torch.tensor([[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0]])
+    slots = torch.tensor([[[0.9, 0.1], [-0.8, 0.1]]])
+    quantized, token_ids = nearest_vocabulary_embeddings(slots, embeddings, chunk_size=2)
+    assert token_ids.tolist() == [[0, 2]]
+    assert torch.equal(quantized, embeddings[token_ids])
+
+
 def test_sft_receiver_conditions_always_include_the_image() -> None:
     image = "/tmp/example.jpg"
     latent = latent_messages(image)
@@ -37,6 +61,19 @@ def test_sft_receiver_conditions_always_include_the_image() -> None:
         assert content[0] == {"type": "image", "image": image}
     assert "Humor plan:" not in latent[0]["content"][1]["text"]
     assert "Humor plan:" in text[0]["content"][1]["text"]
+
+
+def test_a4_semantic_recovery_can_explicitly_disable_image_shortcut() -> None:
+    messages = semantic_recovery_messages(
+        "/tmp/example.jpg", "conflict", include_image=False
+    )
+    assert messages[0]["content"] == [{
+        "type": "text",
+        "text": (
+            "Recover only the exact conflict field carried by the external memory. "
+            "Preserve every word and output only that field, without a heading or explanation."
+        ),
+    }]
 
 
 def _plan(left: str, right: str) -> dict:
@@ -84,3 +121,185 @@ def test_diversity_reports_quality_conditioned_and_angle_endpoints() -> None:
     report = summarize_diversity(rows, min_candidates=3)
     assert report["per_cluster"][0]["good_only"] is not None
     assert report["per_cluster"][0]["human_angle_coverage"] == 2
+
+
+def test_formal_jobs_use_native_full_gpu_contract_and_current_p1_path() -> None:
+    training = (ROOT / "jobs/formal_bridge_train.pjm").read_text()
+    generation = (ROOT / "jobs/pilot_validation_generation.pjm").read_text()
+    fallback = (ROOT / "scripts/submit_formal_bridge_matrix.sh").read_text()
+    for script in (training, generation):
+        assert "PYTORCH_ALLOC_CONF=backend:native" in script
+        assert "expandable_segments" not in script
+    expected = "outputs/pilot/learned_sft_kl_visualcap_v2"
+    assert expected in generation
+    assert expected in fallback
+
+
+def test_all_formal_comparison_configs_share_visual_token_budget() -> None:
+    configs = [
+        *sorted((ROOT / "configs/pilot").glob("*.yaml")),
+        *sorted((ROOT / "configs/formal").glob("*.yaml")),
+    ]
+    budgets = set()
+    for path in configs:
+        model = yaml.safe_load(path.read_text())["model"]
+        budgets.add((model.get("min_visual_tokens"), model.get("max_visual_tokens")))
+    assert budgets == {(256, 1280)}
+
+
+def test_a4_config_removes_shortcuts_and_requires_donor_reconstruction() -> None:
+    config = yaml.safe_load(
+        (ROOT / "configs/pilot/cross_attention_semantic_phase_a4.yaml").read_text()
+    )
+    assert config["loss"]["semantic_objective"] == "channel_isolated_v4"
+    assert config["loss"]["channel_visibility"] == "target_only"
+    assert config["loss"]["counterfactual_reconstruction"] > 0
+    assert config["training"]["semantic_prompt_include_image"] is False
+    assert config["model"]["frozen"] is True
+
+
+def test_a5_repair_config_uses_role_specific_projection_and_receiver_alignment() -> None:
+    config = yaml.safe_load(
+        (ROOT / "configs/pilot/cross_attention_semantic_phase_a5.yaml").read_text()
+    )
+    assert config["loss"]["semantic_objective"] == "channel_isolated_v5"
+    assert config["bridge"]["projection_mode"] == "per_channel"
+    assert config["loss"]["channel_visibility"] == "target_only"
+    assert config["loss"]["semantic_target_alignment"] > 0
+    assert config["training"]["semantic_prompt_include_image"] is False
+    assert config["training"]["max_train_clusters"] is None
+    assert config["training"]["max_validation_clusters"] is None
+
+
+def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
+    smoke = (ROOT / "scripts/real_trace_bridge_smoke.py").read_text()
+    assert "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples" in smoke
+    assert "stress = max(selected" in smoke
+    assert "memory_stress = max(selected" in smoke
+    assert "for row in (stress, memory_stress)" in smoke
+    assert 'config["bridge"]["layer_indices"]' in smoke
+    assert 'config["bridge"]["receiver_layers"]' not in smoke
+    assert "configure_frozen_receiver" in smoke
+    assert "load_context_index" in smoke
+    assert "validate_row_context" in smoke
+    assert "prompt_mode=prompt_mode" in smoke
+    # Donor selection branches on the experiment baseline and must not read
+    # it before the assignment (a prior GPU submission failed at this point).
+    assert smoke.index('baseline = config["experiment"]["baseline"]') < smoke.index(
+        "semantic_channel_training = ("
+    )
+
+
+def test_formal_job_is_fail_closed_in_smoke_data_gpu_train_order() -> None:
+    job = (ROOT / "jobs/formal_bridge_train.pjm").read_text()
+    preflight = job.index("run_formal_preflight.py")
+    resource = job.index("check_cuda_resource.py")
+    stress = job.index("real_trace_bridge_smoke.py")
+    training = job.index("train_bridge.py")
+    assert preflight < resource < stress < training
+    checker = (ROOT / "scripts/run_formal_preflight.py").read_text()
+    assert checker.index('"scripts/train_bridge.py", "--help"') < checker.index(
+        '"scripts/verify_clustered_dataset.py"'
+    )
+    assert '"scripts/check_trace_completion.py"' in checker
+
+
+def test_current_pretrained_bridge_smoke_is_public_route_and_training_free() -> None:
+    job = (ROOT / "jobs/pretrained_bridge_real_trace_smoke_bsimplex.pjm").read_text()
+    assert "#PJM -L rscgrp=b-batch" in job
+    assert "#PJM -L node=1" in job
+    assert "#PJM -L gpu=1" not in job
+    assert "cross_attention_caption_pretrained_public.yaml" in job
+    assert "--require-context-ready --require-bridge-data-ready" in job
+    assert "run_pretrained_bridge_preflight.py" in job
+    assert "real_trace_bridge_smoke.py" in job
+    assert "scientific_training" in job
+    assert "train_bridge.py" not in job
+
+
+def test_a4_smoke_is_separate_and_has_no_scientific_training() -> None:
+    smoke = (ROOT / "jobs/cross_attention_phase_a4_smoke.pjm").read_text()
+    assert "cross_attention_semantic_phase_a4.yaml" in smoke
+    assert "real_trace_bridge_smoke.py" in smoke
+    assert "validate_phase_a4_smoke.py" in smoke
+    assert "train_bridge.py" not in smoke
+    assert "run_formal_preflight.py" in smoke
+    assert "PYTORCH_ALLOC_CONF=backend:native" in smoke
+    assert "CUDA_VISIBLE_DEVICES=0" in smoke
+
+
+def test_a4_formal_job_is_strict_and_reads_its_own_gate() -> None:
+    job = (ROOT / "jobs/cross_attention_phase_a4.pjm").read_text()
+    assert "#PJM -L rscgrp=c-batch" in job
+    assert "#PJM -L gpu=1" in job
+    assert "#PJM -L node=1" not in job
+    assert "#PJM -L exec-policy=simplex" not in job
+    assert "cross_attention_semantic_phase_a4_cbatch_retry1" in job
+    assert "check_semantic_training_gate.py" in job
+    assert '"$output/semantic_gate.json"' in job
+    assert 'open(sys.argv[1])' in job
+    assert "outputs/pilot/cross_attention_semantic_phase_a4/semantic_gate.json" not in job
+    assert job.index("run_formal_preflight.py") < job.index("train_bridge.py")
+    assert job.index("train_bridge.py") < job.index("check_semantic_training_gate.py")
+
+
+def test_a4_outer_evaluator_is_independent_and_fail_closed() -> None:
+    evaluator = (ROOT / "scripts/run_outer_semantic_confirmation_a4.py").read_text()
+    validator = (ROOT / "scripts/validate_outer_semantic_confirmation_a4.py").read_text()
+    job = (ROOT / "jobs/outer_semantic_confirmation_a4.pjm").read_text()
+    smoke = (ROOT / "jobs/outer_semantic_confirmation_a4_smoke.pjm").read_text()
+    assert "channel_isolated_v4" in evaluator
+    assert "active = (channel,)" in evaluator
+    assert '"zero_bridge_gap": 0.0' in evaluator
+    assert "length_matched_channel_donors" in evaluator
+    assert "target_only" in validator
+    assert "zero_bridge_included" in validator
+    assert "cross_attention_semantic_phase_a4.yaml" in job
+    assert "cross_attention_semantic_phase_a4_cbatch_retry1" in job
+    assert "--seeds 20260830 20260831 20260832" in job
+    assert "--max-clusters 2" in smoke
+    assert "PYTORCH_ALLOC_CONF=backend:native" in job
+    assert "#PJM -L rscgrp=c-batch" in job
+    assert "#PJM -L gpu=1" in job
+    assert "#PJM -L node=1" not in job
+
+
+def test_a5_repair_and_caption_jobs_are_sequentially_fail_closed() -> None:
+    train = (ROOT / "jobs/cross_attention_phase_a5.pjm").read_text()
+    traces = (ROOT / "jobs/cache_test_planner_traces.pjm").read_text()
+    outer = (ROOT / "jobs/outer_semantic_confirmation_a5.pjm").read_text()
+    caption = (ROOT / "jobs/a5_joint_caption_generation.pjm").read_text()
+    assert "cross_attention_semantic_phase_a5.yaml" in train
+    assert "validate_phase_a5_smoke.py" in train
+    assert "role-specific" in train
+    assert "--input-manifest data/processed/latent_bridge_v35/test_trace_inputs.jsonl" in traces
+    assert "validate_test_trace_cache.py" in traces
+    assert "--max-clusters 2" in outer
+    assert "--expected-clusters 121" in outer
+    assert "--donor-trace-index" in outer
+    assert "planner_traces_homer_strict_v35/index.jsonl" in outer
+    assert "from re_evaluate_failed_semantic_bridges import length_matched_channel_donors" not in (
+        ROOT / "scripts/run_outer_semantic_confirmation_a5.py"
+    ).read_text()
+    assert "outer_semantic_go" in caption
+    assert "--group-size 10" in caption
+    assert "--condition full_plan_text" in caption
+    assert "--comparison full_plan_text:a5_typed" in caption
+    for job in (train, traces, outer, caption):
+        assert "PYTORCH_ALLOC_CONF=backend:native" in job
+        assert "#PJM -L rscgrp=c-batch" in job
+        assert "#PJM -L gpu=1" in job
+        assert "#PJM -L node=1" not in job
+        assert "exec-policy=simplex" not in job
+
+
+def test_dataset_audit_checks_every_byte_level_dependency() -> None:
+    audit = (ROOT / "scripts/audit_dataset_records.py").read_text()
+    for contract in (
+        "image SHA-256 mismatch",
+        "image.verify()",
+        'manifest.get("input_sha256", {})',
+        "duplicate row_id",
+        "cluster leakage",
+    ):
+        assert contract in audit

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "repair_manifest_version": "pretrained-homer-context-repair-20260910-r10",
+  "data_version": "homer_pretrained_7b_public_release_362",
+  "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+  "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5",
+  "adapter": null,
+  "policy": "validator-feedback-format-only-v1",
+  "scope": "only the 1 residual failure after retry-round 8; bounded upstream stage resampling; no full rerun",
+  "source_failure_manifests": [
+    {
+      "path": "data/cache/homer_pretrained_7b_homer_context_shard_0/failures.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "data/cache/homer_pretrained_7b_homer_context_shard_1/failures.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "data/cache/homer_pretrained_7b_homer_context_shard_2/failures.json",
+      "sha256": "0031876fa30ac049336e046f797800c376962bd6c5c991d4c5cd55bf896aed83"
+    }
+  ],
+  "targets": [
+    {
+      "cluster_id": "nycc_678",
+      "source_shard": 2,
+      "previous_error": "nycc_678: generator.select_entities validator-feedback repair failed: entity reference is not uniquely repairable: 'giraffes'"
+    }
+  ],
+  "supersedes": "manifests/pretrained_homer_context_repair_20260910_r9.json",
+  "created_after_job": "6750588",
+  "bounded_replay": {
+    "stage": "imaginator.summary",
+    "reason": "summary has one unique key, so two distinct official entity selections are impossible without semantic invention",
+    "max_attempts": 16,
+    "semantic_editing": false
+  }
+}
