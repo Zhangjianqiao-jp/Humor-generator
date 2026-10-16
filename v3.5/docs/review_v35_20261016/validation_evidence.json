@@ -57,5 +57,20 @@
     "peak_reserved_bytes": 7042236416,
     "report_sha256": "a68cdc68db5921f24af09a00f1908b5470c768d66ea32f3dc4623d3586ffabea",
     "runtime_loss_source_sha256": "132b29651bfc918d2edbee9d06658d850c5025f0e38bfd84ffa51db26d090efa"
+  },
+  "fp32_revalidation": {
+    "job_id": 7097141,
+    "status": "submitted_pending_gpu_result",
+    "submitted_at_jst": "2026-10-16T23:39:30+09:00",
+    "output_directory": "results/engineering_smoke/v35_selected_plan_fp32_20261016_recovery",
+    "loss_source_sha256_at_submission": "2e7e6331d347c5e7cd25e37623e7aeb6827e673b15d443556eb792015eb353c9",
+    "code_reference_commit": "c9fff47f3614a2d31cbe8e152df1e01de6962ba6",
+    "pr_runtime_config_test_files_identical_at_submission": 34,
+    "targeted_cpu_tests": {
+      "command": ".venv/bin/python -m pytest -o addopts='' -q tests/test_bridge_losses.py",
+      "passed": 9,
+      "elapsed_seconds": 73.19
+    },
+    "humor_quality_verified": false
   }
 }

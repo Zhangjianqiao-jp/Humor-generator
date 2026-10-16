@@ -50,6 +50,8 @@ NLL 改为对 logits.float() 计算交叉熵。真实 GPU smoke 的 BF16 NLL 约
 
 ## 已有证据与不能得出的结论
 
+恢复进度见 [RECOVERY_STATUS_ZH.md](RECOVERY_STATUS_ZH.md)：FP32 定向 CPU 回归 9 项通过，GPU 复验 job 7097141 已提交，尚待结果；不得将排队状态计为通过。
+
 - 真实 GPU job 7091538：H100，两个训练 cluster、一次 bridge 更新；冻结基础模型 trainable=0，bridge trainable=6,949,572，梯度范数约 0.704，更新范数约 0.262。峰值 allocated 6.40 GiB、reserved 6.56 GiB。
 - **该 GPU 运行早于 FP32 NLL 修复**。它证明原运行版本工程路径能执行，不能视为当前 PR 全部代码的真实 GPU 认证；需要复跑。
 - 真实本地 processor 检查 813 条训练、132 条验证 caption：两侧目标 token 一致，无 EOS，最长目标 44 tokens；未使用测试集生成。
