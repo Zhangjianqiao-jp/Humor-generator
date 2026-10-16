@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "prepared_not_launched_not_preregistered",
+  "scope": "v3.5_selected_plan",
+  "pending_gpu_job": 7097320,
+  "training_seeds_proposed": [
+    20260906,
+    20260907,
+    20260908
+  ],
+  "full_bridge_runs_proposed": 9,
+  "checkpoint_metric": "caption_nll",
+  "blocked_before_confirmatory_evaluation": [
+    "new_unexposed_evaluation_population",
+    "primary_reference_group",
+    "exact_judge_version",
+    "T1_training_matched_text_baseline",
+    "evaluation_budget"
+  ],
+  "arms": [
+    {
+      "id": "nll",
+      "config": "configs/pilot/v35_selected_plan_ablations/nll.yaml",
+      "config_sha256": "3d1d9447a1af3ed3f70387e3b1053324219002a4dad22c2ff83b8694536df93d",
+      "status": "config_exists_training_not_launched"
+    },
+    {
+      "id": "nll_kl",
+      "config": "configs/pilot/v35_selected_plan_ablations/nll_kl.yaml",
+      "config_sha256": "ebbe072418af590681f26c443e2146f6ea6ee9843b04bcab30331483d5e509be",
+      "status": "config_exists_training_not_launched"
+    },
+    {
+      "id": "nll_kl_margin",
+      "config": "configs/pilot/v35_selected_plan_ablations/nll_kl_margin.yaml",
+      "config_sha256": "d988142fbc407f41c4776407d59b717b4af0926cc9f72b855eac4bf265e2d90a",
+      "status": "config_exists_training_not_launched"
+    }
+  ]
+}

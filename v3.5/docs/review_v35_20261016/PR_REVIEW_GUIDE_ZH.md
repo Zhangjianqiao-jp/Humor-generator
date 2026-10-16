@@ -78,3 +78,5 @@ NLL 改为对 logits.float() 计算交叉熵。真实 GPU smoke 的 BF16 NLL 约
 - [Cawley & Talbot, JMLR 2010](https://jmlr.org/papers/v11/cawley10a.html)：模型选择偏差及独立评估的重要性。
 
 这些论文不替代本项目的实现证据和实验结果。
+
+后续执行方案：[NEXT_EXPERIMENT_PLAN_ZH.md](NEXT_EXPERIMENT_PLAN_ZH.md)，包含依赖条件、对照矩阵、对齐标注、统计与停止规则；正式训练尚未启动。
