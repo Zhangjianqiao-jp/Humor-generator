@@ -9,7 +9,7 @@ def _records() -> list[dict]:
     rows = []
     for system in ("latent_bridge", "text_homer_context_replay"):
         for image in ("i1", "i2"):
-            for trial in (0, 1):
+            for trial in range(5):
                 for group in ("1-9", "200-209", "1000-1009"):
                     for reference_index in range(5):
                         rows.append(

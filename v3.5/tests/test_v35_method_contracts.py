@@ -174,9 +174,8 @@ def test_a5_repair_config_uses_role_specific_projection_and_receiver_alignment()
 def test_resource_smoke_covers_image_and_full_memory_stress_samples() -> None:
     smoke = (ROOT / "scripts/real_trace_bridge_smoke.py").read_text()
     assert "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples" in smoke
-    assert "stress = max(selected" in smoke
-    assert "memory_stress = max(selected" in smoke
-    assert "for row in (stress, memory_stress)" in smoke
+    # Sample selection is exercised behaviorally in test_review_repairs;
+    # keep only the independent integration contract checks here.
     assert 'config["bridge"]["layer_indices"]' in smoke
     assert 'config["bridge"]["receiver_layers"]' not in smoke
     assert "configure_frozen_receiver" in smoke

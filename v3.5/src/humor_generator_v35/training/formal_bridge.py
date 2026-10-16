@@ -258,11 +258,13 @@ def _prompt_and_full(
     backend: QwenBackend,
     prompt_messages: list[dict[str, Any]],
     answer: str,
+    *, partial_answer: bool = False,
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], torch.Tensor]:
     prompt = backend.encode(prompt_messages, add_generation_prompt=True)
     full = backend.encode(
         [*prompt_messages, {"role": "assistant", "content": [text_part(answer)]}],
         add_generation_prompt=False,
+        **({"continue_final_message": True} if partial_answer else {}),
     )
     prompt_length = prompt["input_ids"].shape[1]
     if not torch.equal(full["input_ids"][:, :prompt_length], prompt["input_ids"]):

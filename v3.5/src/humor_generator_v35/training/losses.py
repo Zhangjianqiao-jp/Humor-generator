@@ -10,7 +10,9 @@ from torch.nn import functional as F
 def token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, ignore_index: int = -100) -> torch.Tensor:
     if logits.shape[:-1] != targets.shape:
         raise ValueError("logits and targets must agree before the vocabulary dimension")
-    return F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1), ignore_index=ignore_index)
+    # Qwen emits bf16 logits. Accumulate NLL in fp32 so small validation
+    # improvements are not rounded at bf16 precision (about 0.0156 near 3).
+    return F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), targets.reshape(-1), ignore_index=ignore_index)
 
 
 def text_teacher_forward_kl(

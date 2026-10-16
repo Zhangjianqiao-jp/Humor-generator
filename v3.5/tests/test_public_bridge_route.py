@@ -191,4 +191,10 @@ def test_public_bridge_uses_official_system_and_replaces_only_plan_block(tmp_pat
     assert "ordinary vs. absurd" in text[1]["content"][0]["text"]
     assert "ordinary vs. absurd" not in latent[1]["content"][0]["text"]
     assert len(text[1]["content"]) == len(latent[1]["content"]) == 2
+    for messages in (text, latent):
+        assert all(block["type"] == "text" for block in messages[1]["content"])
+        assert context.standard_description in messages[1]["content"][0]["text"]
+        assert context.image not in json.dumps(messages)
+    assert context.free_association_text in text[1]["content"][1]["text"]
+    assert context.free_association_text not in latent[1]["content"][1]["text"]
     assert target_caption_text({"row_id": "r", "caption": "A good caption."}) == "A good caption."

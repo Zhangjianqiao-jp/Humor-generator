@@ -15,3 +15,4 @@ data/processed/
 src/*.egg-info/
 .d[0-9]*
 .auto-research/
+.secrets/

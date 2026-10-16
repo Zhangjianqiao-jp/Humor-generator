@@ -32,6 +32,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import load_trace, read_jsonl
 from humor_generator_v35.homer.official_prompts import parse_caption_blob
+from humor_generator_v35.homer.caption_parsing import parse_caption_strict
+from humor_generator_v35.training.selected_plan import (SELECTED_PLAN_POLICY, LEGACY_MEMORY_POLICY, LEGACY_TARGET_POLICY, encode_selected_plan, selected_plan_sha256)
 from humor_generator_v35.latent.bridges import TypedLatentBridge
 from humor_generator_v35.latent.cross_attention import ReceiverDrivenCrossAttentionBridge
 from humor_generator_v35.qwen_backend import QwenBackend, model_device
@@ -93,6 +95,7 @@ def load_completed_keys(
     rows: Iterable[dict[str, Any]],
     schedule: Iterable[dict[str, int]],
     split: str,
+    expected_contract: dict[str, Any] | None = None,
 ) -> set[tuple[str, int]]:
     """Validate resumable output before allowing records to be skipped.
 
@@ -111,6 +114,8 @@ def load_completed_keys(
     }
     completed: set[tuple[str, int]] = set()
     for line_number, item in enumerate(read_jsonl(path), 1):
+        if expected_contract is not None and item.get("generation_contract") != expected_contract:
+            raise ValueError("existing generation method/config/checkpoint contract mismatch")
         required = {
             "system_id", "image_id", "image_sha256", "split", "generation_seed",
             "trial", "candidate_index", "candidate_count",
@@ -228,6 +233,13 @@ def load_bridge(config: dict[str, Any], checkpoint: Path, backend: QwenBackend) 
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     if not isinstance(payload, dict) or "bridge" not in payload:
         raise ValueError(f"bridge checkpoint has no bridge state: {checkpoint}")
+    expected = {
+        "memory_source": config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY),
+        "training_target_policy": config.get("protocol", {}).get("training_target_policy", LEGACY_TARGET_POLICY),
+    }
+    historical = {"memory_source": LEGACY_MEMORY_POLICY, "training_target_policy": LEGACY_TARGET_POLICY}
+    if payload.get("method_contract", historical) != expected:
+        raise ValueError("checkpoint payload method contract mismatch")
     bridge.load_state_dict(payload["bridge"], strict=True)
     bridge.to(model_device(backend.model)).eval()
     for parameter in bridge.parameters():
@@ -235,7 +247,7 @@ def load_bridge(config: dict[str, Any], checkpoint: Path, backend: QwenBackend) 
     return bridge
 
 
-def validate_checkpoint(checkpoint: Path) -> dict[str, Any]:
+def validate_checkpoint(checkpoint: Path, *, expected_contract: dict[str, str] | None = None) -> dict[str, Any]:
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
     completion = checkpoint.parent / "complete.json"
@@ -249,6 +261,12 @@ def validate_checkpoint(checkpoint: Path) -> dict[str, Any]:
     if completion_payload.get("status") != "complete":
         raise ValueError(f"bridge completion gate is not complete: {completion_payload}")
     run_payload = json.loads(run_manifest.read_text(encoding="utf-8"))
+    actual_contract = {
+        "memory_source": run_payload.get("memory_source", LEGACY_MEMORY_POLICY),
+        "training_target_policy": run_payload.get("training_target_policy", LEGACY_TARGET_POLICY),
+    }
+    if expected_contract is not None and actual_contract != expected_contract:
+        raise ValueError("checkpoint method contract mismatch; revised method requires retraining")
     if run_payload.get("current_homer_public_route") is not True:
         raise ValueError("checkpoint was not trained on the current HOMER public route")
     if run_payload.get("policy_trainable_parameters") != 0:
@@ -259,6 +277,8 @@ def validate_checkpoint(checkpoint: Path) -> dict[str, Any]:
         "path": str(checkpoint.resolve()),
         "sha256": sha256(checkpoint),
         "completion_sha256": sha256(completion),
+        "method_contract": actual_contract,
+        "scientific_gate": "not_established_by_training_completion",
         "run_manifest_sha256": sha256(run_manifest),
         "run_manifest": {
             "git_commit": run_payload.get("git_commit"),
@@ -305,7 +325,7 @@ def main() -> None:
     parser = ArgumentParser()
     parser.add_argument(
         "--config", type=Path,
-        default=ROOT / "configs/pilot/cross_attention_caption_pretrained_public.yaml",
+        default=ROOT / "configs/pilot/cross_attention_caption_selected_plan_v2.yaml",
     )
     parser.add_argument(
         "--dataset", type=Path,
@@ -313,7 +333,7 @@ def main() -> None:
     )
     parser.add_argument("--split", default="test")
     parser.add_argument(
-        "--condition", choices=["text_homer_context_replay", "latent_bridge"], required=True,
+        "--condition", choices=["text_homer_context_replay", "latent_bridge", "no_memory"], required=True,
     )
     parser.add_argument(
         "--checkpoint", type=Path,
@@ -343,8 +363,17 @@ def main() -> None:
         schedule_track = "homer_comparable_5_candidates_5_trials"
     if args.condition == "latent_bridge" and args.checkpoint is None:
         raise ValueError("latent_bridge requires --checkpoint")
+    method_contract = {
+        "memory_source": config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY),
+        "training_target_policy": config.get("protocol", {}).get("training_target_policy", LEGACY_TARGET_POLICY),
+    }
+    if method_contract["memory_source"] not in {LEGACY_MEMORY_POLICY, SELECTED_PLAN_POLICY}:
+        raise ValueError("unsupported memory source")
+    parser_policy = config.get("protocol", {}).get("caption_parser", "official_compatibility_v1")
+    if parser_policy not in {"strict_caption_v1", "official_compatibility_v1"}:
+        raise ValueError("unsupported caption parser")
     checkpoint_meta = (
-        validate_checkpoint(args.checkpoint.resolve())
+        validate_checkpoint(args.checkpoint.resolve(), expected_contract=method_contract)
         if args.checkpoint is not None else None
     )
     rows = load_population(args.dataset.resolve(), args.split)
@@ -374,12 +403,20 @@ def main() -> None:
         base_seed=args.base_seed, trial_stride=args.trial_stride,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    generation_contract = {
+        **method_contract, "caption_parser": parser_policy,
+        "config_sha256": sha256(config_path), "max_new_tokens": args.max_new_tokens,
+        "context_index_sha256": sha256(context_index_path),
+        "trace_index_sha256": sha256(trace_index_path),
+        "checkpoint_sha256": None if bridge is None else checkpoint_meta["sha256"],
+    }
     completed = load_completed_keys(
         args.output,
         condition=args.condition,
         rows=rows,
         schedule=schedule,
         split=args.split,
+        expected_contract=generation_contract,
     )
     total = len(rows) * len(schedule)
     written = len(completed)
@@ -390,10 +427,11 @@ def main() -> None:
             trace_record = traces[cluster]
             trace_states = None
             if bridge is not None:
-                trace_states = load_trace(
-                    resolve_path(trace_record["trace_path"]),
-                    expected_sha256=str(trace_record["trace_sha256"]),
-                )
+                trace_states = (encode_selected_plan(backend, context)
+                    if method_contract["memory_source"] == SELECTED_PLAN_POLICY else load_trace(
+                        resolve_path(trace_record["trace_path"]),
+                        expected_sha256=str(trace_record["trace_sha256"]),
+                    ))
                 parameter = next(bridge.parameters())
                 full_memory = {
                     name: trace_states[name].states.to(
@@ -420,9 +458,20 @@ def main() -> None:
                             messages, temperature=1.0,
                             max_new_tokens=args.max_new_tokens, seed=seed,
                         )
-                caption, explanation = _caption_record(raw, cluster=cluster)
+                official_caption, official_explanation = _caption_record(raw, cluster=cluster)
+                parsed = parse_caption_strict(raw)
+                caption, explanation = official_caption, official_explanation
+                if parser_policy == "strict_caption_v1":
+                    caption = parsed.caption if parsed.status == "ok" else "[INVALID CAPTION OUTPUT]"
+                    explanation = parsed.explanation
                 record = {
-                    "schema_version": 1,
+                    "schema_version": 2,
+                    "generation_contract": generation_contract,
+                    "selected_plan_sha256": selected_plan_sha256(context),
+                    "parse_status": parsed.status,
+                    "caption_parser": parser_policy,
+                    "official_compatibility_caption": official_caption,
+                    "official_compatibility_explanation": official_explanation,
                     "system_id": args.condition,
                     "image_id": cluster,
                     "image_path": str(resolve_path(row["image"])),
@@ -482,7 +531,8 @@ def main() -> None:
         "checkpoint": checkpoint_meta if bridge is not None else None,
         "git_commit": git_commit(),
         "output_sha256": sha256(args.output),
-        "scientific_status": "current_public_homer_context_replay_comparison",
+        "generation_contract": generation_contract,
+        "scientific_status": "exploratory_comparison_not_evidence_of_mechanism_success",
     }
     args.output.with_suffix(args.output.suffix + ".manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",

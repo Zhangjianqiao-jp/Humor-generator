@@ -31,7 +31,12 @@ from humor_generator_v35.training.formal_bridge import (
 )
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
 from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
+from humor_generator_v35.training.gates import evaluate_mechanism_gate
+from humor_generator_v35.training.checkpoint_selection import (
+    selection_metric, selection_score, resume_best, selection_record,
+)
 from humor_generator_v35.training.memory_safe import configure_frozen_receiver
+from humor_generator_v35.training.selected_plan import SELECTED_PLAN_POLICY, LEGACY_MEMORY_POLICY, LEGACY_TARGET_POLICY
 from humor_generator_v35.training.public_bridge import (
     PUBLIC_BRIDGE_PROMPT_TRACK,
     load_context_index,
@@ -81,8 +86,11 @@ def main() -> None:
         help="Initialize bridge weights only (for semantic-reconstruction -> caption stage).",
     )
     args = parser.parse_args()
+    if args.output.exists() and any(args.output.iterdir()) and args.resume is None:
+        raise ValueError("training output must be empty for a new run; preserve historical artifacts")
     config_path = args.config.resolve()
     config = yaml.safe_load(config_path.read_text())
+    checkpoint_metric = selection_metric(config)
     if args.resume and args.init_bridge:
         raise ValueError("--resume and --init-bridge are mutually exclusive")
     if config["experiment"]["baseline"] not in {
@@ -96,6 +104,8 @@ def main() -> None:
     if prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
         raise ValueError(f"unsupported bridge_prompt_track: {prompt_mode}")
     current_public_route = prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK
+    if config.get("protocol", {}).get("memory_source") == SELECTED_PLAN_POLICY and config["experiment"]["baseline"] != "receiver_cross_attention":
+        raise ValueError("selected-plan method requires receiver_cross_attention")
     if current_public_route:
         if config["experiment"].get("route") != "homer_public_code_bridge":
             raise ValueError(
@@ -163,12 +173,23 @@ def main() -> None:
             )
         ).to(device)
     freeze_report = configure_frozen_receiver(backend.model, bridge)
+    method_contract = {
+        "memory_source": config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY),
+        "training_target_policy": config.get("protocol", {}).get("training_target_policy", LEGACY_TARGET_POLICY),
+    }
+    def check_method_contract(payload):
+        old = {"memory_source": LEGACY_MEMORY_POLICY, "training_target_policy": LEGACY_TARGET_POLICY}
+        if payload.get("method_contract", old) != method_contract:
+            raise ValueError("checkpoint method contract mismatch; retrain the revised method")
     resume_state = None
     if args.resume:
         resume_state = torch.load(args.resume, map_location="cpu", weights_only=True)
+        check_method_contract(resume_state)
+        resume_best(resume_state, checkpoint_metric)
         bridge.load_state_dict(resume_state["bridge"])
     elif args.init_bridge:
         initial = torch.load(args.init_bridge, map_location="cpu", weights_only=True)
+        check_method_contract(initial)
         if "bridge" not in initial:
             raise RuntimeError("initial checkpoint has no bridge state")
         bridge.load_state_dict(initial["bridge"])
@@ -278,6 +299,8 @@ def main() -> None:
             ),
             prompt_mode=prompt_mode,
             context_index=context_index,
+            memory_source=config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY),
+            target_policy=config.get("protocol", {}).get("training_target_policy", LEGACY_TARGET_POLICY),
         )
         if str(config["loss"].get("alignment_teacher", "legacy_embedding_projection")) == (
             "receiver_contextual_final_hidden"
@@ -322,6 +345,7 @@ def main() -> None:
         "schema_version": 1,
         "git_commit": git_commit(),
         "config_sha256": sha256(config_path),
+        "checkpoint_selection_metric": checkpoint_metric,
         "dataset_manifest_sha256": sha256(dataset / "manifest.json"),
         "trace_index_sha256": sha256(trace_path),
         "policy_trainable_parameters": policy_trainable,
@@ -370,6 +394,8 @@ def main() -> None:
             "semantic_prompt_include_image", True
         ),
         "bridge_prompt_track": prompt_mode,
+        "memory_source": config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY),
+        "training_target_policy": config.get("protocol", {}).get("training_target_policy", LEGACY_TARGET_POLICY),
         "current_homer_public_route": current_public_route,
         "context_index": None if context_path is None else str(context_path.relative_to(ROOT)),
         "context_index_sha256": None if context_path is None else sha256(context_path),
@@ -378,7 +404,8 @@ def main() -> None:
         ),
         "homer_context_contract": (
             "same_selected_conflict_entity_and_seeded_path_for_text_teacher_and_latent_student"
-            if current_public_route else None
+            if current_public_route and config.get("protocol", {}).get("memory_source") == SELECTED_PLAN_POLICY
+            else "historical_early_trace_system_comparison" if current_public_route else None
         ),
         "initial_bridge_checkpoint": None if args.init_bridge is None else str(args.init_bridge.resolve()),
         "train_cluster_ids_sha256": hashlib.sha256(
@@ -411,7 +438,7 @@ def main() -> None:
             json.dumps(run_manifest, indent=2) + "\n"
         )
 
-    best = float(resume_state.get("best_validation_total", float("inf"))) if resume_state else float("inf")
+    best = resume_best(resume_state, checkpoint_metric)
     stale = int(resume_state.get("stale_epochs", 0)) if resume_state else 0
     global_step = int(resume_state.get("global_step", 0)) if resume_state else 0
     start_epoch = int(resume_state.get("epoch", 0)) if resume_state else 0
@@ -640,11 +667,12 @@ def main() -> None:
             "global_step": global_step,
             "train": train_summary,
             "validation": validation_summary,
+            "mechanism_gate": evaluate_mechanism_gate(validation_summary, config.get("gate", {})),
         }
         with log_path.open("a") as handle:
             handle.write(json.dumps(record) + "\n")
         print(json.dumps(record), flush=True)
-        score = record["validation"]["total"]
+        score = selection_score(record["validation"], checkpoint_metric)
         improved = score < best - float(config["training"]["early_stopping_min_delta"])
         if improved:
             best = score
@@ -652,12 +680,17 @@ def main() -> None:
         else:
             stale += 1
         checkpoint = {
+            "method_contract": {
+                "memory_source": config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY),
+                "training_target_policy": config.get("protocol", {}).get("training_target_policy", LEGACY_TARGET_POLICY),
+            },
             "bridge": {key: value.detach().cpu() for key, value in bridge.state_dict().items()},
             "optimizer": optimizer.state_dict(),
             "epoch": epoch + 1,
             "global_step": global_step,
             "validation": record["validation"],
-            "best_validation_total": best,
+            "mechanism_gate": record["mechanism_gate"],
+            **selection_record(checkpoint_metric, best),
             "stale_epochs": stale,
         }
         torch.save(checkpoint, args.output / f"checkpoint_epoch_{epoch + 1}.pt")
@@ -667,7 +700,8 @@ def main() -> None:
             break
     (args.output / "complete.json").write_text(json.dumps({
         "status": "complete",
-        "best_validation_total": best,
+        **selection_record(checkpoint_metric, best),
+        "scientific_status": "training_complete_only_consult_checkpoint_mechanism_gate",
         "epochs_completed": epoch + 1,
         "global_step": global_step,
     }, indent=2) + "\n")

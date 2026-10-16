@@ -112,3 +112,15 @@ def test_latent_slots_shift_all_three_mrope_axes_at_caption_boundary() -> None:
     torch.testing.assert_close(inserted[:, :, :3], original[:, :, :3])
     torch.testing.assert_close(inserted[:, :, 3:5], torch.tensor([[[7, 8]]] * 3))
     torch.testing.assert_close(inserted[:, :, 5:], original[:, :, 3:] + 2)
+
+
+def test_bfloat16_nll_uses_float32_reduction_and_agrees_with_log_probability():
+    from humor_generator_v35.training.losses import token_cross_entropy, sequence_log_probability
+    torch.manual_seed(31)
+    logits = torch.randn(1, 7, 23, dtype=torch.bfloat16, requires_grad=True)
+    targets = torch.tensor([[1, 3, 5, 7, 9, 11, 13]])
+    nll = token_cross_entropy(logits, targets)
+    assert nll.dtype == torch.float32
+    torch.testing.assert_close(nll, -sequence_log_probability(logits, targets).mean())
+    nll.backward()
+    assert logits.grad is not None and torch.isfinite(logits.grad).all()

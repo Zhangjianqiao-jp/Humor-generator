@@ -19,13 +19,11 @@ class FreezeReport:
 def configure_frozen_receiver(model: Any, bridge: torch.nn.Module) -> FreezeReport:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
-    if hasattr(model, "gradient_checkpointing_enable"):
-        try:
-            model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-        except TypeError:
-            model.gradient_checkpointing_enable()
-    if hasattr(model, "enable_input_require_grads"):
-        model.enable_input_require_grads()
+    # Temporary bridge hooks end before backward. Keep checkpointing disabled
+    # until recomputation can retain those hooks; frozen receivers stay deterministic.
+    model.eval()
+    if hasattr(model, "gradient_checkpointing_disable"):
+        model.gradient_checkpointing_disable()
     config = getattr(model, "config", None)
     if config is not None:
         config.use_cache = False
@@ -35,7 +33,7 @@ def configure_frozen_receiver(model: Any, bridge: torch.nn.Module) -> FreezeRepo
         raise RuntimeError("receiver policy must remain frozen")
     if bridge_trainable == 0:
         raise RuntimeError("bridge has no trainable parameters")
-    return FreezeReport(policy_trainable, bridge_trainable, True, False)
+    return FreezeReport(policy_trainable, bridge_trainable, False, False)
 
 
 def inject_latent_slots(

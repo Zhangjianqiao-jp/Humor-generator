@@ -6,11 +6,11 @@ source-aware, adapter-free Planner trace plus the cached HOMER
 summary/retrieval/selection context and uses the pinned public caption prompt
 for both the text teacher and the latent-plan student.
 
-The bridge is an alternative communication channel for the *same* selected
-HOMER plan.  It must not become a generic caption SFT task with a free-floating
-latent prefix.  The context cache therefore records the selected conflict,
-selected entities and sampled DFS paths, while the trace cache retains the raw
-Planner responses used to produce that context.
+This module builds the text-side final plan and the latent-side empty plan
+prompt. It does not by itself establish equal information. The versioned
+selected_plan encoder transmits exactly the selected fields; historical early
+trace memory is a separate system comparison. The context cache records the
+selected conflict and paths, while the trace cache retains earlier responses.
 """
 from __future__ import annotations
 
@@ -216,9 +216,8 @@ def public_latent_caption_messages(context: PublicHomerContext) -> list[dict[str
 
     The exact public system prompt and two user-block serialization are kept.
     The conflict/path fields are empty only in the student request; the bridge
-    receives the same cached Planner trace and selected context provenance.
-    This prevents a second textual copy of the plan from leaking into the
-    latent condition.
+    receives external memory selected by the versioned memory_source policy.
+    Provenance equality alone does not establish equal memory content.
     """
     return caption_messages(context.standard_description, "", "")
 

@@ -127,11 +127,12 @@ def summarize_one(
     bootstrap_seed: int,
     bootstrap_replicates: int,
     records_suffix: str = "records.jsonl",
+    expected_images: set[str] | None = None,
 ) -> dict[str, Any]:
     records_path = output_dir / f"{safe_name(label)}.{records_suffix}"
     summary = aggregate(mapping_path, judgments_path, records_path)
     records = [json.loads(line) for line in records_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    metrics = compute(records, bootstrap_seed=bootstrap_seed, bootstrap_replicates=bootstrap_replicates)
+    metrics = compute(records, bootstrap_seed=bootstrap_seed, bootstrap_replicates=bootstrap_replicates, expected_images=expected_images)
     return {
         "model_id": label,
         "judgments_path": str(judgments_path),
@@ -186,6 +187,8 @@ def render_markdown(result: dict[str, Any]) -> str:
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
+    population = Path(args.population)
+    expected_images = {json.loads(line)["cluster_id"] for line in population.read_text().splitlines() if line.strip()}
     mapping_path = Path(args.private_mapping)
     provenance_path = Path(args.provenance)
     provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
@@ -229,6 +232,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             label=model_id,
             bootstrap_seed=args.bootstrap_seed + index * 1000,
             bootstrap_replicates=args.bootstrap_replicates,
+            expected_images=expected_images,
         )
         for index, (model_id, path) in enumerate(specs)
     ]
@@ -261,6 +265,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             label="majority-vote",
             bootstrap_seed=args.bootstrap_seed + 9000,
             bootstrap_replicates=args.bootstrap_replicates,
+            expected_images=expected_images,
         )
     else:
         result["majority"] = None
@@ -273,6 +278,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Finalize auxiliary multi-model HOMER judgments")
+    parser.add_argument("--population", type=Path, default=Path(__file__).resolve().parents[1] / "data/processed/homer_pretrained_7b_public_release_362/test.jsonl")
     parser.add_argument("--private-mapping", required=True, type=Path)
     parser.add_argument("--provenance", required=True, type=Path)
     parser.add_argument("--judgments", required=True, action="append", metavar="MODEL_ID=PATH")
