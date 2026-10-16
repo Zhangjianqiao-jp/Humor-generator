@@ -11,7 +11,7 @@
   "full_bridge_runs_proposed": 9,
   "checkpoint_metric": "caption_nll",
   "blocked_before_confirmatory_evaluation": [
-    "new_unexposed_evaluation_population",
+    "historical_test_exposure_audit_or_new_unexposed_population",
     "primary_reference_group",
     "exact_judge_version",
     "T1_training_matched_text_baseline",
