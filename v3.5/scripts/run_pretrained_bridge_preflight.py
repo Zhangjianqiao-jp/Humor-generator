@@ -10,6 +10,7 @@ from __future__ import annotations
 from argparse import ArgumentParser
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -18,7 +19,6 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv/bin/python"
-CONFIG = ROOT / "configs/pilot/cross_attention_caption_pretrained_public.yaml"
 
 
 def run(argv: list[str]) -> dict[str, Any]:
@@ -43,6 +43,7 @@ def main() -> None:
         "--output", type=Path,
         default=ROOT / "results/preflight/pretrained_bridge_preflight.json",
     )
+    parser.add_argument("--config", type=Path, default=ROOT / "configs/pilot/cross_attention_caption_selected_plan_v2.yaml")
     parser.add_argument("--skip-tests", action="store_true")
     args = parser.parse_args()
     commands = [
@@ -57,8 +58,8 @@ def main() -> None:
         ],
         [
             str(PYTHON), "scripts/verify_pretrained_bridge_inputs.py",
-            "--config", str(CONFIG),
-            "--output", str(ROOT / "results/preflight/pretrained_bridge_inputs_public.json"),
+            "--config", str(args.config.resolve()),
+            "--output", str(args.output.resolve().parent / "pretrained_bridge_inputs_public.json"),
         ],
         [str(PYTHON), "scripts/engineering_smoke.py"],
         [str(PYTHON), "scripts/validate_project_memory.py"],
@@ -85,6 +86,8 @@ def main() -> None:
         "status": "pass" if failure is None else "fail",
         "failure_command": None if failure is None else failure["argv"],
         "git_commit": commit,
+        "config_path": str(args.config.resolve()),
+        "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
         "route": "homer_public_code_bridge",
         "data_version": "homer_pretrained_7b_public_release_362",
         "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5",

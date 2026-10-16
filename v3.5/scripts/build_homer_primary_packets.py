@@ -145,6 +145,27 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     rows = read_jsonl(source)
     contexts = load_contexts()
     references = load_references()
+    parser_tracks = {row.get("caption_parser", "official_compatibility_v1") for row in rows}
+    if len(parser_tracks) != 1:
+        raise ValueError("cannot mix caption parser tracks")
+    parser_track = next(iter(parser_tracks))
+    if parser_track not in {"official_compatibility_v1", "strict_caption_v1"}:
+        raise ValueError("unsupported caption parser track")
+    if parser_track == "strict_caption_v1" and any(row.get("parse_status") is None for row in rows):
+        raise ValueError("strict parser rows require parse_status")
+    method_contracts = {}
+    for row in rows:
+        system = row.get("system_id")
+        contract = row.get("generation_contract")
+        if system in method_contracts and method_contracts[system] != contract:
+            raise ValueError("mixed generation contracts within one system")
+        method_contracts[system] = contract
+    if any(value is not None for value in method_contracts.values()):
+        if any(not isinstance(value, dict) for value in method_contracts.values()):
+            raise ValueError("cannot mix historical and versioned generation records")
+        comparable = [{k: v for k, v in value.items() if k != "checkpoint_sha256"} for value in method_contracts.values()]
+        if any(value != comparable[0] for value in comparable):
+            raise ValueError("text and latent generation contracts differ")
     systems = sorted({row.get("system_id") for row in rows})
     expected_systems = ["latent_bridge", "text_homer_context_replay"]
     if systems != expected_systems:
@@ -165,6 +186,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError(f"empty caption for {system}/{image_id}")
 
     expected_images = {image for system, image in by_system_image if system == expected_systems[0]}
+    population_path = ROOT / "data/processed/homer_pretrained_7b_public_release_362/test.jsonl"
+    population_ids = {row["cluster_id"] for row in read_jsonl(population_path)}
+    if expected_images != population_ids:
+        raise ValueError("generation image IDs differ from sealed test population")
     if len(expected_images) != 47:
         raise ValueError(f"expected 47 test images, got {len(expected_images)}")
     for system in expected_systems:
@@ -174,6 +199,11 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             candidates = by_system_image[(system, image_id)]
             if len(candidates) != 25:
                 raise ValueError(f"expected 25 candidates for {system}/{image_id}, got {len(candidates)}")
+            for row in candidates:
+                if any(type(row.get(key)) is not int for key in ("trial", "candidate_index", "candidate_count", "generation_seed")):
+                    raise ValueError("candidate/trial/count/seed must be integers")
+            if {(row["trial"], row["candidate_index"]) for row in candidates} != {(t, c) for t in range(5) for c in range(5)}:
+                raise ValueError("incomplete or duplicate trial/candidate grid")
             if any(row.get("candidate_count") != 5 for row in candidates):
                 raise ValueError(f"candidate_count contract failed for {system}/{image_id}")
 
@@ -228,6 +258,9 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                             "reference_group": group,
                             "reference_index": reference_index,
                             "candidate_caption": candidate_row["caption"],
+                            "caption_parser": parser_track,
+                            "parse_status": candidate_row.get("parse_status"),
+                            "invalid_caption_policy": "count_as_failure" if parser_track == "strict_caption_v1" else "official_compatibility",
                             "reference_caption": reference,
                             "description": description,
                         })
@@ -239,8 +272,11 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
 
     provenance = {
         "schema_version": 1,
-        "evaluation_id": "v35-pretrained-qwen7b-homer-primary-20260911",
-        "track": "homer_comparable",
+        "evaluation_id": "v35-homer-" + sha256_file(source)[:16],
+        "generation_contracts": method_contracts,
+        "caption_parser": parser_track,
+        "invalid_caption_policy": "count_as_failure" if parser_track == "strict_caption_v1" else "official_compatibility",
+        "track": "homer_comparable" if parser_track == "official_compatibility_v1" else "homer_metrics_strict_parser_extension",
         "protocol": "homer_official_humorAI_pairwise_reference",
         "dataset": "homer_pretrained_7b_public_release_362",
         "code_commit": current_commit(),
@@ -254,19 +290,19 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "models": [
             {"role": "planner", "model_id": MODEL_ID, "revision_or_snapshot": MODEL_REVISION, "adapter": None, "prompt_sha256": HOMER_PROMPT_SHA256},
             {"role": "generator", "model_id": MODEL_ID, "revision_or_snapshot": MODEL_REVISION, "adapter": None, "prompt_sha256": HOMER_PROMPT_SHA256},
-            {"role": "bridge", "model_id": "v35_latent_bridge", "revision_or_snapshot": "f2c6eb623f89d7d129213ba86c29df99658f2dea1962ce18a9f1ae5d89d7d508", "adapter": None, "prompt_sha256": HOMER_PROMPT_SHA256},
+            {"role": "bridge", "model_id": "v35_latent_bridge", "revision_or_snapshot": (method_contracts.get("latent_bridge") or {}).get("checkpoint_sha256"), "adapter": None, "prompt_sha256": HOMER_PROMPT_SHA256},
         ],
         "generation": {
             "temperature": 1.0,
             "candidates_per_image": 5,
             "seeds": sorted({int(row["generation_seed"]) for row in rows}),
             "repeated_trials": 5,
-            "max_new_tokens": 96,
+            "max_new_tokens": (method_contracts.get("latent_bridge") or {}).get("max_new_tokens"),
         },
         "evaluator": {
             "model_id": "gpt-5-chat-latest",
             "canonical_model_id": "gpt-5-chat-latest",
-            "version_or_date": "2026-09-11",
+            "version_or_date": "unresolved_until_evaluator_run",
             "temperature": 0,
             "prompt_sha256": prompt_hash,
             "substitution": False,
@@ -288,7 +324,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     manifest = {
         "schema_version": 1,
         "status": "complete_packets_external_judgment_pending",
-        "track": "homer_comparable",
+        "track": "homer_comparable" if parser_track == "official_compatibility_v1" else "homer_metrics_strict_parser_extension",
         "protocol": "homer_official_humorAI_pairwise_reference",
         "source_generations": str(source),
         "source_generations_sha256": sha256_file(source),

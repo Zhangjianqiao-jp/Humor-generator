@@ -91,7 +91,14 @@ def aggregate(mapping_path: Path, judgment_path: Path, output_path: Path) -> dic
         group = row.get("reference_group")
         reference_index = row.get("reference_index")
         candidate_index = row.get("candidate_index")
-        key = (condition, image_id, int(trial), group, int(reference_index))
+        for field in ("trial", "reference_index", "candidate_index", "generation_seed"):
+            if type(row.get(field)) is not int:
+                raise ValueError(f"{field} must be an integer")
+        if candidate_index not in range(5) or reference_index not in range(5) or trial not in range(5):
+            raise ValueError("candidate/reference/trial index must be in 0..4")
+        if group not in GROUPS:
+            raise ValueError(f"unknown reference group: {group}")
+        key = (condition, image_id, trial, group, reference_index)
         if key not in metadata:
             metadata[key] = {
                 "contest_number": row.get("contest_number"),
@@ -104,7 +111,16 @@ def aggregate(mapping_path: Path, judgment_path: Path, output_path: Path) -> dic
             raise ValueError(f"duplicate candidate index for {key}: {candidate_index}")
         metadata[key]["generation_seeds"][int(candidate_index)] = int(row["generation_seed"])
         packet_id = row.get("packet_id")
-        by_reference[key].append(judgments[packet_id])
+        decision = judgments[packet_id]
+        policy = row.get("invalid_caption_policy", "official_compatibility")
+        if policy not in {"official_compatibility", "count_as_failure"}:
+            raise ValueError("unsupported invalid-caption policy")
+        if policy == "count_as_failure":
+            if row.get("caption_parser") != "strict_caption_v1" or row.get("parse_status") is None:
+                raise ValueError("failure scoring requires strict parser provenance")
+            if row["parse_status"] != "ok":
+                decision = "B"
+        by_reference[key].append(decision)
 
     # Every official group has five references.  Do not silently aggregate a
     # partial reference set, because that would change the released evaluator's
@@ -122,7 +138,7 @@ def aggregate(mapping_path: Path, judgment_path: Path, output_path: Path) -> dic
         responses = by_reference[key]
         if len(responses) != 5:
             raise ValueError(f"{key} has {len(responses)} candidates; expected five")
-        if len(metadata[key]["generation_seeds"]) != 5:
+        if set(metadata[key]["generation_seeds"]) != set(range(5)):
             raise ValueError(f"{key} has incomplete candidate index set")
         records.append({
             "system_id": condition,
@@ -155,7 +171,8 @@ def aggregate(mapping_path: Path, judgment_path: Path, output_path: Path) -> dic
         "reference_groups": list(GROUPS),
         "references_per_group": 5,
         "candidate_count": 5,
-        "decision_contract": "A=generated caption wins against that human reference; B=reference wins",
+        "decision_contract": "A=generated caption wins; B=reference wins; explicitly versioned strict-parser failures count as B",
+        "invalid_caption_policy": sorted({row.get("invalid_caption_policy", "official_compatibility") for row in mapping}),
         "output": str(output_path),
     }
     return summary

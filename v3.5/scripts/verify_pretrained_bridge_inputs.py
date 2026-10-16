@@ -45,7 +45,7 @@ def verify(config_path: Path) -> dict[str, Any]:
         errors.append("experiment.route must be homer_public_code_bridge")
     if protocol.get("bridge_prompt_track") != PUBLIC_BRIDGE_PROMPT_TRACK:
         errors.append("bridge prompt track is not the current official-caption replacement track")
-    if protocol.get("training_target_policy") != "source_caption_only_no_fabricated_explanation":
+    if protocol.get("training_target_policy") not in {"source_caption_only_no_fabricated_explanation", "marked_caption_open_assistant_v1"}:
         errors.append("training target policy must avoid fabricated explanations")
     if model.get("revision") != REVISION:
         errors.append("Qwen revision is not the pinned pretrained revision")
@@ -59,8 +59,10 @@ def verify(config_path: Path) -> dict[str, Any]:
             errors.append(f"model.{key} must be true")
     if data.get("data_version") != DATA_VERSION:
         errors.append("data.data_version mismatch")
-    if data.get("target_policy") != "source_caption_only_no_fabricated_explanation":
-        errors.append("data.target_policy must record the source-caption-only policy")
+    if data.get("target_policy") != protocol.get("training_target_policy"):
+        errors.append("data.target_policy must match protocol.training_target_policy")
+    if protocol.get("memory_source", "early_planner_trace_v1") not in {"early_planner_trace_v1", "selected_plan_frozen_encoding_v1"}:
+        errors.append("unsupported memory source")
     for key, expected in (
         ("dataset", EXPECTED_DATASET),
         ("trace_input_manifest", EXPECTED_TRACE_INPUT),

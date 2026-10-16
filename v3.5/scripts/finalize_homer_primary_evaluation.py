@@ -58,7 +58,7 @@ def paired_bootstrap(values: list[float], *, seed: int, replicates: int) -> tupl
     return bootstrap_mean(values, seed=seed, replicates=replicates)
 
 
-def validate_records(records: list[dict[str, Any]]) -> tuple[int, list[str], list[int], list[str]]:
+def validate_records(records: list[dict[str, Any]], *, expected_images: set[str] | None = None, expected_trials: tuple[int, ...] = (0, 1, 2, 3, 4)) -> tuple[int, list[str], list[int], list[str]]:
     if not records:
         raise ValueError("aggregated HOMER records are empty")
     systems = sorted({row.get("system_id") for row in records})
@@ -67,8 +67,18 @@ def validate_records(records: list[dict[str, Any]]) -> tuple[int, list[str], lis
     groups = sorted({row.get("official_reference_group") for row in records})
     if groups != sorted(GROUPS):
         raise ValueError(f"expected official reference groups {sorted(GROUPS)}, got {groups}")
-    images = sorted({str(row.get("image_id")) for row in records})
-    trials = sorted({int(row.get("trial")) for row in records})
+    for row in records:
+        if not isinstance(row.get("image_id"), str) or not row["image_id"]:
+            raise ValueError("image_id must be a non-empty string")
+        for field in ("trial", "candidate_count", "winning_caption_count"):
+            if type(row.get(field)) is not int:
+                raise ValueError(f"{field} must be an integer, not bool/string/float")
+    images = sorted({row["image_id"] for row in records})
+    trials = sorted({row["trial"] for row in records})
+    if trials != sorted(expected_trials):
+        raise ValueError(f"incomplete HOMER grid: expected trials {expected_trials}, got {trials}")
+    if expected_images is not None and set(images) != expected_images:
+        raise ValueError("incomplete HOMER grid: image population mismatch")
     expected = {
         (system, image, trial, group, f"{group}/gt_caption{reference_index + 1}")
         for system in SYSTEMS
@@ -95,8 +105,8 @@ def validate_records(records: list[dict[str, Any]]) -> tuple[int, list[str], lis
     return 5, images, trials, list(GROUPS)
 
 
-def compute(records: list[dict[str, Any]], *, bootstrap_seed: int, bootstrap_replicates: int) -> dict[str, Any]:
-    n, images, trials, groups = validate_records(records)
+def compute(records: list[dict[str, Any]], *, bootstrap_seed: int, bootstrap_replicates: int, expected_images: set[str] | None = None, expected_trials: tuple[int, ...] = (0, 1, 2, 3, 4)) -> dict[str, Any]:
+    n, images, trials, groups = validate_records(records, expected_images=expected_images, expected_trials=expected_trials)
     by_key = {
         (str(row["system_id"]), str(row["image_id"]), int(row["trial"]), str(row["official_reference_group"]), str(row["reference_group"])): row
         for row in records
@@ -157,6 +167,7 @@ def compute(records: list[dict[str, Any]], *, bootstrap_seed: int, bootstrap_rep
         "schema_version": 1,
         "protocol": "homer_unbiased_pass_at_k_paired_image_bootstrap",
         "statistical_unit": "image_id",
+        "population_validation": "external_expected_ids" if expected_images is not None else "observed_ids_only",
         "formula": "1 - C(n-c,k) / C(n,k)",
         "candidate_count": n,
         "k_values": list(KS),
@@ -172,7 +183,9 @@ def compute(records: list[dict[str, Any]], *, bootstrap_seed: int, bootstrap_rep
 
 def render_markdown(result: dict[str, Any], provenance: dict[str, Any]) -> str:
     lines = [
-        "# v3.5 HOMER primary comparison",
+        "# v3.5 HOMER metric comparison",
+        "",
+        f"Evaluation track: {provenance.get("track", "unspecified")}",
         "",
         "This report is generated only after an exact one-to-one external A/B judgment set.",
         "It uses the official unbiased Pass@K estimator and paired image-level bootstrap.",
@@ -197,6 +210,7 @@ def render_markdown(result: dict[str, Any], provenance: dict[str, Any]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Finalize HOMER primary Pass@K comparison")
+    parser.add_argument("--population", type=Path, default=Path(__file__).resolve().parents[1] / "data/processed/homer_pretrained_7b_public_release_362/test.jsonl", help="Independent expected image population JSONL")
     parser.add_argument("--private-mapping", required=True, type=Path)
     parser.add_argument("--judgments", required=True, type=Path)
     parser.add_argument("--provenance", required=True, type=Path)
@@ -213,9 +227,12 @@ def main() -> None:
         with records_path.open(encoding="utf-8") as handle:
             records = [json.loads(line) for line in handle if line.strip()]
         provenance = json.loads(args.provenance.read_text(encoding="utf-8"))
-        result = compute(records, bootstrap_seed=args.bootstrap_seed, bootstrap_replicates=args.bootstrap_replicates)
+        expected_images = {json.loads(line)["cluster_id"] for line in args.population.read_text().splitlines() if line.strip()}
+        result = compute(records, bootstrap_seed=args.bootstrap_seed, bootstrap_replicates=args.bootstrap_replicates, expected_images=expected_images)
         result["aggregation"] = summary
         result["provenance"] = provenance
+        result["evaluation_track"] = provenance.get("track", "unspecified")
+        result["invalid_caption_policy"] = summary["invalid_caption_policy"]
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
         args.output_json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         args.output_md.parent.mkdir(parents=True, exist_ok=True)

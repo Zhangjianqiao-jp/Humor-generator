@@ -1,0 +1,61 @@
+{
+  "cpu_tests": {
+    "command": ".venv/bin/python -m pytest -o addopts='' -q",
+    "passed": 187,
+    "elapsed_seconds": 239.4,
+    "environment": "existing local v3.5 workspace with pinned dependencies and local assets"
+  },
+  "target_audit": {
+    "status": "pass",
+    "config_sha256": "164839ba57994309f7233aa94afa4a4c596f72736cf6709692c299f294eb2822",
+    "context_sha256": "386bd46b9179916db6b30162c96b5fd3d33ef91e5bfc8f07ff693b83656c3b27",
+    "model_manifest_sha256": "89dfa679163ae5ebb6143bc0e96dde6b6459623d1851394f5afcf2c464018653",
+    "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5",
+    "splits": {
+      "train": {
+        "rows": 813,
+        "checked": 813,
+        "clusters": 271,
+        "dataset_sha256": "8e55d9ee49ceb79b2b4c8018ff127418da57158d00931f9467a0cad943bb0ec4",
+        "max_target_tokens": 44,
+        "max_full_tokens": {
+          "text": 295,
+          "latent": 206
+        }
+      },
+      "validation": {
+        "rows": 132,
+        "checked": 132,
+        "clusters": 44,
+        "dataset_sha256": "b7d5c0459fd8850554bb3578a78a90d9467980e0e9d8742fc95060a9e0e50a3b",
+        "max_target_tokens": 40,
+        "max_full_tokens": {
+          "text": 283,
+          "latent": 185
+        }
+      }
+    },
+    "errors": [],
+    "scope": "train_validation_tokenization_only_no_weights_no_test_set"
+  },
+  "gpu_smoke": {
+    "job_id": 7091538,
+    "status": "pass",
+    "scope": "engineering_only_before_fp32_nll_fix",
+    "humor_quality_verified": false,
+    "config_sha256": "164839ba57994309f7233aa94afa4a4c596f72736cf6709692c299f294eb2822",
+    "runtime_git_commit": "c08368c9aa3ab2efcac6e3e0d3f24e099e139f6b",
+    "clusters": [
+      "nycc_555",
+      "nycc_788"
+    ],
+    "policy_trainable_parameters": 0,
+    "bridge_trainable_parameters": 6949572,
+    "gradient_norm": 0.7037416696548462,
+    "update_norm": 0.26248034834861755,
+    "peak_allocated_bytes": 6870112768,
+    "peak_reserved_bytes": 7042236416,
+    "report_sha256": "a68cdc68db5921f24af09a00f1908b5470c768d66ea32f3dc4623d3586ffabea",
+    "runtime_loss_source_sha256": "132b29651bfc918d2edbee9d06658d850c5025f0e38bfd84ffa51db26d090efa"
+  }
+}

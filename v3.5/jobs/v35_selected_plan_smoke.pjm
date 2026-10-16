@@ -1,0 +1,69 @@
+#!/bin/sh
+# Selected-plan v2 engineering gate: two examples, one bridge-only update.
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=00:30:00
+#PJM -j
+#PJM -S
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+SMOKE_OUTPUT="${SMOKE_OUTPUT:?submit with -x SMOKE_OUTPUT=...}"
+# Refuse to overwrite any existing run, including an incomplete run.
+mkdir "$SMOKE_OUTPUT"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export PYTHONPATH=src
+export PYTHONUNBUFFERED=1
+export TOKENIZERS_PARALLELISM=false
+export PYTORCH_ALLOC_CONF=backend:native
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export NLTK_DATA="$PWD/artifacts/nltk_data"
+CONFIG=configs/pilot/cross_attention_caption_selected_plan_v2.yaml
+cp "$CONFIG" "$SMOKE_OUTPUT/config.yaml"
+python - "$SMOKE_OUTPUT" <<'PY'
+import hashlib, json, pathlib, subprocess, sys
+root = pathlib.Path.cwd()
+paths = [p for folder in ('src', 'scripts', 'tests', 'configs', 'jobs')
+         for p in (root / folder).rglob('*') if p.suffix in ('.py', '.yaml', '.pjm')]
+payload = {'git_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+           'file_sha256': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+                           for p in sorted(paths)}}
+(pathlib.Path(sys.argv[1]) / 'runtime_source_manifest.json').write_text(json.dumps(payload, indent=2)+'\n')
+PY
+python scripts/run_pretrained_bridge_preflight.py --config "$CONFIG" \
+  --output "$SMOKE_OUTPUT/cpu_preflight.json"
+python scripts/check_cuda_resource.py > "$SMOKE_OUTPUT/cuda_resource.json"
+python scripts/real_trace_bridge_smoke.py --config "$CONFIG" \
+  --trace-index data/cache/homer_pretrained_7b_planner_traces/index.jsonl \
+  --output "$SMOKE_OUTPUT/real_trace_bridge_smoke.json"
+python - "$SMOKE_OUTPUT" <<'PY'
+import hashlib, json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+source = json.loads((p/'runtime_source_manifest.json').read_text())
+for name, digest in source['file_sha256'].items():
+    if hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() != digest:
+        raise SystemExit(f'source changed during smoke: {name}')
+preflight = json.loads((p/'cpu_preflight.json').read_text())
+smoke = json.loads((p/'real_trace_bridge_smoke.json').read_text())
+config_hash = hashlib.sha256((p/'config.yaml').read_bytes()).hexdigest()
+if preflight['status'] != 'pass' or smoke['status'] != 'pass':
+    raise SystemExit('preflight or smoke failed')
+if not (preflight['config_sha256'] == smoke['config_sha256'] == config_hash):
+    raise SystemExit('preflight/smoke config mismatch')
+if smoke['memory_source'] != 'selected_plan_frozen_encoding_v1':
+    raise SystemExit('wrong memory source')
+if smoke['training_target_policy'] != 'marked_caption_open_assistant_v1':
+    raise SystemExit('wrong target policy')
+if smoke['policy_trainable_parameters'] != 0 or smoke['scientific_training'] is not False:
+    raise SystemExit('wrong training scope')
+if len(set(smoke['clusters'])) != 2:
+    raise SystemExit('two independent examples required')
+(p/'complete.json').write_text(json.dumps({
+    'status':'pass', 'scope':'selected_plan_v2_engineering_only',
+    'config_sha256':config_hash, 'humor_quality_verified':False,
+}, indent=2)+'\n')
+PY

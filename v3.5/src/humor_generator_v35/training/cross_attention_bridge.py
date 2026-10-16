@@ -22,6 +22,7 @@ from .formal_bridge import (
 )
 from .losses import sequence_log_probability, text_teacher_forward_kl, token_cross_entropy
 from .memory_safe import cache_text_teacher_logits, caption_only_logits
+from .selected_plan import (SELECTED_PLAN_POLICY, LEGACY_MEMORY_POLICY, PARTIAL_CAPTION_POLICY, LEGACY_TARGET_POLICY, encode_selected_plan, selected_plan_sha256)
 from .public_bridge import (
     PUBLIC_BRIDGE_PROMPT_TRACK,
     PublicHomerContext,
@@ -126,7 +127,9 @@ class ReceiverCrossAttentionTask:
                  loss_config: dict[str, float], max_target_tokens: int,
                  stage: str, semantic_prompt_include_image: bool = True,
                  prompt_mode: str = "legacy",
-                 context_index: Mapping[str, PublicHomerContext] | None = None) -> None:
+                 context_index: Mapping[str, PublicHomerContext] | None = None,
+                 memory_source: str = LEGACY_MEMORY_POLICY,
+                 target_policy: str = LEGACY_TARGET_POLICY) -> None:
         if stage not in {"semantic_reconstruction", "caption"}:
             raise ValueError("stage must be semantic_reconstruction or caption")
         self.backend = backend
@@ -141,6 +144,15 @@ class ReceiverCrossAttentionTask:
         if self.prompt_mode not in {"legacy", PUBLIC_BRIDGE_PROMPT_TRACK}:
             raise ValueError(f"unsupported bridge prompt_mode: {self.prompt_mode}")
         self.context_index = dict(context_index or {})
+        self.memory_source = memory_source
+        self.target_policy = target_policy
+        if memory_source not in {SELECTED_PLAN_POLICY, LEGACY_MEMORY_POLICY}:
+            raise ValueError("unsupported memory source")
+        if target_policy not in {PARTIAL_CAPTION_POLICY, LEGACY_TARGET_POLICY}:
+            raise ValueError("unsupported target policy")
+        if (memory_source == SELECTED_PLAN_POLICY or target_policy == PARTIAL_CAPTION_POLICY) and self.prompt_mode != PUBLIC_BRIDGE_PROMPT_TRACK:
+            raise ValueError("selected-plan/partial-caption policies require public caption route")
+        self._selected_plan_cache = {}
         if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK and not self.context_index:
             raise ValueError("current HOMER bridge mode requires a non-empty context index")
         if self.prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK and stage != "caption":
@@ -183,10 +195,17 @@ class ReceiverCrossAttentionTask:
             raise RuntimeError("receiver policy is not frozen")
 
     def _states(self, cluster: str) -> dict[str, AlignedMessageStates]:
-        record = self.trace_index[cluster]
-        loaded = load_trace(
-            self.root / record["trace_path"], expected_sha256=record["trace_sha256"]
-        )
+        if self.memory_source == SELECTED_PLAN_POLICY:
+            context = self.context_index[cluster]
+            key = selected_plan_sha256(context)
+            if key not in self._selected_plan_cache:
+                self._selected_plan_cache[key] = encode_selected_plan(self.backend, context)
+            loaded = self._selected_plan_cache[key]
+        else:
+            record = self.trace_index[cluster]
+            loaded = load_trace(
+                self.root / record["trace_path"], expected_sha256=record["trace_sha256"]
+            )
         parameter = next(self.bridge.parameters())
         return {
             name: AlignedMessageStates(
@@ -360,6 +379,8 @@ class ReceiverCrossAttentionTask:
                 validate_row_context(example.row, context)
                 messages = public_latent_caption_messages(context)
                 target = target_caption_text(example.row)
+                if self.target_policy == PARTIAL_CAPTION_POLICY:
+                    target = "##Caption: " + target
                 teacher_messages = public_text_caption_messages(context)
             else:
                 messages = zero_prefix_caption_messages(example.row["image"])
@@ -369,7 +390,8 @@ class ReceiverCrossAttentionTask:
             messages = semantic_recovery_messages(example.row["image"])
             target = exact_typed_semantics(states)
             teacher_messages = None
-        _, full, targets = _prompt_and_full(self.backend, messages, target)
+        partial_answer = self.stage == "caption" and self.target_policy == PARTIAL_CAPTION_POLICY
+        _, full, targets = _prompt_and_full(self.backend, messages, target, partial_answer=partial_answer)
         if targets.shape[1] > self.max_target_tokens:
             raise RuntimeError(
                 f"target exceeds max_target_tokens={self.max_target_tokens}: "
@@ -379,7 +401,7 @@ class ReceiverCrossAttentionTask:
         teacher_logits = None
         if self.stage == "caption" and float(self.loss_config.get("text_teacher_forward_kl", 0)) > 0:
             _, teacher_full, teacher_targets = _prompt_and_full(
-                self.backend, teacher_messages, target
+                self.backend, teacher_messages, target, partial_answer=partial_answer
             )
             if not torch.equal(teacher_targets, targets):
                 raise RuntimeError("text and latent conditions tokenize target differently")
@@ -524,10 +546,12 @@ class ReceiverCrossAttentionTask:
             shuffled0 = sequence_log_probability(
                 self._logits(embeddings, mask, positions, targets, shuffled_states), targets
             )
+            shuffled_diagnostics = list(self.bridge.last_diagnostics)
             coefficient = torch.sigmoid(-matched0 + shuffled0 + margin).detach()
             margin_loss = F.softplus(-matched0 + shuffled0 + margin).mean()
 
         matched = self._logits(embeddings, mask, positions, targets, matched_states)
+        matched_diagnostics = list(self.bridge.last_diagnostics)
         nll = token_cross_entropy(matched, targets)
         kl = matched.new_zeros(())
         if teacher_cpu is not None:
@@ -559,8 +583,23 @@ class ReceiverCrossAttentionTask:
             + float(self.loss_config.get("text_teacher_forward_kl", 0)) * kl_value
             + shuffled_weight * margin_loss
         )
-        diagnostics = self.bridge.last_diagnostics
+        diagnostics = matched_diagnostics
+        controls = {}
+        if not backward and getattr(self, "memory_source", None) == SELECTED_PLAN_POLICY:
+            with torch.no_grad():
+                no_memory = caption_only_logits(
+                    self.backend.model, inputs_embeds=embeddings, attention_mask=mask,
+                    position_ids=positions, caption_tokens=int(targets.shape[1]),
+                )
+                no_memory_nll = float(token_cross_entropy(no_memory, targets).cpu())
+            controls = {
+                "no_memory_caption_nll": no_memory_nll,
+                "nll_improvement_over_no_memory": no_memory_nll - float(nll_value.cpu()),
+            }
         return {
+            **controls,
+            "shuffled_mean_attention_entropy": float(sum(d.attention_entropy for d in shuffled_diagnostics) / max(1, len(shuffled_diagnostics))),
+            "shuffled_mean_relative_update_norm": float(sum(d.relative_update_norm for d in shuffled_diagnostics) / max(1, len(shuffled_diagnostics))),
             "total": float(total.cpu()),
             "caption_nll": float(nll_value.cpu()),
             "teacher_kl": float(kl_value.cpu()),
@@ -695,6 +734,7 @@ class ReceiverCrossAttentionTask:
             active_channels=active_channels,
             capture_hidden=self.semantic_target_alignment_weight > 0,
         )
+        matched_diagnostics = list(self.bridge.last_diagnostics)
         reconstruction_nll = token_cross_entropy(matched, targets)
         matched_logp = sequence_log_probability(matched, targets)
         nll_value = reconstruction_nll.detach()
@@ -764,7 +804,7 @@ class ReceiverCrossAttentionTask:
             + self.counterfactual_reconstruction_weight * donor_reconstruction_value
             + self.semantic_target_alignment_weight * semantic_alignment_value
         )
-        diagnostics = self.bridge.last_diagnostics
+        diagnostics = matched_diagnostics
         return {
             "total": float(total.cpu()),
             "caption_nll": float(nll_value.cpu()),

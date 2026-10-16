@@ -240,9 +240,10 @@ class QwenBackend:
         with disable():
             yield
 
-    def encode(self, messages: list[dict[str, Any]], *, add_generation_prompt: bool) -> dict[str, torch.Tensor]:
+    def encode(self, messages: list[dict[str, Any]], *, add_generation_prompt: bool, continue_final_message: bool = False) -> dict[str, torch.Tensor]:
         rendered = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=add_generation_prompt
+            messages, tokenize=False, add_generation_prompt=add_generation_prompt,
+            continue_final_message=continue_final_message,
         )
         image_inputs, video_inputs = self.process_vision_info(messages)
         kwargs: dict[str, Any] = {"text": [rendered], "padding": True, "return_tensors": "pt"}

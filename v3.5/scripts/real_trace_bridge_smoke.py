@@ -5,6 +5,7 @@ from __future__ import annotations
 from argparse import ArgumentParser
 import hashlib
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -13,6 +14,7 @@ import yaml
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from humor_generator_v35.data.traces import load_trace, read_jsonl
@@ -30,6 +32,7 @@ from humor_generator_v35.training.formal_bridge import (
     length_matched_channel_donors,
     load_trace_index,
     prepare_example,
+    _prompt_and_full,
 )
 from humor_generator_v35.training.cross_attention_bridge import ReceiverCrossAttentionTask
 from humor_generator_v35.training.losses import symmetric_info_nce, variance_floor_loss
@@ -38,8 +41,51 @@ from humor_generator_v35.training.public_bridge import (
     PUBLIC_BRIDGE_PROMPT_TRACK,
     load_context_index,
     validate_row_context,
+    public_text_caption_messages,
+    target_caption_text,
 )
-from train_bridge import fixed_hash_sample_clusters
+from humor_generator_v35.homer.prompts import text_part
+from humor_generator_v35.training.selected_plan import (
+    SELECTED_PLAN_POLICY, LEGACY_MEMORY_POLICY, PARTIAL_CAPTION_POLICY, selected_plan_channels,
+)
+from scripts.train_bridge import fixed_hash_sample_clusters
+
+
+def memory_token_count(row, *, memory_source, backend, context_index, traces):
+    """Measure the actual configured memory, with the production chat template."""
+    if memory_source == SELECTED_PLAN_POLICY:
+        context = context_index[str(row["cluster_id"])]
+        return sum(
+            int(backend.encode(
+                [{"role": "user", "content": [text_part(text)]}],
+                add_generation_prompt=False,
+            )["input_ids"].shape[1])
+            for text in selected_plan_channels(context).values()
+        )
+    if memory_source != LEGACY_MEMORY_POLICY:
+        raise ValueError(f"unsupported smoke memory source: {memory_source}")
+    record = traces[row["cluster_id"]]
+    loaded = load_trace(ROOT / record["trace_path"], expected_sha256=record["trace_sha256"])
+    return sum(int(item.states.shape[1]) for item in loaded.values())
+
+
+def select_stress_rows(rows, raw_pixels, latent_tokens):
+    if len({row["cluster_id"] for row in rows}) < 2:
+        raise ValueError("smoke requires two independent clusters")
+    image_stress = max(rows, key=lambda row: (raw_pixels(row), row["cluster_id"]))
+    memory_stress = max(rows, key=lambda row: (latent_tokens(row), row["cluster_id"]))
+    result = [image_stress]
+    if memory_stress["cluster_id"] != image_stress["cluster_id"]:
+        result.append(memory_stress)
+    else:
+        result.append(next(row for row in rows if row["cluster_id"] != image_stress["cluster_id"]))
+    return result
+
+
+def require_finite_metrics(metrics, label):
+    for name, value in metrics.items():
+        if not math.isfinite(float(value)):
+            raise RuntimeError(f"non-finite {label}: {name}={value}")
 
 
 def main() -> None:
@@ -71,25 +117,11 @@ def main() -> None:
         raise RuntimeError("real trace smoke requires two clusters")
     # Cover both independent memory-risk axes in the fixed pilot subset while
     # preserving the engineering-smoke contract of at most two examples: raw
-    # image size and full (untruncated) Planner memory.
+    # image size and full memory from the configured source.
     selected = cluster_balanced_rows(rows, epoch=0, seed=seed)
     def raw_pixels(row: dict) -> int:
         with Image.open(row["image"]) as image:
             return image.width * image.height
-    stress = max(selected, key=lambda row: (raw_pixels(row), row["cluster_id"]))
-    def latent_tokens(row: dict) -> int:
-        record = traces[row["cluster_id"]]
-        loaded = load_trace(ROOT / record["trace_path"], expected_sha256=record["trace_sha256"])
-        return sum(int(item.states.shape[1]) for item in loaded.values())
-    memory_stress = max(selected, key=lambda row: (latent_tokens(row), row["cluster_id"]))
-    smoke_rows = []
-    for row in (stress, memory_stress):
-        if row["cluster_id"] not in {item["cluster_id"] for item in smoke_rows}:
-            smoke_rows.append(row)
-    if len(smoke_rows) < 2:
-        smoke_rows.append(next(
-            row for row in selected if row["cluster_id"] != smoke_rows[0]["cluster_id"]
-        ))
     semantic_channel_training = (
         baseline == "receiver_cross_attention"
         and str(config["training"].get("stage")) == "semantic_reconstruction"
@@ -118,7 +150,7 @@ def main() -> None:
             raise RuntimeError("current public bridge smoke requires data.context_index")
         context_index_path = ROOT / context_value
         context_index = load_context_index(context_index_path)
-        for row in smoke_rows:
+        for row in selected:
             context = context_index.get(str(row["cluster_id"]))
             if context is None:
                 raise RuntimeError(f"missing current HOMER context: {row['cluster_id']}")
@@ -137,6 +169,34 @@ def main() -> None:
     backend.model.eval()
     for parameter in backend.model.parameters():
         parameter.requires_grad_(False)
+    memory_source = config.get("protocol", {}).get("memory_source", LEGACY_MEMORY_POLICY)
+    if memory_source == SELECTED_PLAN_POLICY and context_index is None:
+        raise RuntimeError("selected-plan smoke requires validated contexts")
+    memory_lengths = {
+        row["cluster_id"]: memory_token_count(
+            row, memory_source=memory_source, backend=backend,
+            context_index=context_index, traces=traces,
+        ) for row in selected
+    }
+    def latent_tokens(row):
+        return memory_lengths[row["cluster_id"]]
+    prompt_lengths = {}
+    if prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK:
+        # The public caption route sends a text description, not image pixels.
+        # Measure the teacher-forced text prompt including the actual target.
+        for row in selected:
+            target = target_caption_text(row)
+            partial = config.get("protocol", {}).get("training_target_policy") == PARTIAL_CAPTION_POLICY
+            if partial:
+                target = "##Caption: " + target
+            _, full, _ = _prompt_and_full(
+                backend, public_text_caption_messages(context_index[str(row["cluster_id"])]),
+                target, partial_answer=partial,
+            )
+            prompt_lengths[row["cluster_id"]] = int(full["input_ids"].shape[1])
+        smoke_rows = select_stress_rows(selected, lambda row: prompt_lengths[row["cluster_id"]], latent_tokens)
+    else:
+        smoke_rows = select_stress_rows(selected, raw_pixels, latent_tokens)
     width = int(backend.model.get_input_embeddings().weight.shape[1])
     if baseline == "receiver_cross_attention":
         bridge = ReceiverDrivenCrossAttentionBridge(
@@ -182,6 +242,8 @@ def main() -> None:
             ),
             prompt_mode=prompt_mode,
             context_index=context_index,
+            memory_source=config.get("protocol", {}).get("memory_source", "early_planner_trace_v1"),
+            target_policy=config.get("protocol", {}).get("training_target_policy", "source_caption_only_no_fabricated_explanation"),
         )
         if baseline == "receiver_cross_attention"
         else FrozenReceiverBridgeTask(
@@ -228,6 +290,13 @@ def main() -> None:
             for channel, (student, teacher) in pairs.items():
                 alignment_students[channel].append(student)
                 alignment_teachers[channel].append(teacher)
+        require_finite_metrics(sample_metrics, f"sample {row['cluster_id']}")
+        validation_metrics = None
+        if memory_source == SELECTED_PLAN_POLICY:
+            validation_metrics = task.evaluate_example(example, negative_cluster)
+            require_finite_metrics(validation_metrics, f"validation {row['cluster_id']}")
+            if "nll_improvement_over_no_memory" not in validation_metrics:
+                raise RuntimeError("selected-plan smoke did not exercise no-memory validation")
         with Image.open(row["image"]) as image:
             size = [image.width, image.height]
         sample_reports.append({
@@ -236,9 +305,11 @@ def main() -> None:
             "image_size": size,
             "raw_image_pixels": size[0] * size[1],
             "full_latent_tokens": latent_tokens(row),
+            "text_teacher_full_tokens": prompt_lengths.get(row["cluster_id"]),
             "hard_negative_cluster": negative_cluster,
             "encode_diagnostics": backend.last_encode_diagnostics,
             "loss": sample_metrics,
+            "validation_at_initial_weights": validation_metrics,
             "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
         })
@@ -275,22 +346,37 @@ def main() -> None:
             contrastive_metrics[f"retrieval_at_1_{channel}"] = float(
                 retrieval_by_channel[channel].detach().cpu()
             )
-    gradient_norm = float(torch.nn.utils.clip_grad_norm_(bridge.parameters(), 1.0))
+    require_finite_metrics(contrastive_metrics, "contrastive loss")
+    gradient_norm = float(torch.nn.utils.clip_grad_norm_(
+        bridge.parameters(), float(config["training"].get("max_grad_norm", 1.0)),
+        error_if_nonfinite=True,
+    ))
+    if gradient_norm <= 0:
+        raise RuntimeError("bridge received no gradient")
+    if any(parameter.grad is not None for parameter in backend.model.parameters()):
+        raise RuntimeError("frozen receiver accumulated gradients")
     optimizer.step()
     update_norm = float(sum(
         (parameter.detach().float() - before[name]).square().sum()
         for name, parameter in bridge.named_parameters() if parameter.requires_grad
     ).sqrt())
-    if not all(torch.isfinite(torch.tensor(value)) for value in [*metrics.values(), gradient_norm, update_norm]):
-        raise RuntimeError("non-finite real-trace smoke diagnostics")
+    require_finite_metrics({"gradient_norm": gradient_norm, "update_norm": update_norm}, "optimizer")
     if update_norm <= 0:
         raise RuntimeError("bridge did not update")
     report = {
         "status": "pass",
         "scientific_training": False,
-        "real_planner_traces": True,
+        "real_planner_traces": memory_source == LEGACY_MEMORY_POLICY,
+        "memory_source": memory_source,
+        "training_target_policy": task.target_policy if isinstance(task, ReceiverCrossAttentionTask) else None,
+        "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
         "clusters": [row["cluster_id"] for row in smoke_rows],
-        "selection": "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples",
+        "receiver_input_modality": "text_description" if prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK else "image_and_text",
+        "selection": (
+            "max_text_teacher_full_tokens_plus_max_full_latent_tokens_at_most_two_examples"
+            if prompt_mode == PUBLIC_BRIDGE_PROMPT_TRACK
+            else "max_raw_pixels_plus_max_full_latent_tokens_at_most_two_examples"
+        ),
         "communication_interface": (
             "receiver_driven_full_state_cross_attention_no_soft_prefix"
             if baseline == "receiver_cross_attention" else "input_soft_prefix"
@@ -324,8 +410,8 @@ def main() -> None:
         "update_norm": update_norm,
         "last_loss": metrics,
         "contrastive_loss": contrastive_metrics,
-        "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
-        "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+        "peak_allocated_bytes": max(item["peak_allocated_bytes"] for item in sample_reports),
+        "peak_reserved_bytes": max(item["peak_reserved_bytes"] for item in sample_reports),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
