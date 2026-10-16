@@ -60,7 +60,7 @@
   },
   "fp32_revalidation": {
     "job_id": 7097141,
-    "status": "submitted_pending_gpu_result",
+    "status": "pass",
     "submitted_at_jst": "2026-10-16T23:39:30+09:00",
     "output_directory": "results/engineering_smoke/v35_selected_plan_fp32_20261016_recovery",
     "loss_source_sha256_at_submission": "2e7e6331d347c5e7cd25e37623e7aeb6827e673b15d443556eb792015eb353c9",
@@ -71,6 +71,39 @@
       "passed": 9,
       "elapsed_seconds": 73.19
     },
-    "humor_quality_verified": false
+    "humor_quality_verified": false,
+    "scope": "engineering_only_after_fp32_nll_fix",
+    "started_at_jst": "2026-10-17T00:01:27+09:00",
+    "ended_at_jst": "2026-10-17T00:05:25+09:00",
+    "exit_code": 0,
+    "config_sha256": "164839ba57994309f7233aa94afa4a4c596f72736cf6709692c299f294eb2822",
+    "runtime_loss_source_sha256": "2e7e6331d347c5e7cd25e37623e7aeb6827e673b15d443556eb792015eb353c9",
+    "report_sha256": "2c3a7936e76c98a76f8a4b9bf1c2a1ac1274c5e9fcd04d608283efe206593440",
+    "clusters": [
+      "nycc_555",
+      "nycc_788"
+    ],
+    "policy_trainable_parameters": 0,
+    "bridge_trainable_parameters": 6949572,
+    "gradient_norm": 0.7026151418685913,
+    "update_norm": 0.2624785006046295,
+    "peak_allocated_bytes": 6871408128,
+    "peak_reserved_bytes": 7063207936,
+    "initial_weight_diagnostics": [
+      {
+        "cluster": "nycc_555",
+        "caption_nll": 3.443760633468628,
+        "nll_plus_matched_logp": 0.0,
+        "nll_improvement_over_no_memory": 0.014943361282348633,
+        "matched_minus_shuffled_logp": 0.008423328399658203
+      },
+      {
+        "cluster": "nycc_788",
+        "caption_nll": 3.237456798553467,
+        "nll_plus_matched_logp": 0.0,
+        "nll_improvement_over_no_memory": -0.00847315788269043,
+        "matched_minus_shuffled_logp": 0.0076220035552978516
+      }
+    ]
   }
 }

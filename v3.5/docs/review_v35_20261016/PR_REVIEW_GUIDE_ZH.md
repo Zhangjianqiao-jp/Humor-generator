@@ -50,10 +50,10 @@ NLL 改为对 logits.float() 计算交叉熵。真实 GPU smoke 的 BF16 NLL 约
 
 ## 已有证据与不能得出的结论
 
-恢复进度见 [RECOVERY_STATUS_ZH.md](RECOVERY_STATUS_ZH.md)：FP32 定向 CPU 回归 9 项通过，GPU 复验 job 7097141 已提交，尚待结果；不得将排队状态计为通过。
+恢复进度见 [RECOVERY_STATUS_ZH.md](RECOVERY_STATUS_ZH.md)：FP32 定向 CPU 回归 9 项通过；GPU 复验 job 7097141 于 2026-10-17 00:05:25 JST 正常结束，工程检查通过。
 
 - 真实 GPU job 7091538：H100，两个训练 cluster、一次 bridge 更新；冻结基础模型 trainable=0，bridge trainable=6,949,572，梯度范数约 0.704，更新范数约 0.262。峰值 allocated 6.40 GiB、reserved 6.56 GiB。
-- **该 GPU 运行早于 FP32 NLL 修复**。它证明原运行版本工程路径能执行，不能视为当前 PR 全部代码的真实 GPU 认证；需要复跑。
+- **该 GPU 运行早于 FP32 NLL 修复**。它证明原运行版本工程路径能执行，不能视为当前 PR 全部代码的真实 GPU 认证。后续 job 7097141 已复跑 FP32 修复版本，两样本 NLL 与负平均 log-probability 一致；源码及配置哈希核对通过。该检查仍不覆盖真实生成 KV cache 或幽默质量。
 - 真实本地 processor 检查 813 条训练、132 条验证 caption：两侧目标 token 一致，无 EOS，最长目标 44 tokens；未使用测试集生成。
 - CPU 完整单元及集成测试：187 passed in 239.40s。结构化证据见 `validation_evidence.json`。
 - 固定 8 个训练 cluster 的定性审阅发现部分计划不支持人类 caption 的具体笑点；没有总体失配率或独立标注共识。详见 `ALIGNMENT_FINDINGS_ZH.md`。

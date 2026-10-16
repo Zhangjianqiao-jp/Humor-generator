@@ -1,5 +1,13 @@
 # 执行恢复与 FP32 GPU 复验交接
 
+## 最新结果：2026-10-17
+
+GPU job 7097141 已通过，00:01:27–00:05:25 JST，退出码 0。complete、CPU preflight、GPU smoke 三份报告均 pass，配置哈希一致，运行时 losses.py 哈希与提交记录一致。冻结模型训练参数为 0，bridge 参数 6,949,572；梯度范数 0.702615，更新范数 0.262479；峰值 allocated 6.40 GiB、reserved 6.58 GiB。
+
+两训练样本的 NLL + matched_logp 均为 0。初始权重下相对 no-memory 的 NLL 改善分别为 +0.014943、-0.008473；不是验证集估计，也不是训练收益，不能证明机制或幽默效果成立。真实生成 KV cache、计划与人类 caption 对齐及科学评测仍未完成。详细数值和报告哈希见 validation_evidence.json。
+
+以下保留提交时记录，QUE 与预计启动时间是历史状态。
+
 ## 2026-10-16 本轮实际进展
 
 - 工具通道、shell、文件访问、Git 远程访问恢复；之前宿主关闭 stdout 的具体根因仍未确认。
