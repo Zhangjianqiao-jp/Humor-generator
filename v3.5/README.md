@@ -15,6 +15,16 @@ The annotation-by-annotation reproduction decision and current route changes
 are recorded in
 [`docs/HOMER_ANNOTATION_RECONCILIATION_ZH.md`](docs/HOMER_ANNOTATION_RECONCILIATION_ZH.md).
 
+The no-API-key, account-agent HOMER evaluation is resumable without chat
+context.  Use the self-contained controller and recovery rules in
+[`docs/HOMER_EVALUATION_RESUMABLE_ZH.md`](docs/HOMER_EVALUATION_RESUMABLE_ZH.md);
+the complete state-machine design is summarized in
+[`docs/EVALUATION_MECHANISM_ZH.md`](docs/EVALUATION_MECHANISM_ZH.md).
+The `scripts/resume_homer_evaluation.sh` entrypoint persists packet hashes,
+shard checkpoints, quota/transient retries, scoped worker handles and
+fail-closed finalization state. Re-running the entrypoint after a quota window
+does not re-judge validated batches or require the previous chat context.
+
 ## Scientific scope
 
 Two systems are deliberately separated:

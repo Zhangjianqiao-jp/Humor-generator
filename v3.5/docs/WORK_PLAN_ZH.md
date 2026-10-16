@@ -1265,3 +1265,29 @@ Group-of-10 auxiliary blind packets，之后只接受有完整 provenance 的外
 本记录对应运行时代码提交 `16e887ad3420e8f6318976e6b5f1f180508cccf4`；正式 bridge
 运行时提交仍为 `2477f4e461dc4477928a9b8cf3e9cbb4a54120ea`，两者均保留，不修改历史
 作业证据。旧 v2.5/v3.0、DPO 和历史 latent 输出不进入本次统计。
+
+#### 15.3.15 多模型盲评 pilot 终态（2026-09-11）
+
+为检查不同评审模型在完全相同的匿名 HOMER packet 上的一致性，使用固定的 120 条
+public packet 做了独立 pilot。`gpt-5.5`、`gpt-5.6-sol`、`gpt-5.6-terra` 均完成
+120/120 条；三者共同一致 115/120（95.83%），两两原始一致率为 96.67%--97.50%。
+每个输出都通过 packet ID/顺序/样本 SHA-256/A-B 合约门禁，且未包含 private mapping。
+结果和 manifest 保存在 `outputs/caption_judgement/pretrained_bridge_comparison_20260911/
+multimodel_pilot_120/`，方法说明见 `docs/MULTIMODEL_JUDGE_PILOT_20260911.md`。
+
+该 pilot 不是正式 HOMER 主表：协作接口不能独立验证 temperature=0，样本也只有
+120/35,250；当前环境没有可调用的 `gpt-5.4`，因此不得把 `gpt-5.6-terra` 标作
+`gpt-5.4`。正式主评测仍须使用 pinned `gpt-5-chat-latest` API runner；完整结果未
+生成以前，不报告 latent 与 pure-text 的 Pass@K 差异。
+
+新增 `scripts/run_homer_auxiliary_openai.py`，复用匿名 packet 校验并允许显式指定
+辅助模型；每个模型必须独立输出文件，记录 model/temperature/prompt hash/source
+provenance hash。`--max-requests 0` 的三模型全量协议 smoke 均通过，未发送请求、未
+创建 judgment 文件。待外部 API key 和真实可用 model endpoint 后，才可运行 35,250
+条全量 auxiliary track；辅助结果与 canonical HOMER 表分开统计。
+
+同时新增 `scripts/finalize_homer_auxiliary_models.py`：对每个 auxiliary model 严格检查
+35,250 个 packet 的一一对应、model/temperature/prompt provenance，再分别计算官方
+Pass@1/3/5；若输入为奇数个评审模型，额外生成 majority-vote 辅助结果，并输出模型间
+一致率。该脚本不允许不完整 judgment 集进入汇总，也不把 auxiliary 结果并入 canonical
+HOMER 表。

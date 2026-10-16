@@ -1,13 +1,52 @@
 schema_version: 1
 memory_id: humor_generator_v35_working
 volatile: true
-observed_at: "2026-09-11T13:38:00+09:00"
+observed_at: "2026-09-14T21:17:30+09:00"
 must_revalidate: true
-source_commit: 327fa9a0c655083462acb5e76a5390e7c01b3b1a
+source_commit: dccf160d51c7ef6dac944c1b77fe7e0870f966c9
 branch: latent
 
-current_phase: pretrained_7b_formal_bridge_and_full_generation_complete_evaluation_pending
+current_phase: homer_auxiliary_agent_evaluation_complete
 scope: v3.5_latent_only
+resumable_evaluation_controller:
+  status: implemented_smoke_passed_and_evaluation_complete
+  entrypoint: scripts/resume_homer_evaluation.sh
+  controller: scripts/homer_evaluation_controller.py
+  runbook: docs/HOMER_EVALUATION_RESUMABLE_ZH.md
+  mechanism_doc: docs/EVALUATION_MECHANISM_ZH.md
+  command: >-
+    scripts/resume_homer_evaluation.sh start --interval-seconds 120
+  state_files:
+    - evaluation_manifest.json
+    - evaluation_progress.json
+    - evaluation_controller_state.json
+    - evaluation_controller.log
+  recovery: >-
+    Re-run the same command after SSH disconnect, quota exhaustion, process
+    exit, or node restart. Valid batch checkpoints are retained; malformed
+    responses are quarantined and retried. Private mapping is local-finalizer
+    only. Both controller and runner remove provider variables ending in
+    _API_KEY. Quota reset, transient 5xx/rate-limit, timeout and unknown-error
+    states are persisted as markers instead of hot-looping.
+  models: [gpt-5.5, gpt-5.6-sol, gpt-5.6-terra]
+  unavailable_models: [gpt-5.4]
+  smoke: >-
+    py_compile, targeted recovery tests (15 passed), and controller status
+    passed on the 35250-packet evaluation root; no duplicate worker was
+    launched while existing runners were detected. The runner validates
+    existing final shard outputs and quarantines stale/partial files instead
+    of deadlocking recovery. Worker environments scrub all provider API-key
+    variables before each resumed Codex account invocation. Finalization
+    validates the summary sentinel, packet count, evaluator set and non-empty
+    Markdown before treating the run as complete; partial final reports are
+    quarantined. The context-free shell entrypoint was syntax-checked.
+  last_verified_progress: >-
+    2026-09-14T21:17 JST: all three evaluator outputs are complete at
+    35250/35250; Terra's 5/5 mandatory re-audit was promoted; strict merge and
+    finalizer returned exit code 0; multimodel_summary.json has the complete
+    sentinel and majority metrics. The 100-row Terra truncation was recovered
+    by adaptive split with immutable .invalidN evidence. No evaluator process
+    remains active. Final report: docs/MULTIMODEL_JUDGE_FULL_AGENT_EVALUATION_20260914.md.
 preference_learning:
   status: disabled
   boundary: >-
@@ -672,6 +711,34 @@ remaining_sequence_after_resource_gate:
   - compute_homer_pass_at_1_3_5_and_auxiliary_statistics
   - publish_text_homer_vs_latent_comparison_report
 
+current_auxiliary_agent_evaluation:
+  status: running
+  no_api_key: true
+  transport: codex-exec-account
+  protocol: homer_official_humorAI_pairwise_reference
+  packet_count: 35250
+  systems: [latent_bridge, text_homer_context_replay]
+  images: 47
+  trials: 5
+  candidates_per_image: 5
+  reference_groups: ["1-9", "200-209", "1000-1009"]
+  references_per_group: 5
+  evaluators: [gpt-5.5, gpt-5.6-sol, gpt-5.6-terra]
+  unavailable_requested_model: gpt-5.4
+  gpt_5_4_note: >-
+    No callable gpt-5.4 agent is exposed in this environment; gpt-5.6-terra is
+    retained under its true model ID and is never relabeled as gpt-5.4.
+  public_only: true
+  private_mapping_exposed: false
+  temperature: 0
+  temperature_note: requested_zero_not_independently_exposed_by_codex_interface
+  shard_dir: outputs/caption_judgement/pretrained_bridge_comparison_20260911/multimodel_agent_shards
+  supervisor: scripts/supervise_homer_agent_evaluation.py
+  supervisor_log: outputs/caption_judgement/pretrained_bridge_comparison_20260911/agent_supervisor.log
+  legacy_terra_suspect_shards: ["shard_001201_002400", "shard_006001_010800", "shard_010801_015600", "shard_025201_030000", "shard_030001_034800"]
+  legacy_terra_policy: backup_and_replace_only_after_complete_reaudit
+  completion_gate: all_three_models_35250_rows_then_merge_and_finalizer
+
 evaluation_packets:
   status: ready_external_judgment_pending
   primary:
@@ -700,6 +767,19 @@ evaluation_packets:
     packets: 94
     images: 47
     judges_required: 3
+  multimodel_pilot:
+    directory: outputs/caption_judgement/pretrained_bridge_comparison_20260911/multimodel_pilot_120
+    protocol: homer_official_humorAI_pairwise_anonymous_consistency_pilot
+    packets_per_model: 120
+    evaluators: [gpt-5.5, gpt-5.6-sol, gpt-5.6-terra]
+    rows_per_evaluator: 120
+    unanimous_packets: 115
+    unanimous_rate: 0.9583333333333334
+    gpt_5_4_available: false
+    temperature_control: requested_zero_not_exposed_by_collaboration_interface
+    status: complete_pilot_not_primary
+    runner: scripts/run_homer_auxiliary_openai.py
+    finalizer: scripts/finalize_homer_auxiliary_models.py
   prohibition: no_quality_claim_before_complete_external_judgments
 
 eta:
