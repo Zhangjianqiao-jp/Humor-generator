@@ -105,5 +105,170 @@
         "matched_minus_shuffled_logp": 0.0076220035552978516
       }
     ]
+  },
+  "generation_cache_probe": {
+    "job_id": 7097320,
+    "status": "failed_original_numeric_gate",
+    "started_at_jst": "2026-10-17T01:09:25+09:00",
+    "ended_at_jst": "2026-10-17T01:12:02+09:00",
+    "exit_code": 1,
+    "report_sha256": "e60298b1084c9ca06a87769481302b5611da1a815b814ddcd5be10394e81af8b",
+    "source_manifest_sha256": "fe37829a951b9beea68221712915b39a18c0deeaa2fd540dbc8c0534fd8cd56f",
+    "all_42_source_config_hashes_verified_before_diagnostic_changes": true,
+    "max_abs_logit_tolerance": 0.25,
+    "kl_tolerance": 0.001,
+    "checks": [
+      {
+        "cluster": "nycc_555",
+        "condition": "no_memory",
+        "status": "pass",
+        "steps": 8,
+        "argmax_agreement_count": 8,
+        "max_abs_logit_error": 0.20703125,
+        "max_kl": 0.0005111356731504202,
+        "hooks_removed": true,
+        "observed_decoder_sequence_lengths": [
+          140,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "cluster": "nycc_555",
+        "condition": "initial_latent_bridge",
+        "status": "fail",
+        "steps": 8,
+        "argmax_agreement_count": 8,
+        "max_abs_logit_error": 0.28125,
+        "max_kl": 0.0020457059144973755,
+        "hooks_removed": true,
+        "observed_decoder_sequence_lengths": [
+          140,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "cluster": "nycc_788",
+        "condition": "no_memory",
+        "status": "fail",
+        "steps": 8,
+        "argmax_agreement_count": 8,
+        "max_abs_logit_error": 0.3125,
+        "max_kl": 0.0015213806182146072,
+        "hooks_removed": true,
+        "observed_decoder_sequence_lengths": [
+          155,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "cluster": "nycc_788",
+        "condition": "initial_latent_bridge",
+        "status": "fail",
+        "steps": 8,
+        "argmax_agreement_count": 8,
+        "max_abs_logit_error": 0.25,
+        "max_kl": 0.0013032322749495506,
+        "hooks_removed": true,
+        "observed_decoder_sequence_lengths": [
+          155,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    ],
+    "generation_summary": [
+      {
+        "cluster": "nycc_555",
+        "condition": "text_same_plan",
+        "count": 3,
+        "parse_status_counts": {
+          "ok": 3
+        },
+        "duplicate_valid_captions": 0,
+        "duplicate_raw_outputs": 0
+      },
+      {
+        "cluster": "nycc_555",
+        "condition": "no_memory",
+        "count": 3,
+        "parse_status_counts": {
+          "ok": 3
+        },
+        "duplicate_valid_captions": 0,
+        "duplicate_raw_outputs": 0
+      },
+      {
+        "cluster": "nycc_555",
+        "condition": "initial_latent_bridge",
+        "count": 3,
+        "parse_status_counts": {
+          "ok": 3
+        },
+        "duplicate_valid_captions": 0,
+        "duplicate_raw_outputs": 0
+      },
+      {
+        "cluster": "nycc_788",
+        "condition": "text_same_plan",
+        "count": 3,
+        "parse_status_counts": {
+          "ok": 3
+        },
+        "duplicate_valid_captions": 0,
+        "duplicate_raw_outputs": 0
+      },
+      {
+        "cluster": "nycc_788",
+        "condition": "no_memory",
+        "count": 3,
+        "parse_status_counts": {
+          "ok": 3
+        },
+        "duplicate_valid_captions": 0,
+        "duplicate_raw_outputs": 0
+      },
+      {
+        "cluster": "nycc_788",
+        "condition": "initial_latent_bridge",
+        "count": 3,
+        "parse_status_counts": {
+          "ok": 3
+        },
+        "duplicate_valid_captions": 0,
+        "duplicate_raw_outputs": 0
+      }
+    ],
+    "humor_quality_verified": false,
+    "followup": {
+      "job_id": 7100860,
+      "status": "submitted_pending_result",
+      "precision": "unquantized_fp32_compute_after_bf16_weight_loading",
+      "caveat": "Converting BF16-loaded weights to FP32 does not restore original weight precision; diagnoses compute/quantization jointly.",
+      "output_directory": "results/engineering_smoke/v35_generation_cache_fp32_20261017",
+      "cache_only": true
+    }
   }
 }

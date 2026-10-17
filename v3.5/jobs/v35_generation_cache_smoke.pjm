@@ -17,4 +17,9 @@ export PYTORCH_ALLOC_CONF=backend:native
 export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=1
 export NLTK_DATA="$PWD/artifacts/nltk_data"
-python scripts/check_selected_plan_generation.py --output "${SMOKE_OUTPUT:?unique output directory required}"
+if [ "${CACHE_ONLY:-0}" = 1 ]; then
+  set -- --cache-only
+else
+  set --
+fi
+python scripts/check_selected_plan_generation.py --precision "${PROBE_PRECISION:-nf4_bf16}" "$@" --output "${SMOKE_OUTPUT:?unique output directory required}"

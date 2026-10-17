@@ -80,6 +80,8 @@ def cache_probe(backend, bridge, memory, messages):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--precision", choices=("nf4_bf16", "fp32"), default="nf4_bf16")
+    ap.add_argument("--cache-only", action="store_true")
     args=ap.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     config_path=ROOT/"configs/pilot/cross_attention_caption_selected_plan_v2.yaml"
@@ -97,8 +99,10 @@ def main():
         validate_row_context(row, contexts[cluster])
         selected.append(row)
     mc=cfg["model"]
-    backend=QwenBackend.load(mc["name"], revision=mc["revision"], load_in_4bit=True,
+    backend=QwenBackend.load(mc["name"], revision=mc["revision"], load_in_4bit=args.precision=="nf4_bf16",
                             min_visual_tokens=mc["min_visual_tokens"], max_visual_tokens=mc["max_visual_tokens"])
+    if args.precision == "fp32":
+        backend.model.float()
     torch.manual_seed(cfg["training"]["seed"])
     width=backend.model.get_input_embeddings().weight.shape[1]
     bc=cfg["bridge"]
@@ -106,7 +110,9 @@ def main():
         layer_indices=bc["layer_indices"], bottleneck_dim=bc["bottleneck_dim"],
         heads=bc["heads"], gate_init=bc["gate_init"], channel_fusion=bc["channel_fusion"],
         projection_mode=bc["projection_mode"]).to(model_device(backend.model)).eval()
-    report={"scope":"initial_bridge_engineering_only_train_rows", "humor_quality_verified":False,
+    report={"scope":"initial_bridge_engineering_only_train_rows", "precision":args.precision,
+            "cache_only":args.cache_only, "model_parameter_dtype":str(next(backend.model.parameters()).dtype),
+            "attention_implementation":getattr(backend.model.config, "_attn_implementation", None), "humor_quality_verified":False,
             "model_revision":mc["revision"], "config_sha256":digest(config_path),
             "context_sha256":digest(context_path), "cache_checks":[], "generations":[],
             "production_generate_use_cache":backend.model.generation_config.use_cache,
@@ -121,7 +127,7 @@ def main():
         for condition, mem in (("no_memory",None),("initial_latent_bridge",memory)):
             check=cache_probe(backend,bridge,mem,messages)
             report["cache_checks"].append({"cluster":cluster,"condition":condition,**check})
-        for condition in ("text_same_plan","no_memory","initial_latent_bridge"):
+        for condition in (() if args.cache_only else ("text_same_plan","no_memory","initial_latent_bridge")):
             msgs=public_text_caption_messages(context) if condition=="text_same_plan" else messages
             for seed in (20261017,20261018,20261019):
                 with (bridge.inject(backend.model,memory) if condition=="initial_latent_bridge" else nullcontext()):
@@ -135,7 +141,7 @@ def main():
                     f.write(json.dumps(item,ensure_ascii=False)+"\n")
     report["generation_summary"]=[]
     for row in selected:
-        for condition in ("text_same_plan","no_memory","initial_latent_bridge"):
+        for condition in (() if args.cache_only else ("text_same_plan","no_memory","initial_latent_bridge")):
             items=[g for g in report["generations"] if g["cluster"]==row["cluster_id"] and g["condition"]==condition]
             valid=[" ".join(g["caption"].casefold().split()) for g in items if g["parse_status"]=="ok"]
             report["generation_summary"].append({"cluster":row["cluster_id"],"condition":condition,
