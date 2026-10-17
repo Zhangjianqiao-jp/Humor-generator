@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "scope": "three_small_float32_cpu_fixtures_alignment_only",
+  "reference_commit": "3f6bf5442c6e8848555a6132516e6d36f35444fb",
+  "reference_file_sha256": "415957df427eb79a4212e760af4d133cb4ce10cc4619f11447082117922f366d",
+  "max_abs_errors": [
+    1.1920928955078125e-07,
+    0.0,
+    1.1920928955078125e-07
+  ],
+  "atol": 2e-05,
+  "rtol": 2e-05,
+  "math_unit_tests_passed": 6,
+  "gpu_model_validated": false
+}
