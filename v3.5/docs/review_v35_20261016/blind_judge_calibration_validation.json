@@ -1,0 +1,41 @@
+{
+  "crowd_ranked": {
+    "correct": 6,
+    "count": 10
+  },
+  "identical_caption": {
+    "correct": 2,
+    "count": 2
+  },
+  "schema_valid": 12,
+  "crowd_pair_consistent": 3,
+  "crowd_pair_total": 5,
+  "per_cluster": {
+    "nycc_859": [
+      "winner",
+      "loser"
+    ],
+    "nycc_593": [
+      "loser",
+      "loser"
+    ],
+    "nycc_691": [
+      "winner",
+      "winner"
+    ],
+    "nycc_549": [
+      "winner",
+      "loser"
+    ],
+    "nycc_562": [
+      "winner",
+      "winner"
+    ]
+  },
+  "scope": "description_only_five_train_calibration_pairs_not_representative_of_generated_captions",
+  "source_sha256": {
+    "review.jsonl": "daef9974292216d176f5df64bac9f0a9b8252b5d4ceea92c1c7312b3aee43c6d",
+    "private_key.jsonl": "97a188ee4746e58a34c9a9fa5e47186d65bbdfbbe2718c67d99bea42846cfb29",
+    "judgments/judgments.jsonl": "34383b903151a6e20625d232469ecbca53805cfbaeb802c5d94787487b46ff3a"
+  }
+}
