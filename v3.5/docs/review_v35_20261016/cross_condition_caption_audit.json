@@ -1,0 +1,38 @@
+{
+  "scope": "two_train_clusters_initial_bridge_only",
+  "exact_matches": 3,
+  "pairs": [
+    {
+      "cluster": "nycc_555",
+      "seed": 20261017,
+      "exact_caption_equal": true
+    },
+    {
+      "cluster": "nycc_555",
+      "seed": 20261018,
+      "exact_caption_equal": true
+    },
+    {
+      "cluster": "nycc_555",
+      "seed": 20261019,
+      "exact_caption_equal": false
+    },
+    {
+      "cluster": "nycc_788",
+      "seed": 20261017,
+      "exact_caption_equal": true
+    },
+    {
+      "cluster": "nycc_788",
+      "seed": 20261018,
+      "exact_caption_equal": false
+    },
+    {
+      "cluster": "nycc_788",
+      "seed": 20261019,
+      "exact_caption_equal": false
+    }
+  ],
+  "denominator": 6,
+  "humor_quality_verified": false
+}
