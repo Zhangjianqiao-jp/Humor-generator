@@ -44,7 +44,7 @@ def analyze(run_dirs, context_path):
     blob=context_path.read_bytes();context_hash=hashlib.sha256(blob).hexdigest()
     contexts={c['cluster_id']:c for c in (json.loads(l) for l in blob.decode().splitlines() if l.strip())}
     all_records={};all_clusters=[];reference=None;expected=set()
-    invariants=['arms','seeds','model_revision','precision','train_sha256','context_sha256','config_sha256','script_sha256','source_sha256']
+    invariants=['arms','seeds','model_revision','precision','train_sha256','context_sha256','config_sha256','script_sha256','source_sha256','alignment_sha256','alignment_parameters']
     for directory in run_dirs:
         manifest=json.loads((directory/'manifest.json').read_text())
         if manifest['context_sha256']!=context_hash:raise ValueError('context hash mismatch')

@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-`scripts/statebridge_alignment.py` 已实现独立的无训练对齐计算；它还没有接入 Qwen 生成，也没有加入正在排队的五组实验。不能称为 StateBridge 完整复现或效果通过。
+`scripts/statebridge_alignment.py` 已实现独立的无训练对齐计算；已有独立 Qwen 生成入口 `scripts/compare_statebridge_interfaces.py`，尚未在 GPU 执行，也没有加入正在排队的五组实验。不能称为 StateBridge 完整复现或效果通过。
 
 参考 [StateBridge 论文](https://arxiv.org/abs/2608.13317)（arXiv 页面注明 COLM 2026 接收）及[官方实现](https://github.com/YanwenPneg/StateBridge/blob/3f6bf5442c6e8848555a6132516e6d36f35444fb/methods/state_bridge.py)。固定参考提交 `3f6bf5442c6e8848555a6132516e6d36f35444fb`。
 
@@ -25,3 +25,17 @@
 现有五组、四批串行实验继续使用固定脚本。后续对齐实验单独版本化：固定同一计划和接收提示，对比原始 hidden、范数校准 hidden、完整对齐，并保留 text 与 exact embedding 控制。记录对齐开销、输入长度、token 对应和全部参数；先做单 cluster 资源检查，再扩展。若采用计划回放而非官方发送端生成，应命名为 StateBridge-inspired replay，不能声称官方复现。
 
 先看实体、冲突、路径恢复及格式，再用盲评判定幽默质量。恢复率、训练样本小试和对齐数值一致性均不能替代质量证据。概率加权接口的对照依据另见 [CIPHER, ICLR 2024](https://arxiv.org/abs/2310.06272)；当前 top64 replay 也是诊断变体。
+
+## 独立生成入口（待 GPU 验证）
+
+`compare_statebridge_interfaces.py` 是已冻结五组脚本的独立派生版本，文件头记录来源 SHA256。六组为 no_memory、text_plan、exact_embeddings、raw_hidden_replayed_plan、global_norm_hidden_replayed_plan、statebridge_replayed_plan。相同模型、计划全长、提示、两个 caption seeds 和一次 greedy 恢复。每个 cluster 共 18 次生成；默认只运行一个 cluster 做资源与接口验证。
+
+相邻比较含义：raw→global_norm 测试范数校准；global_norm→statebridge 测试白化、旋转、重着色和词表锚定的组合，不能把组合效果全归于旋转。当前不做 K=64 截断，避免截断与对齐同时改变。与原五组归一化方案也不同：原方案使用每个对应 token 的范数，此处使用全词表平均范数。
+
+启动文件 `jobs/v35_statebridge_compare.pjm`，20 分钟、一个 GPU。须在既有四批结束后再提交，当前未提交。工作目录为 v3.5：
+
+```sh
+pjsub -x COMPARE_OUTPUT=results/engineering_smoke/v35_statebridge_pilot_20261018,MAX_CLUSTERS=1 jobs/v35_statebridge_compare.pjm
+```
+
+`alignment_events.jsonl` 在分解前后落盘，用于区别分解未完成与生成失败。manifest 记录对齐模块哈希和固定参数；分析器拒绝合并参数或模块哈希不同的批次。准备时间是各组共享开销，不作为某组独有耗时。资源小试完成后再决定是否扩展到完整 16 个 cluster。

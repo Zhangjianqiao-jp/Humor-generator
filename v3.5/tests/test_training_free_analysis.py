@@ -61,5 +61,16 @@ class AnalysisTests(unittest.TestCase):
             self.assertFalse(result['humour_quality_evaluated'])
     def test_single_contest_no_spurious_interval(self):
         self.assertIsNone(a.paired_interval([1.0])['interval95'])
+    def test_alignment_contract_changes_rejected(self):
+        for field in ['alignment_sha256','alignment_parameters']:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                run,context,rows=self.fixture(Path(tmp))
+                (run/'records.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
+                second=Path(tmp)/'second';second.mkdir()
+                manifest=json.loads((run/'manifest.json').read_text())
+                manifest[field]='changed'
+                (second/'manifest.json').write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(ValueError,'incompatible run contracts'):
+                    a.analyze([run,second],context)
 
 if __name__=='__main__':unittest.main()
