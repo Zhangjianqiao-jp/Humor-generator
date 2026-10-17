@@ -1,0 +1,19 @@
+#!/bin/sh
+#PJM -L rscgrp=b-batch
+#PJM -L node=1
+#PJM -L elapse=01:00:00
+#PJM -j
+#PJM -S
+set -eu
+cd "${PJM_O_WORKDIR:-$(dirname "$0")/..}"
+module purge
+module load python/3.12.11
+module load cuda/12.6.1
+. .venv/bin/activate
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+export PYTHONUNBUFFERED=1
+export PYTHONPATH=src
+# One process and one GPU, all conditions serial; weights loaded only once.
+python scripts/compare_training_free_interfaces.py --scheme all --max-clusters 16 --output "${COMPARE_OUTPUT:?unique output required}"
