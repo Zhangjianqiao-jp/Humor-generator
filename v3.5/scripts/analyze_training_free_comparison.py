@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import random
+import re
 
 
 def normalized(value):
@@ -28,6 +29,12 @@ def recovery_scores(raw, context, no_memory=False):
             'paths_exact':valid and value.get('paths')==target['paths'],
             'conflict_normalized_exact':valid and normalized(value.get('conflict'))==normalized(target['conflict']),
             'full_plan_exact':value==target}
+
+
+def unwrap_json_fence(raw):
+    """Secondary content-only measure: unwrap one whole-output fence, never extract substrings."""
+    match=re.fullmatch(r'\s*```(?:json)?[ \t]*\r?\n(.*?)\r?\n```\s*',raw,re.DOTALL)
+    return (match.group(1), True) if match else (raw, False)
 
 
 def paired_interval(differences, repeats=10000):
@@ -74,10 +81,16 @@ def analyze(run_dirs, context_path):
         rows=[r for k,r in all_records.items() if k[1]==arm]
         caps=[r for r in rows if r['task']=='caption'];recs=[r for r in rows if r['task']=='recovery']
         scores=[recovery_scores(r['raw_output'],contexts[r['cluster']],arm=='no_memory') for r in recs]
+        unwrapped=[unwrap_json_fence(r['raw_output']) for r in recs]
+        content_scores=[recovery_scores(raw,contexts[r['cluster']],arm=='no_memory') for r,(raw,_) in zip(recs,unwrapped)]
         output['arms'][arm]={'caption_count':len(caps),'caption_parse_status':dict(Counter(r['parse_status'] for r in caps)),
             'caption_token_cap_count':sum(bool(r['reached_token_cap']) for r in caps),
             'recovery_count':len(recs),'recovery_token_cap_count':sum(bool(r['reached_token_cap']) for r in recs),
             'recovery_field_counts':{k:sum(bool(v[k]) for v in scores) for k in scores[0]},
+            'secondary_fence_normalized_recovery':{
+                'scope':'posthoc_content_diagnostic_not_strict_format_compliance',
+                'fences_removed':sum(removed for _,removed in unwrapped),
+                'field_counts':{k:sum(bool(v[k]) for v in content_scores) for k in content_scores[0]}},
             'interpretation':'no-memory should return {}, not reconstruct missing plan' if arm=='no_memory' else 'field exactness is lexical/structural, not semantic judgement'}
         if arm!='text_plan' and 'text_plan' in reference['arms']:
             diffs=[];equal=0;pairs=0

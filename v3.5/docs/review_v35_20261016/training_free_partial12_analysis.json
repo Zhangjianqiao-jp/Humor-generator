@@ -1,0 +1,239 @@
+{
+  "status": "complete_descriptive_analysis",
+  "contests": 12,
+  "records": 180,
+  "humour_quality_evaluated": false,
+  "arms": {
+    "no_memory": {
+      "caption_count": 24,
+      "caption_parse_status": {
+        "ok": 24
+      },
+      "caption_token_cap_count": 1,
+      "recovery_count": 12,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 12,
+        "field_counts": {
+          "json_valid": 12,
+          "empty_object_correct": 12,
+          "entity_set_exact": 0,
+          "paths_exact": 0,
+          "conflict_normalized_exact": 0,
+          "full_plan_exact": 0
+        }
+      },
+      "interpretation": "no-memory should return {}, not reconstruct missing plan"
+    },
+    "text_plan": {
+      "caption_count": 24,
+      "caption_parse_status": {
+        "ok": 24
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 12,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 12,
+        "field_counts": {
+          "json_valid": 12,
+          "empty_object_correct": 0,
+          "entity_set_exact": 12,
+          "paths_exact": 12,
+          "conflict_normalized_exact": 11,
+          "full_plan_exact": 11
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "exact_embeddings": {
+      "caption_count": 24,
+      "caption_parse_status": {
+        "ok": 24
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 12,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 12,
+        "field_counts": {
+          "json_valid": 12,
+          "empty_object_correct": 0,
+          "entity_set_exact": 12,
+          "paths_exact": 12,
+          "conflict_normalized_exact": 11,
+          "full_plan_exact": 11
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "soft_top64_replayed_plan": {
+      "caption_count": 24,
+      "caption_parse_status": {
+        "ok": 24
+      },
+      "caption_token_cap_count": 2,
+      "recovery_count": 12,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 12,
+        "field_counts": {
+          "json_valid": 12,
+          "empty_object_correct": 0,
+          "entity_set_exact": 0,
+          "paths_exact": 0,
+          "conflict_normalized_exact": 0,
+          "full_plan_exact": 0
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "norm_hidden_replayed_plan": {
+      "caption_count": 24,
+      "caption_parse_status": {
+        "ok": 23,
+        "invalid_markers": 1
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 12,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 12,
+        "field_counts": {
+          "json_valid": 12,
+          "empty_object_correct": 0,
+          "entity_set_exact": 0,
+          "paths_exact": 0,
+          "conflict_normalized_exact": 0,
+          "full_plan_exact": 0
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    }
+  },
+  "paired_caption_comparisons": [
+    {
+      "arm": "no_memory",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": [
+          0.0,
+          0.0
+        ],
+        "resampling_unit": "contest",
+        "repeats": 10000,
+        "scope": "descriptive_format_only_not_humour_or_confirmatory"
+      },
+      "normalized_exact_caption_matches": 0,
+      "both_valid_pairs": 24
+    },
+    {
+      "arm": "exact_embeddings",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": [
+          0.0,
+          0.0
+        ],
+        "resampling_unit": "contest",
+        "repeats": 10000,
+        "scope": "descriptive_format_only_not_humour_or_confirmatory"
+      },
+      "normalized_exact_caption_matches": 24,
+      "both_valid_pairs": 24
+    },
+    {
+      "arm": "soft_top64_replayed_plan",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": [
+          0.0,
+          0.0
+        ],
+        "resampling_unit": "contest",
+        "repeats": 10000,
+        "scope": "descriptive_format_only_not_humour_or_confirmatory"
+      },
+      "normalized_exact_caption_matches": 1,
+      "both_valid_pairs": 24
+    },
+    {
+      "arm": "norm_hidden_replayed_plan",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": -0.041666666666666664,
+        "interval95": [
+          -0.125,
+          0.0
+        ],
+        "resampling_unit": "contest",
+        "repeats": 10000,
+        "scope": "descriptive_format_only_not_humour_or_confirmatory"
+      },
+      "normalized_exact_caption_matches": 1,
+      "both_valid_pairs": 23
+    }
+  ],
+  "partial": true,
+  "planned_contests": 16,
+  "evidence_sha256": {
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch0/manifest.json": "e6ed8bc05a99702f42335ed84366645aaafb4fef3758d42eb651702ee7b4c5dc",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch0/summary.json": "a2b4a643836af625f72a8e5aba25e28a797afbacab831ec762032b1df7a2eb84",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch0/records.jsonl": "6f655e39e4f6bc195eed8f1d295f85dc4f8080f667c6b93449b0fc89e2a6537f",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch1/manifest.json": "1fce07086335bbb733bd8da68b595ed2c5803ac744a177bad1140b340c2b40c3",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch1/summary.json": "12fa62f31f29b2bdb20853d35489f0b16047dab7c6f248e90d2eee2a084fb715",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch1/records.jsonl": "b7cbcc1ca795f17481c57a2a162d39de7a12b0721e41520d31fe2fb0b9b3074e",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch2/manifest.json": "1fe6065ca7a087ec2dbdec0433a06afe5747495f8869e8d68ae66e1c4561d78f",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch2/summary.json": "019e318381be294501c23a540cab175f9e181b3775bd713331b388ff45d1e795",
+    "results/engineering_smoke/v35_training_free_serial_20261017_batch2/records.jsonl": "57846f39b0a9ffe0982e638d8cafd26d1d8fd9649824503eafc54e54b3d3c8a3"
+  },
+  "analyzer_sha256": "72b7b8227d9734df96123d2face9e22ae4a949c8da10b48b04cd519ce8020bf5"
+}

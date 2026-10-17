@@ -59,6 +59,20 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(result['arms']['no_memory']['caption_count'],2)
             self.assertEqual(result['arms']['no_memory']['caption_parse_status']['invalid_markers'],2)
             self.assertFalse(result['humour_quality_evaluated'])
+    def test_fence_unwrap_is_whole_output_only(self):
+        self.assertEqual(a.unwrap_json_fence('```json\n{}\n```'),('{}',True))
+        for raw in ['Here is JSON: ```json\n{}\n```','```json\n{}\n``` trailing',
+                    '```python\n{}\n```','{}']:
+            self.assertEqual(a.unwrap_json_fence(raw),(raw,False))
+    def test_fenced_content_does_not_rewrite_strict_score(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run,context,rows=self.fixture(Path(tmp))
+            rows[0]['raw_output']='```json\n{}\n```'
+            (run/'records.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
+            result=a.analyze([run],context)['arms']['no_memory']
+            self.assertEqual(result['recovery_field_counts']['empty_object_correct'],0)
+            self.assertEqual(result['secondary_fence_normalized_recovery']['field_counts']['empty_object_correct'],1)
+
     def test_single_contest_no_spurious_interval(self):
         self.assertIsNone(a.paired_interval([1.0])['interval95'])
     def test_alignment_contract_changes_rejected(self):
