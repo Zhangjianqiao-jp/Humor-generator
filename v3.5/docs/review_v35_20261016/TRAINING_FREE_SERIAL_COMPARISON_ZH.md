@@ -49,3 +49,5 @@ soft 方案的每步分布来自计划前缀，既可能丢失低概率的已选
 ## 串行自动接续
 
 `scripts/continue_training_free_batches.py` 已在 genkai0001 的 tmux `v35-recovery:latent-serial` 启动。只有前批 60 条结果齐备、源码哈希/offset 一致、调度器退出码为 0，才提交下一批。任一失败、源码改变、输出目录冲突或超过 72 小时就停止，不自动重试。此监控不会自动宣布质量通过或自动修改 PR。日志位于 `results/preflight/v35_effectiveness_20261017/serial_batches.log`。
+
+数学定义及结果解释的补充：[TRAINING_FREE_MATH_AUDIT_ZH.md](TRAINING_FREE_MATH_AUDIT_ZH.md)。soft replay 不是已选计划的无损表示；exact recovery 不是幽默质量或有效语义利用的必要条件。此次保留排队版本，禁止事后将诊断变体当作官方方法复现。

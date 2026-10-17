@@ -1,0 +1,18 @@
+{
+  "status": "pass",
+  "scope": "mathematical_toy_counterexamples_not_model_quality",
+  "weighted_embedding_noninjective": true,
+  "replay_blind_to_final_token": true,
+  "topk_error_bound_example": {
+    "error": "2/15",
+    "bound": "1/5"
+  },
+  "norm_cancellation_example": {
+    "input_norms": [
+      1,
+      1
+    ],
+    "mixture_norm": 0
+  },
+  "implication": "A continuous embedding need not preserve a distribution or the complete chosen message."
+}
