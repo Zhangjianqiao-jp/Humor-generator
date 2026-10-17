@@ -1,6 +1,6 @@
 # 无训练接口串行 GPU 对比
 
-GPU 作业 **7102098** 已提交；结果目录 `results/engineering_smoke/v35_training_free_serial_20261017`。尚无 GPU 通过结果。
+原一小时作业 7102098 因预计排队到 10 月 20 日而取消，未运行。替换为每批 4 个 cluster、20 分钟上限的四批串行任务，首批 **7102101**，预计 2026-10-18 05:00 JST 启动（可能变化）。结果目录 `results/engineering_smoke/v35_training_free_serial_20261017_batch0` 到 `batch3`。尚无 GPU 通过结果。
 
 ## 本轮范围
 
@@ -29,7 +29,7 @@ GPU 作业 **7102098** 已提交；结果目录 `results/engineering_smoke/v35_t
 
 - 共用实现：`scripts/compare_training_free_interfaces.py`
 - 独立方案入口：`sh scripts/run_text_interface_controls.sh --output <new-dir>`、`sh scripts/run_soft_plan_interface.sh --output <new-dir>`、`sh scripts/run_normalized_hidden_interface.sh --output <new-dir>`。
-- 一次串行运行全部条件：`jobs/v35_training_free_compare.pjm`，单节点，最多 1 小时。
+- 一次串行运行全部条件：`jobs/v35_training_free_compare.pjm`，单节点，每批最多 20 分钟，默认 4 个 cluster。
 - 脚本只接受 1–16 个训练 cluster；目录必须不存在。逐条持久化 `records.jsonl`；完成写 `summary.json`，完成状态不是质量通过。
 - 固定模型 revision、NF4/BF16 和 source/config/data 哈希。已知低精度 cache 数值差异保持披露，不继续扩展精度支线。
 
@@ -45,3 +45,7 @@ soft 方案的每步分布来自计划前缀，既可能丢失低概率的已选
 
 [CIPHER, ICLR 2024](https://proceedings.iclr.cc/paper_files/paper/2024/hash/e444859b2a22df6b56af9381ad1e9480-Abstract-Conference.html)：概率加权 embedding 通信先例。
 [StateBridge, 2026 preprint](https://arxiv.org/abs/2608.13317)：后续对齐方法参照；本轮归一化 hidden-state 不是其复现。
+
+## 串行自动接续
+
+`scripts/continue_training_free_batches.py` 已在 genkai0001 的 tmux `v35-recovery:latent-serial` 启动。只有前批 60 条结果齐备、源码哈希/offset 一致、调度器退出码为 0，才提交下一批。任一失败、源码改变、输出目录冲突或超过 72 小时就停止，不自动重试。此监控不会自动宣布质量通过或自动修改 PR。日志位于 `results/preflight/v35_effectiveness_20261017/serial_batches.log`。

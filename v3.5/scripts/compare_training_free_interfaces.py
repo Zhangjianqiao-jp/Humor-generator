@@ -34,8 +34,11 @@ def main():
     ap.add_argument('--scheme',choices=['all',*SCHEMES],default='all')
     ap.add_argument('--output',type=Path,required=True)
     ap.add_argument('--max-clusters',type=int,default=16)
+    ap.add_argument('--cluster-offset',type=int,default=0)
     args=ap.parse_args()
     if not 1<=args.max_clusters<=16: raise ValueError('diagnostic limit is 1..16 train clusters')
+    if args.cluster_offset < 0 or args.cluster_offset+args.max_clusters > 16:
+        raise ValueError('batch must stay inside the fixed 16-cluster diagnostic set')
     args.output.mkdir(parents=True,exist_ok=False)
     cfgpath=ROOT/'configs/pilot/cross_attention_caption_selected_plan_v2.yaml'
     cfg=yaml.safe_load(cfgpath.read_text());mc=cfg['model']
@@ -43,10 +46,10 @@ def main():
     rows=[json.loads(l) for l in trainpath.read_text().splitlines() if l.strip()]
     contextpath=ROOT/cfg['data']['context_index']; contexts=load_context_index(contextpath)
     selection_seed='v35_effectiveness_diagnostic_20261017:'
-    clusters=sorted({r['cluster_id'] for r in rows},key=lambda c:hashlib.sha256((selection_seed+c).encode()).hexdigest())[:args.max_clusters]
+    clusters=sorted({r['cluster_id'] for r in rows},key=lambda c:hashlib.sha256((selection_seed+c).encode()).hexdigest())[args.cluster_offset:args.cluster_offset+args.max_clusters]
     arms=sum(SCHEMES.values(),[]) if args.scheme=='all' else SCHEMES[args.scheme]
     manifest={'scope':'train_only_custom_prompt_not_official_homer_reproduction',
-        'arms':arms,'clusters':clusters,'selection_seed':selection_seed,'seeds':[20261017,20261018],
+        'arms':arms,'clusters':clusters,'cluster_offset':args.cluster_offset,'selection_seed':selection_seed,'seeds':[20261017,20261018],
         'training':False,'model_revision':mc['revision'],'precision':'nf4_bf16',
         'train_sha256':sha(trainpath),'context_sha256':sha(contextpath),
         'config_sha256':sha(cfgpath),'script_sha256':sha(Path(__file__)),
