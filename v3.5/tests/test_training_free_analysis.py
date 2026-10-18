@@ -76,7 +76,7 @@ class AnalysisTests(unittest.TestCase):
     def test_single_contest_no_spurious_interval(self):
         self.assertIsNone(a.paired_interval([1.0])['interval95'])
     def test_alignment_contract_changes_rejected(self):
-        for field in ['alignment_sha256','alignment_parameters']:
+        for field in ['alignment_sha256','alignment_parameters','controls_sha256','source_interventions']:
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 run,context,rows=self.fixture(Path(tmp))
                 (run/'records.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
