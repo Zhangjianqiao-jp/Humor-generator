@@ -1,0 +1,268 @@
+{
+  "status": "complete_descriptive_analysis",
+  "contests": 1,
+  "records": 18,
+  "humour_quality_evaluated": false,
+  "arms": {
+    "no_memory": {
+      "caption_count": 2,
+      "caption_parse_status": {
+        "ok": 2
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 1,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 1,
+        "field_counts": {
+          "json_valid": 1,
+          "empty_object_correct": 1,
+          "entity_set_exact": 0,
+          "paths_exact": 0,
+          "conflict_normalized_exact": 0,
+          "full_plan_exact": 0
+        }
+      },
+      "interpretation": "no-memory should return {}, not reconstruct missing plan"
+    },
+    "text_plan": {
+      "caption_count": 2,
+      "caption_parse_status": {
+        "ok": 2
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 1,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 1,
+        "field_counts": {
+          "json_valid": 1,
+          "empty_object_correct": 0,
+          "entity_set_exact": 1,
+          "paths_exact": 1,
+          "conflict_normalized_exact": 1,
+          "full_plan_exact": 1
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "exact_embeddings": {
+      "caption_count": 2,
+      "caption_parse_status": {
+        "ok": 2
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 1,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 1,
+        "field_counts": {
+          "json_valid": 1,
+          "empty_object_correct": 0,
+          "entity_set_exact": 1,
+          "paths_exact": 1,
+          "conflict_normalized_exact": 1,
+          "full_plan_exact": 1
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "raw_hidden_replayed_plan": {
+      "caption_count": 2,
+      "caption_parse_status": {
+        "invalid_markers": 1,
+        "ok": 1
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 1,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 1,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 0,
+        "field_counts": {
+          "json_valid": 1,
+          "empty_object_correct": 0,
+          "entity_set_exact": 0,
+          "paths_exact": 0,
+          "conflict_normalized_exact": 0,
+          "full_plan_exact": 0
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "global_norm_hidden_replayed_plan": {
+      "caption_count": 2,
+      "caption_parse_status": {
+        "ok": 2
+      },
+      "caption_token_cap_count": 1,
+      "recovery_count": 1,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 1,
+        "field_counts": {
+          "json_valid": 1,
+          "empty_object_correct": 0,
+          "entity_set_exact": 0,
+          "paths_exact": 0,
+          "conflict_normalized_exact": 0,
+          "full_plan_exact": 0
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    },
+    "statebridge_replayed_plan": {
+      "caption_count": 2,
+      "caption_parse_status": {
+        "ok": 2
+      },
+      "caption_token_cap_count": 0,
+      "recovery_count": 1,
+      "recovery_token_cap_count": 0,
+      "recovery_field_counts": {
+        "json_valid": 0,
+        "empty_object_correct": 0,
+        "entity_set_exact": 0,
+        "paths_exact": 0,
+        "conflict_normalized_exact": 0,
+        "full_plan_exact": 0
+      },
+      "secondary_fence_normalized_recovery": {
+        "scope": "posthoc_content_diagnostic_not_strict_format_compliance",
+        "fences_removed": 1,
+        "field_counts": {
+          "json_valid": 1,
+          "empty_object_correct": 0,
+          "entity_set_exact": 1,
+          "paths_exact": 1,
+          "conflict_normalized_exact": 1,
+          "full_plan_exact": 1
+        }
+      },
+      "interpretation": "field exactness is lexical/structural, not semantic judgement"
+    }
+  },
+  "paired_caption_comparisons": [
+    {
+      "arm": "no_memory",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": null,
+        "reason": "fewer_than_two_contests"
+      },
+      "normalized_exact_caption_matches": 0,
+      "both_valid_pairs": 2
+    },
+    {
+      "arm": "exact_embeddings",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": null,
+        "reason": "fewer_than_two_contests"
+      },
+      "normalized_exact_caption_matches": 2,
+      "both_valid_pairs": 2
+    },
+    {
+      "arm": "raw_hidden_replayed_plan",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": -0.5,
+        "interval95": null,
+        "reason": "fewer_than_two_contests"
+      },
+      "normalized_exact_caption_matches": 0,
+      "both_valid_pairs": 1
+    },
+    {
+      "arm": "global_norm_hidden_replayed_plan",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": null,
+        "reason": "fewer_than_two_contests"
+      },
+      "normalized_exact_caption_matches": 0,
+      "both_valid_pairs": 2
+    },
+    {
+      "arm": "statebridge_replayed_plan",
+      "reference": "text_plan",
+      "format_rate_difference": {
+        "mean": 0.0,
+        "interval95": null,
+        "reason": "fewer_than_two_contests"
+      },
+      "normalized_exact_caption_matches": 1,
+      "both_valid_pairs": 2
+    }
+  ],
+  "evidence_sha256": {
+    "manifest.json": "a9dce77c4f8840a1f9d5c5b69bf09240e9adbc9aa9239fc8fb3e1b769ce6c124",
+    "records.jsonl": "d9825f141c5203d30476a8352d06599117c95074aec0d48d4721c09c9d3a3d8f",
+    "summary.json": "8b78846e4230c168bd9a83d18339016fb34c76eeebad4065d5005e1f3effbbe0",
+    "alignment_events.jsonl": "7790064abad861ee500ad2b0080188c5c8032707fe2886cd2feff017dfac6d62"
+  },
+  "alignment_diagnostics": {
+    "alignment": {
+      "proper_rotation": true,
+      "determinant": 6.361311435699463,
+      "rotation_orthogonality_max_error": 0.001249551773071289,
+      "reference_rmse_before_norm_and_anchor": 0.003626423655077815,
+      "target_vocab_norm": 0.8826501394128371,
+      "regularization": 0.001,
+      "anchor_weight": 0.3,
+      "scope": "alignment_only_not_semantic_or_quality_guarantee"
+    },
+    "sender_seconds": 5.571692600846291,
+    "alignment_seconds": 6.792741491924971,
+    "shared_preparation_not_per_arm_cost": true
+  },
+  "scheduler_exit_code": 0
+}
