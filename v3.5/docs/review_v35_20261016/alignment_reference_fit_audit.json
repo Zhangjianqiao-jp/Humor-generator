@@ -1,0 +1,33 @@
+{
+  "scope": "synthetic_independent_random_states_and_references_not_qwen_or_semantic_evaluation",
+  "claim": "reference reconstruction alone does not identify meaningful source-state information",
+  "cases": [
+    {
+      "seed": 3,
+      "tokens": 8,
+      "width": 32,
+      "source_rank": 7,
+      "reference_rank": 7,
+      "unregularized_reconstruction_max_error": 4.9404924595819466e-15,
+      "regularized_reconstruction_rmse": 0.00011695844739872605
+    },
+    {
+      "seed": 17,
+      "tokens": 8,
+      "width": 32,
+      "source_rank": 7,
+      "reference_rank": 7,
+      "unregularized_reconstruction_max_error": 3.760880495917718e-15,
+      "regularized_reconstruction_rmse": 0.00011147037679431353
+    },
+    {
+      "seed": 41,
+      "tokens": 8,
+      "width": 32,
+      "source_rank": 7,
+      "reference_rank": 7,
+      "unregularized_reconstruction_max_error": 3.2751579226442118e-15,
+      "regularized_reconstruction_rmse": 0.00012419568179323392
+    }
+  ]
+}
